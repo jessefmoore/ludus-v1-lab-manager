@@ -85,18 +85,20 @@ def _slugify(name: str) -> str:
 
 
 def _make_userid(base: str) -> str:
-    """Build a Ludus-compatible userid: ``<slug>-<hex>`` or ``usr-<hex>``.
+    """Build a Ludus-compatible userid: ``<slug><hex>`` or ``usr<hex>``.
 
-    Total length is always <= ``_MAX_USERID_LEN``. The hex suffix gives
-    ~16M variants per slug, which combined with the unique-constraint
-    retry loop makes collisions vanishingly unlikely in practice.
+    Ludus enforces ``^[A-Za-z0-9]{1,20}$`` — no hyphens, underscores,
+    or other punctuation allowed. Total length is always <=
+    ``_MAX_USERID_LEN``. The hex suffix gives ~16M variants per slug,
+    which combined with the unique-constraint retry loop makes
+    collisions vanishingly unlikely in practice.
     """
     slug = _slugify(base)
     suffix = secrets.token_hex(_USERID_SUFFIX_BYTES)
     if not slug:
-        # token_hex(4) = 8 chars => "usr-" + 8 = 12 chars total.
-        return f"usr-{secrets.token_hex(4)}"
-    candidate = f"{slug}-{suffix}"
+        # token_hex(4) = 8 chars => "usr" + 8 = 11 chars total.
+        return f"usr{secrets.token_hex(4)}"
+    candidate = f"{slug}{suffix}"
     return candidate[:_MAX_USERID_LEN]
 
 

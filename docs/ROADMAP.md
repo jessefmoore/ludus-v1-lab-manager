@@ -1,40 +1,41 @@
 # Roadmap
 
-## Phase 1 — Core backend + Ludus wrapper (MVP)
+## Phase 1 — Core backend + Ludus wrapper (MVP) :white_check_mark:
 
-- [ ] FastAPI project scaffold (`pyproject.toml`, `main.py`, settings)
-- [ ] SQLite + SQLAlchemy models (users, lab_templates, sessions, students, events)
-- [ ] Auth (single instructor, JWT in httpOnly cookie)
-- [ ] `services/ludus.py` — HTTP client wrapping Ludus API
-  - [ ] `user_add(userid, name, email, password) -> User`
-  - [ ] `user_rm(userid) -> None`
-  - [ ] `range_assign(userid, range_id) -> None`
-  - [ ] `user_wireguard(userid) -> str`  (returns .conf text)
-  - [ ] `snapshot_revert(userid, name) -> None`
-  - [ ] `range_deploy(userid, config_yaml) -> None`  (for dedicated mode)
-- [ ] Endpoints:
-  - [ ] `POST /api/auth/login`
-  - [ ] `GET/POST /api/labs`
-  - [ ] `GET/POST /api/sessions`
-  - [ ] `POST /api/sessions/{id}/provision`
-  - [ ] `POST /api/sessions/{id}/students`
-  - [ ] `POST /api/students/{id}/reset`
-  - [ ] `DELETE /api/students/{id}`
-  - [ ] `GET /invite/{token}` (public, HTML)
-  - [ ] `GET /invite/{token}/config` (public, .conf download)
+- [x] FastAPI project scaffold (`pyproject.toml`, `main.py`, settings)
+- [x] SQLite + SQLAlchemy models (users, lab_templates, sessions, students, events)
+- [x] Auth (single instructor, JWT in httpOnly cookie)
+- [x] `services/ludus.py` — HTTP client wrapping Ludus API
+  - [x] `user_add(userid, name, email, password) -> User`
+  - [x] `user_rm(userid) -> None`
+  - [x] `range_assign(userid, range_id) -> None`
+  - [x] `user_wireguard(userid) -> str`  (returns .conf text)
+  - [x] `snapshot_revert(userid, name) -> None`
+  - [x] `range_deploy(userid, config_yaml) -> None`  (for dedicated mode)
+- [x] Endpoints:
+  - [x] `POST /api/auth/login`
+  - [x] `GET/POST /api/labs`
+  - [x] `GET/POST /api/sessions`
+  - [x] `POST /api/sessions/{id}/provision`
+  - [x] `POST /api/sessions/{id}/students`
+  - [x] `POST /api/students/{id}/reset`
+  - [x] `DELETE /api/students/{id}`
+  - [x] `GET /invite/{token}` (public, HTML)
+  - [x] `GET /invite/{token}/config` (public, .conf download)
 
-**Exit criteria:** Replace `add_player.sh` end-to-end via curl/HTTP.
+**Exit criteria:** Replace `add_player.sh` end-to-end via curl/HTTP. **MET**
 
-## Phase 2 — Stitch design + frontend
+## Phase 2 — Stitch design + frontend :white_check_mark:
 
-- [ ] Stitch design for 4 screens (Login, Dashboard, Session Detail, Invite)
-- [ ] Export React + Tailwind into `frontend/`
-- [ ] Wire pages to backend API
-- [ ] Auth flow (login → dashboard → logout)
-- [ ] Create session → add students → provision flow
-- [ ] Live student table with status polling
+- [x] Stitch design for 4 screens (Login, Dashboard, Session Detail, LabTemplates)
+  - _Hand-coded from DESIGN_SYSTEM.md (Stitch unavailable). Invite page is server-rendered HTML by the backend, correctly excluded from frontend routes._
+- [x] Export React + Tailwind into `frontend/` (27 source files)
+- [x] Wire pages to backend API (typed API client with all endpoints)
+- [x] Auth flow (login -> dashboard -> logout) via AuthContext + ProtectedRoute + Sidebar logout
+- [x] Create session -> add students -> provision flow (Dashboard create modal -> SessionDetail add student modal -> Provision All)
+- [x] Live student table with status polling
 
-**Exit criteria:** Click-through from login to inviting a student in the browser.
+**Exit criteria:** Click-through from login to inviting a student in the browser. **MET**
 
 ## Phase 3 — Polish
 

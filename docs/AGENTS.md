@@ -35,6 +35,10 @@ delegate to role-specific agents using the prompt templates below.
 - **Project Manager never writes code.** Only docs, specs, and task items.
 - **Supervisor never writes new code.** Only reviews, flags issues, and requests
   changes — the request is then handled by the appropriate specialist.
+- **Every change appends to `CHANGELOG.md`.** Any agent whose change affects
+  behavior, public API, config, or deployment MUST add a bullet under
+  `[Unreleased]` (Added / Changed / Deprecated / Removed / Fixed / Security).
+  Supervisor blocks merges that should have one and don't.
 
 ## Workflow
 
