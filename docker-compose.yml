@@ -1,18 +1,43 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: insec-platform-backend
     container_name: insec-backend
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Force production so the lifespan handler applies alembic migrations
+      # rather than the dev-only Base.metadata.create_all fallback.
+      APP_ENV: production
+      # Container-local paths for the mounted volume.
+      DATABASE_URL: sqlite:////app/data/insec.db
+      CONFIG_STORAGE_DIR: /app/data/configs
     ports:
       - "8000:8000"
     volumes:
+      # Single mount covers both the SQLite DB file and WireGuard configs/.
       - ./data:/app/data
     networks:
       - insec
+    healthcheck:
+      # curl is not in the slim image; python is, so use urllib.
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: insec-platform-frontend
     container_name: insec-frontend
     restart: unless-stopped
     ports:

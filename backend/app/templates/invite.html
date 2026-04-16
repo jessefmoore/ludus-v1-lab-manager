@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>insec.ml invite — {{ student_name }}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0A0B0E; color: #E8EAF0; max-width: 520px; margin: 40px auto; padding: 24px; }
+    h1 { font-size: 20px; }
+    .info { background: #14161C; border: 1px solid #262A36; border-radius: 8px; padding: 16px; margin: 16px 0; }
+    .info dt { color: #8B92A5; font-size: 12px; text-transform: uppercase; margin-top: 8px; }
+    .info dd { margin: 4px 0 0; font-family: monospace; font-size: 13px; }
+    a.btn { display: inline-block; background: #00D4AA; color: #0A0B0E; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+    footer { color: #5A6175; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 32px; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Welcome, {{ student_name }}</h1>
+  <p>Your lab is ready to connect.</p>
+  <dl class="info">
+    <dt>Training</dt><dd>{{ lab_name }}</dd>
+    {% if lab_description %}<dt>Description</dt><dd>{{ lab_description }}</dd>{% endif %}
+    {% if entry_point_vm %}<dt>Entry point</dt><dd>{{ entry_point_vm }}</dd>{% endif %}
+    <dt>Expires</dt><dd>{{ expires_at }}</dd>
+  </dl>
+  <p><a class="btn" href="{{ download_url }}">Download WireGuard config</a></p>
+  <footer>POWERED BY INSEC.ML</footer>
+</body>
+</html>
