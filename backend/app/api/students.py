@@ -180,7 +180,7 @@ async def import_students_csv(
             ) from exc
         except students_service.UseridCollision:
             errors.append(f"Row {row_num}: userid collision for {row.get('email', '')}")
-        except Exception as exc:  # noqa: BLE001 -- catch-all for row-level errors
+        except Exception as exc:
             errors.append(f"Row {row_num}: {exc}")
 
     return CSVImportResponse(created=created, failed=len(errors), errors=errors)
