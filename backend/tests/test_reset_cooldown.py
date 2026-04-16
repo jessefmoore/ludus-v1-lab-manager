@@ -35,7 +35,6 @@ from app.models import (
 from app.models import (
     Session as SessionRow,
 )
-from app.services.exceptions import LudusError
 
 ADMIN_EMAIL = "instructor@example.com"
 ADMIN_PASSWORD = "super-secret-test-pw"

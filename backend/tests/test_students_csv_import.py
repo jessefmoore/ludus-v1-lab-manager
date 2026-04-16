@@ -29,7 +29,6 @@ from app.models import (
     SessionMode,
     SessionStatus,
     Student,
-    StudentStatus,
     User,
 )
 from app.models import (
