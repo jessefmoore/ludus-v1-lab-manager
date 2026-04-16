@@ -13,11 +13,12 @@ import {
   Server,
   ChevronDown,
 } from "lucide-react";
-import { sessions, students, labs, ApiError } from "@/api";
+import { sessions, students, labs, events, ApiError } from "@/api";
 import type {
   SessionDetailRead,
   LabTemplateRead,
   StudentRead,
+  EventRead,
 } from "@/api";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
@@ -39,6 +40,15 @@ export default function SessionDetail() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [provisioning, setProvisioning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Activity log
+  const [activityEvents, setActivityEvents] = useState<EventRead[]>([]);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [activityLoading, setActivityLoading] = useState(false);
+
+  // CSV import
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Confirmation modal state
   const [confirmModal, setConfirmModal] = useState<{
@@ -88,6 +98,17 @@ export default function SessionDetail() {
     }, 5000);
     return () => clearInterval(interval);
   }, [id, session?.status, provisioning]);
+
+  // Fetch activity events when panel is opened
+  useEffect(() => {
+    if (!activityOpen || !session) return;
+    setActivityLoading(true);
+    events
+      .list({ session_id: session.id, limit: 50 })
+      .then(setActivityEvents)
+      .catch(() => {})
+      .finally(() => setActivityLoading(false));
+  }, [activityOpen, session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !session) return <LoadingScreen />;
 
@@ -145,7 +166,11 @@ export default function SessionDetail() {
       toast("success", "Environment reset triggered");
       fetchSession();
     } catch (err) {
-      toast("error", err instanceof ApiError ? err.detail : "Failed to reset student");
+      if (err instanceof ApiError && err.status === 429) {
+        toast("info", err.detail);
+      } else {
+        toast("error", err instanceof ApiError ? err.detail : "Failed to reset student");
+      }
     }
   };
 
@@ -195,6 +220,21 @@ export default function SessionDetail() {
     } finally {
       setConfirmLoading(false);
       setConfirmModal(null);
+    }
+  };
+
+  const handleCsvImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const result = await students.importCsv(session.id, file);
+      const msg = `Imported ${result.created} student(s)${result.failed ? `, ${result.failed} failed` : ""}`;
+      toast(result.failed ? "error" : "success", msg);
+      fetchSession();
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "CSV import failed");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -330,11 +370,21 @@ export default function SessionDetail() {
               Students ({totalStudents})
             </h2>
             <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleCsvImport(f);
+                }}
+              />
               <Button
                 variant="secondary"
                 icon={<Upload />}
-                disabled
-                title="CSV import coming soon"
+                loading={importing}
+                onClick={() => fileInputRef.current?.click()}
               >
                 Import CSV
               </Button>
@@ -436,15 +486,54 @@ export default function SessionDetail() {
           </div>
         )}
 
-        {/* Activity log stub */}
-        <Card>
-          <button className="flex items-center justify-between w-full text-left">
+        {/* Activity log */}
+        <Card className="overflow-hidden">
+          <button
+            className="flex items-center justify-between w-full text-left"
+            onClick={() => setActivityOpen((o) => !o)}
+          >
             <h2 className="text-lg font-semibold text-text-primary">
               Activity Log
             </h2>
-            <ChevronDown className="h-5 w-5 text-text-muted" />
+            <ChevronDown
+              className={`h-5 w-5 text-text-muted transition-transform ${activityOpen ? "rotate-180" : ""}`}
+            />
           </button>
-          <p className="text-sm text-text-muted mt-2">Coming soon</p>
+          {activityOpen && (
+            <div className="mt-4 space-y-2">
+              {activityLoading ? (
+                <p className="text-sm text-text-muted">Loading events...</p>
+              ) : activityEvents.length === 0 ? (
+                <p className="text-sm text-text-muted">No events yet</p>
+              ) : (
+                <div className="max-h-80 overflow-y-auto space-y-1">
+                  {activityEvents.map((ev) => (
+                    <div
+                      key={ev.id}
+                      className="flex items-start gap-3 py-2 px-3 rounded hover:bg-bg-elevated/50 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-mono text-accent-info">
+                          {ev.action}
+                        </span>
+                        {ev.details_json && (
+                          <span className="text-xs text-text-muted ml-2">
+                            {Object.entries(ev.details_json)
+                              .filter(([k]) => k !== "session_id")
+                              .map(([k, v]) => `${k}=${v}`)
+                              .join(", ")}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-text-muted whitespace-nowrap">
+                        {new Date(ev.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 

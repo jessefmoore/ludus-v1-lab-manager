@@ -21,8 +21,10 @@ import logging
 import os
 import re
 import secrets
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Session as SessionRow
@@ -47,6 +49,7 @@ _SLUG_MAX_LEN = 12  # leaves room for "-" + 6 hex chars = 7
 _USERID_SUFFIX_BYTES = 3  # 6 hex chars
 _INSERT_RETRY_LIMIT = 5
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9]+")
+_RESET_COOLDOWN_SECONDS = 120  # 2-minute cooldown between resets
 
 
 class SessionNotFound(Exception):  # noqa: N818 -- spec-mandated name
@@ -75,6 +78,10 @@ class StudentNotReady(Exception):  # noqa: N818 -- spec-mandated name
 
 class LudusResetFailed(Exception):  # noqa: N818 -- spec-mandated name
     """Raised when Ludus returns an error during ``snapshot_revert``."""
+
+
+class ResetCooldown(Exception):  # noqa: N818 -- spec-mandated name
+    """Raised when a reset is requested within the cooldown window."""
 
 
 def _slugify(name: str) -> str:
@@ -280,6 +287,21 @@ def reset_student(
     if student.status != StudentStatus.ready:
         raise StudentNotReady("Student not in ready state — cannot reset")
 
+    # Check cooldown: find most recent student.reset event for this student.
+    last_reset = db.scalars(
+        select(Event)
+        .where(Event.student_id == student_id, Event.action == "student.reset")
+        .order_by(desc(Event.created_at))
+        .limit(1)
+    ).first()
+    if last_reset is not None:
+        elapsed = datetime.now(UTC) - last_reset.created_at.replace(tzinfo=UTC)
+        remaining = timedelta(seconds=_RESET_COOLDOWN_SECONDS) - elapsed
+        if remaining.total_seconds() > 0:
+            raise ResetCooldown(
+                f"Reset cooldown: wait {int(remaining.total_seconds())} seconds"
+            )
+
     try:
         ludus_client.snapshot_revert(student.ludus_userid, snapshot_name)
     except LudusError as exc:
@@ -313,6 +335,7 @@ def reset_student(
 __all__ = [
     "LudusRemovalFailed",
     "LudusResetFailed",
+    "ResetCooldown",
     "SessionEnded",
     "SessionNotFound",
     "StudentNotFound",

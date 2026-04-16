@@ -35,6 +35,14 @@ start a fresh `[Unreleased]` block.
   calls for destructive actions (delete session, remove student, bulk remove).
 - **Provisioning progress bar** — teal progress indicator shown during
   provisioning with ready/total counter.
+- **Audit log** — `GET /api/events` backend endpoint with `session_id`,
+  `limit`, `offset` query params; collapsible Activity Log panel on
+  SessionDetail showing real events with timestamps.
+- **CSV bulk import** — `POST /api/sessions/{id}/students/import` accepts
+  CSV with `full_name,email` columns; frontend file-picker replaces the
+  disabled stub button; partial-failure summary returned.
+- **Reset cooldown** — 2-minute server-side cooldown between student resets
+  (HTTP 429); frontend shows info toast with remaining time.
 
 ### Changed
 - (nothing yet)

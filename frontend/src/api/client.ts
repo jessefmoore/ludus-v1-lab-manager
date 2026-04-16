@@ -12,6 +12,8 @@ import type {
   StudentRead,
   StudentResetRequest,
   StudentResetResponse,
+  CSVImportResponse,
+  EventRead,
 } from "./types";
 
 export class ApiError extends Error {
@@ -123,4 +125,29 @@ export const students = {
       method: "POST",
       body: JSON.stringify(data ?? {}),
     }),
+
+  importCsv: (sessionId: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<CSVImportResponse>(
+      `/api/sessions/${sessionId}/students/import`,
+      {
+        method: "POST",
+        body: form,
+        headers: {}, // let browser set multipart boundary
+      },
+    );
+  },
+};
+
+// Events (audit log)
+export const events = {
+  list: (params?: { session_id?: number; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.session_id != null) qs.set("session_id", String(params.session_id));
+    if (params?.limit != null) qs.set("limit", String(params.limit));
+    if (params?.offset != null) qs.set("offset", String(params.offset));
+    const q = qs.toString();
+    return request<EventRead[]>(`/api/events${q ? `?${q}` : ""}`);
+  },
 };

@@ -11,8 +11,11 @@ Provisioning (calling ``user_add`` / ``range_deploy``) is a separate
 flow in task #21 — this router deliberately never provisions on add.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+import csv
+import io
+
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.config import Settings, get_settings
@@ -41,6 +44,14 @@ class StudentResetResponse(BaseModel):
 
     status: str
     snapshot_name: str
+
+
+class CSVImportResponse(BaseModel):
+    """Summary of a CSV bulk import."""
+
+    created: int
+    failed: int
+    errors: list[str]
 
 router = APIRouter(tags=["students"])
 
@@ -100,6 +111,81 @@ def create_student(
     return _student_to_read(student, settings)
 
 
+@router.post(
+    "/api/sessions/{session_id}/students/import",
+    response_model=CSVImportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def import_students_csv(
+    session_id: int,
+    file: UploadFile,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> CSVImportResponse:
+    """Bulk-import students from a CSV file with ``full_name`` and ``email`` columns.
+
+    Returns 201 with a summary even when some rows fail (validation or
+    collision errors); the successfully imported students are committed.
+    """
+    if file.content_type and file.content_type not in (
+        "text/csv",
+        "application/vnd.ms-excel",
+        "application/octet-stream",
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Expected CSV file, got {file.content_type}",
+        )
+
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV file must be UTF-8 encoded",
+        ) from exc
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames or not {"full_name", "email"}.issubset(
+        set(reader.fieldnames)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CSV must have 'full_name' and 'email' columns",
+        )
+
+    created = 0
+    errors: list[str] = []
+    for row_num, row in enumerate(reader, start=2):
+        try:
+            payload = StudentCreate(
+                full_name=row.get("full_name", "").strip(),
+                email=row.get("email", "").strip(),
+            )
+        except ValidationError as exc:
+            errors.append(f"Row {row_num}: {exc.errors()[0]['msg']}")
+            continue
+        try:
+            students_service.create_student(db, session_id, payload)
+            created += 1
+        except (
+            students_service.SessionNotFound,
+            students_service.SessionEnded,
+        ) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        except students_service.UseridCollision:
+            errors.append(f"Row {row_num}: userid collision for {row.get('email', '')}")
+        except Exception as exc:  # noqa: BLE001 -- catch-all for row-level errors
+            errors.append(f"Row {row_num}: {exc}")
+
+    return CSVImportResponse(created=created, failed=len(errors), errors=errors)
+
+
 @router.delete(
     "/api/students/{student_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -152,8 +238,8 @@ def reset_student(
     ``ready`` state are eligible; ``pending`` or ``error`` rows yield
     ``409``.
 
-    TODO: Rate limiting out of scope for Phase 1; revisit when public
-    load expected.
+    A 2-minute cooldown between resets is enforced at the service layer;
+    repeated calls within the window return ``429``.
     """
     snapshot_name = (
         payload.snapshot_name if payload is not None else _DEFAULT_SNAPSHOT_NAME
@@ -173,6 +259,11 @@ def reset_student(
     except students_service.StudentNotReady as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except students_service.ResetCooldown as exc:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=str(exc),
         ) from exc
     except students_service.LudusResetFailed as exc:

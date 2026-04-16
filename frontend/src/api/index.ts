@@ -1,2 +1,2 @@
-export { ApiError, auth, labs, sessions, students } from "./client";
+export { ApiError, auth, labs, sessions, students, events } from "./client";
 export type * from "./types";

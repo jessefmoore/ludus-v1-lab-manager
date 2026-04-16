@@ -22,7 +22,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, invite, labs, sessions, students
+from app.api import auth, events, invite, labs, sessions, students
 from app.core.config import Settings, get_settings
 from app.core.db import Base, SessionLocal, engine
 from app.services.bootstrap import ensure_admin_user
@@ -96,6 +96,7 @@ app.include_router(auth.router)
 app.include_router(labs.router)
 app.include_router(sessions.router)
 app.include_router(students.router)
+app.include_router(events.router)
 app.include_router(invite.router)
 
 

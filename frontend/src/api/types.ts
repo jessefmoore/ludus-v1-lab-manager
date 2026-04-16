@@ -100,3 +100,20 @@ export interface StudentResetResponse {
   status: string;
   snapshot_name: string;
 }
+
+// CSV Import
+export interface CSVImportResponse {
+  created: number;
+  failed: number;
+  errors: string[];
+}
+
+// Events (audit log)
+export interface EventRead {
+  id: number;
+  session_id: number | null;
+  student_id: number | null;
+  action: string;
+  details_json: Record<string, unknown> | null;
+  created_at: string;
+}
