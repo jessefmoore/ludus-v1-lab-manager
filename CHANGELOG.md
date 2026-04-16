@@ -29,6 +29,13 @@ start a fresh `[Unreleased]` block.
   Escape), Sidebar, TopBar (breadcrumbs + actions), AppLayout.
 - **Vite dev proxy** — `/api/*`, `/health`, `/invite/*` forwarded to `:8000`.
 
+- **Toast notifications** — `ToastProvider` + `useToast()` hook replacing all
+  `alert()` calls with auto-dismissing slide-in toasts (success/error/info).
+- **Confirmation modals** — proper Modal dialogs replacing all `confirm()`
+  calls for destructive actions (delete session, remove student, bulk remove).
+- **Provisioning progress bar** — teal progress indicator shown during
+  provisioning with ready/total counter.
+
 ### Changed
 - (nothing yet)
 

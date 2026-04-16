@@ -26,10 +26,12 @@ import Modal from "@/components/Modal";
 import Input from "@/components/Input";
 import StatusPill from "@/components/StatusPill";
 import LoadingScreen from "@/components/LoadingScreen";
+import { useToast } from "@/components/Toast";
 
 export default function SessionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [session, setSession] = useState<SessionDetailRead | null>(null);
   const [lab, setLab] = useState<LabTemplateRead | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,14 @@ export default function SessionDetail() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [provisioning, setProvisioning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    action: () => Promise<void>;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   const fetchSession = useCallback(() => {
     if (!id) return;
@@ -84,48 +94,58 @@ export default function SessionDetail() {
   const handleProvision = async () => {
     setProvisioning(true);
     try {
-      await sessions.provision(session.id);
+      const result = await sessions.provision(session.id);
+      toast("success", `Provisioned ${result.provisioned} student(s)${result.failed ? `, ${result.failed} failed` : ""}`);
       fetchSession();
-    } catch {
-      // error handled via refetch
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Provisioning failed");
     } finally {
       setProvisioning(false);
     }
   };
 
-  const handleDeleteSession = async () => {
-    if (!confirm("Delete this session? This cannot be undone.")) return;
-    setDeleting(true);
-    try {
-      await sessions.delete(session.id);
-      navigate("/", { replace: true });
-    } catch (err) {
-      alert(err instanceof ApiError ? err.detail : "Failed to delete session");
-    } finally {
-      setDeleting(false);
-    }
+  const handleDeleteSession = () => {
+    setConfirmModal({
+      title: "Delete Session",
+      message: `Delete "${session.name}"? This cannot be undone.`,
+      action: async () => {
+        setDeleting(true);
+        try {
+          await sessions.delete(session.id);
+          navigate("/", { replace: true });
+        } catch (err) {
+          toast("error", err instanceof ApiError ? err.detail : "Failed to delete session");
+        } finally {
+          setDeleting(false);
+        }
+      },
+    });
   };
 
-  const handleDeleteStudent = async (studentId: number) => {
-    if (!confirm("Remove this student?")) return;
-    try {
-      await students.delete(studentId);
-      fetchSession();
-    } catch (err) {
-      alert(
-        err instanceof ApiError ? err.detail : "Failed to remove student",
-      );
-    }
+  const handleDeleteStudent = (studentId: number) => {
+    const student = session.students.find((s) => s.id === studentId);
+    setConfirmModal({
+      title: "Remove Student",
+      message: `Remove ${student?.full_name ?? "this student"} from the session?`,
+      action: async () => {
+        try {
+          await students.delete(studentId);
+          toast("success", "Student removed");
+          fetchSession();
+        } catch (err) {
+          toast("error", err instanceof ApiError ? err.detail : "Failed to remove student");
+        }
+      },
+    });
   };
 
   const handleResetStudent = async (studentId: number) => {
     try {
       await students.reset(studentId);
+      toast("success", "Environment reset triggered");
       fetchSession();
     } catch (err) {
-      alert(
-        err instanceof ApiError ? err.detail : "Failed to reset student",
-      );
+      toast("error", err instanceof ApiError ? err.detail : "Failed to reset student");
     }
   };
 
@@ -146,25 +166,45 @@ export default function SessionDetail() {
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (
-      !confirm(`Remove ${selected.size} selected student(s)?`)
-    )
-      return;
-    for (const sid of selected) {
-      try {
-        await students.delete(sid);
-      } catch {
-        // continue
-      }
+  const handleBulkDelete = () => {
+    setConfirmModal({
+      title: "Remove Students",
+      message: `Remove ${selected.size} selected student(s)?`,
+      action: async () => {
+        let removed = 0;
+        for (const sid of selected) {
+          try {
+            await students.delete(sid);
+            removed++;
+          } catch {
+            // continue
+          }
+        }
+        toast("success", `Removed ${removed} student(s)`);
+        setSelected(new Set());
+        fetchSession();
+      },
+    });
+  };
+
+  const executeConfirm = async () => {
+    if (!confirmModal) return;
+    setConfirmLoading(true);
+    try {
+      await confirmModal.action();
+    } finally {
+      setConfirmLoading(false);
+      setConfirmModal(null);
     }
-    setSelected(new Set());
-    fetchSession();
   };
 
   const pendingCount = session.students.filter(
     (s) => s.status === "pending",
   ).length;
+  const readyCount = session.students.filter(
+    (s) => s.status === "ready",
+  ).length;
+  const totalStudents = session.students.length;
 
   return (
     <>
@@ -203,6 +243,24 @@ export default function SessionDetail() {
           </h1>
           <StatusPill status={session.status} />
         </div>
+
+        {/* Provisioning progress bar */}
+        {totalStudents > 0 && (provisioning || session.status === "provisioning") && (
+          <Card className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-text-secondary">Provisioning progress</span>
+              <span className="text-text-primary font-mono">
+                {readyCount} / {totalStudents}
+              </span>
+            </div>
+            <div className="h-2 bg-bg-elevated rounded-full overflow-hidden">
+              <div
+                className="h-full bg-accent-success rounded-full transition-all duration-500"
+                style={{ width: `${(readyCount / totalStudents) * 100}%` }}
+              />
+            </div>
+          </Card>
+        )}
 
         {/* Info cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -269,7 +327,7 @@ export default function SessionDetail() {
         <Card className="p-0 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 className="text-lg font-semibold text-text-primary">
-              Students ({session.students.length})
+              Students ({totalStudents})
             </h2>
             <div className="flex items-center gap-2">
               <Button
@@ -290,7 +348,7 @@ export default function SessionDetail() {
             </div>
           </div>
 
-          {session.students.length === 0 ? (
+          {totalStudents === 0 ? (
             <div className="flex flex-col items-center justify-center py-16">
               <UserPlus className="h-12 w-12 text-text-muted mb-4" />
               <p className="text-text-secondary mb-1">No students enrolled</p>
@@ -313,8 +371,8 @@ export default function SessionDetail() {
                     <input
                       type="checkbox"
                       checked={
-                        selected.size === session.students.length &&
-                        session.students.length > 0
+                        selected.size === totalStudents &&
+                        totalStudents > 0
                       }
                       onChange={toggleAll}
                       className="accent-accent-success"
@@ -395,10 +453,39 @@ export default function SessionDetail() {
         onClose={() => setShowAddStudent(false)}
         onCreated={() => {
           setShowAddStudent(false);
+          toast("success", "Student added");
           fetchSession();
         }}
         sessionId={session.id}
       />
+
+      {/* Confirmation modal */}
+      <Modal
+        open={!!confirmModal}
+        onClose={() => !confirmLoading && setConfirmModal(null)}
+        title={confirmModal?.title ?? ""}
+        size="sm"
+      >
+        <p className="text-sm text-text-secondary mb-6">
+          {confirmModal?.message}
+        </p>
+        <div className="flex justify-end gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => setConfirmModal(null)}
+            disabled={confirmLoading}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            onClick={executeConfirm}
+            loading={confirmLoading}
+          >
+            Confirm
+          </Button>
+        </div>
+      </Modal>
     </>
   );
 }
