@@ -18,9 +18,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     for correlation. Skips ``/health`` to reduce noise.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request_id = str(uuid.uuid4())
         start = time.monotonic()
 

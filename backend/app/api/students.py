@@ -53,6 +53,7 @@ class CSVImportResponse(BaseModel):
     failed: int
     errors: list[str]
 
+
 router = APIRouter(tags=["students"])
 
 
@@ -155,9 +156,7 @@ async def import_students_csv(
         ) from exc
 
     reader = csv.DictReader(io.StringIO(text))
-    if not reader.fieldnames or not {"full_name", "email"}.issubset(
-        set(reader.fieldnames)
-    ):
+    if not reader.fieldnames or not {"full_name", "email"}.issubset(set(reader.fieldnames)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="CSV must have 'full_name' and 'email' columns",
@@ -254,9 +253,7 @@ def reset_student(
     A 2-minute cooldown between resets is enforced at the service layer;
     repeated calls within the window return ``429``.
     """
-    snapshot_name = (
-        payload.snapshot_name if payload is not None else _DEFAULT_SNAPSHOT_NAME
-    )
+    snapshot_name = payload.snapshot_name if payload is not None else _DEFAULT_SNAPSHOT_NAME
     try:
         students_service.reset_student(
             db,

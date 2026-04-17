@@ -23,9 +23,7 @@ if _settings.database_url.startswith("sqlite"):
     if str(parent) and parent != Path("."):
         os.makedirs(parent, exist_ok=True)
 
-connect_args = (
-    {"check_same_thread": False} if _settings.database_url.startswith("sqlite") else {}
-)
+connect_args = {"check_same_thread": False} if _settings.database_url.startswith("sqlite") else {}
 
 engine = create_engine(
     _settings.database_url,

@@ -88,9 +88,7 @@ def client(
         yield tc
 
 
-def test_login_success_sets_cookie_and_returns_user(
-    client: TestClient, admin_user: User
-) -> None:
+def test_login_success_sets_cookie_and_returns_user(client: TestClient, admin_user: User) -> None:
     """Correct credentials yield 200, Set-Cookie, and a user payload."""
     resp = client.post(
         "/api/auth/login",
@@ -134,9 +132,7 @@ def test_me_without_cookie_returns_401(client: TestClient) -> None:
     assert resp.status_code == 401
 
 
-def test_me_with_valid_cookie_returns_user(
-    client: TestClient, admin_user: User
-) -> None:
+def test_me_with_valid_cookie_returns_user(client: TestClient, admin_user: User) -> None:
     """After login, /me returns the authenticated user."""
     login = client.post(
         "/api/auth/login",
@@ -196,9 +192,7 @@ def test_expired_token_is_rejected(
     assert resp.status_code == 401
 
 
-def test_ensure_admin_user_is_idempotent(
-    db_session: OrmSession, settings: Settings
-) -> None:
+def test_ensure_admin_user_is_idempotent(db_session: OrmSession, settings: Settings) -> None:
     """Calling ensure_admin_user twice returns the same row with no duplicates."""
     first = ensure_admin_user(db_session, settings)
     second = ensure_admin_user(db_session, settings)
@@ -230,9 +224,7 @@ def test_ensure_admin_user_does_not_overwrite_rotated_password(
     assert any("does not match" in rec.message for rec in caplog.records)
 
 
-def test_create_access_token_roundtrip_claims(
-    admin_user_factory: User, settings: Settings
-) -> None:
+def test_create_access_token_roundtrip_claims(admin_user_factory: User, settings: Settings) -> None:
     """create_access_token produces a JWT that decodes to expected claims."""
     token = create_access_token(admin_user_factory, settings)
     decoded = jwt.decode(token, settings.app_secret_key, algorithms=[JWT_ALGORITHM])

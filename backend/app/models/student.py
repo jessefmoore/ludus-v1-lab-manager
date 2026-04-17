@@ -30,19 +30,13 @@ class Student(Base):
     __tablename__ = "students"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.id"), nullable=False, index=True
-    )
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=False, index=True)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
-    ludus_userid: Mapped[str] = mapped_column(
-        String(64), unique=True, index=True, nullable=False
-    )
+    ludus_userid: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     range_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     wg_config_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    invite_token: Mapped[str] = mapped_column(
-        String(64), unique=True, index=True, nullable=False
-    )
+    invite_token: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     invite_redeemed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -108,6 +108,38 @@ export interface CSVImportResponse {
   errors: string[];
 }
 
+// Ludus Discovery
+export interface LudusRange {
+  rangeID: string;
+  rangeNumber: number;
+  name?: string;
+  numberOfVMs?: number;
+  rangeState?: string;
+  lastDeployment?: string;
+  description?: string;
+  testingEnabled?: boolean;
+  [key: string]: unknown; // forward-compat with extra fields
+}
+
+export interface LudusRangeListResponse {
+  ranges: LudusRange[];
+}
+
+export interface LudusRangeConfigResponse {
+  range_number: number;
+  config_yaml: string;
+}
+
+// Platform Settings
+export interface PlatformSettings {
+  ludus_server_url: string;
+  ludus_api_key_masked: string;
+  ludus_verify_tls: boolean;
+  admin_email: string;
+  invite_token_ttl_hours: number;
+  public_base_url: string;
+}
+
 // Events (audit log)
 export interface EventRead {
   id: number;

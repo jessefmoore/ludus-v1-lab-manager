@@ -23,6 +23,7 @@ Any agent can produce pixel-faithful UI from this spec alone.
 
 /* Borders */
 --border-default: #262A36;  /* 1px borders, dividers */
+--border-subtle:  #1E2130;  /* v2: softer borders for glass effects */
 
 /* Text */
 --text-primary:   #E8EAF0;  /* main body text, headings */
@@ -30,7 +31,9 @@ Any agent can produce pixel-faithful UI from this spec alone.
 --text-muted:     #5A6175;  /* timestamps, helper text, disabled */
 
 /* Accents (soft/semantic — use transparent bg for pills) */
---accent-success: #00D4AA;  /* teal — primary action, "Ready" status */
+--accent-success:       #00D4AA;  /* teal — primary action, "Ready" status */
+--accent-success-hover: #00BD97;  /* v2: hover state for teal buttons */
+--accent-success-active:#00A683;  /* v2: active/pressed state */
 --accent-warning: #FFA94D;  /* orange — "Provisioning", attention */
 --accent-danger:  #FF5E5E;  /* red — errors, destructive actions */
 --accent-info:    #6C8EFF;  /* soft blue — links, info badges */
@@ -416,6 +419,53 @@ top bar: Sessions > AD Attacks Workshop ... | Deploy Lab
 - Default transition: `transition-colors duration-150`
 - Hover effects: subtle bg-color shift
 - Loading spinner: `animate-spin` on `Loader2` icon
-- Bulk action bar slide-in: `transition-transform duration-200 translate-y-0` (from `translate-y-full`)
+- Bulk action bar slide-in: `animate-slide-up` (200ms ease-out)
 - Modal: `animate-fade-in` on backdrop, `animate-scale-in` on panel
 - No flashy animations, no parallax, no auto-rotating carousels
+
+---
+
+## v2 Visual Patterns
+
+### Gradient border cards
+
+Cards with semantic importance (data tables, lab templates) use a gradient border
+rendered via a `::before` pseudo-element and CSS `mask-composite`. The `.gradient-border`
+utility class in `index.css` handles this:
+
+```
+gradient: 135deg, teal 0.35 → info-blue 0.18 → border 0.6
+hover:   135deg, teal 0.55 → info-blue 0.30 → border 0.6
+```
+
+### Card variants
+
+The `Card` component now accepts a `variant` prop:
+| Variant | Use | Visual |
+|---|---|---|
+| `default` | Generic containers | Standard `bg-surface` + `border` |
+| `gradient` | Feature cards, data tables | Gradient border via `::before` |
+| `stat` | Dashboard KPI cards | Top gradient glow + hover lift |
+
+### Glow effects
+
+Subtle teal-tinted box-shadows for emphasis:
+- `shadow-glow-sm`: `0 0 10px rgba(0,212,170,0.08)` — stat cards on hover
+- `shadow-glow`:    `0 0 20px rgba(0,212,170,0.1)`  — floating action bars
+- `shadow-glow-lg`: `0 0 40px rgba(0,212,170,0.15)` — hero elements
+
+### Command palette
+
+`Cmd+K` / `Ctrl+K` opens a search overlay for quick navigation to sessions,
+lab templates, and settings. Design follows the modal pattern but with a search
+input at the top and a scrollable results list. Uses `.kbd` utility for key hints.
+
+### Sticky top bar (glass effect)
+
+The top bar uses `sticky top-0 z-30 bg-bg-base/80 backdrop-blur-sm` for a
+semi-transparent glass effect that keeps context visible during scroll.
+
+### Display typography
+
+Page-level headings use `text-[32px] font-bold leading-tight` for visual
+hierarchy over the previous `text-2xl` (24px).

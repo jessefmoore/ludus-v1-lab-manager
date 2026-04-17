@@ -138,9 +138,7 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
             assert r.status_code == 200, r.text
             # The auth cookie is persisted on the TestClient so every
             # subsequent call is authenticated.
-            assert any(
-                c.name for c in client.cookies.jar if c.name
-            ), "expected a session cookie"
+            assert any(c.name for c in client.cookies.jar if c.name), "expected a session cookie"
 
             # 3. /api/auth/me round-trips the cookie.
             r = client.get("/api/auth/me")
@@ -205,18 +203,12 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
                 {"userid": fake_ludus.user_add_calls[0]["userid"], "range_id": "DEMO"}
             ]
             assert fake_ludus.range_deploy_calls == []
-            assert fake_ludus.user_wireguard_calls == [
-                fake_ludus.user_add_calls[0]["userid"]
-            ]
+            assert fake_ludus.user_wireguard_calls == [fake_ludus.user_add_calls[0]["userid"]]
 
             # The provisioner wrote the config to disk at the documented
             # path layout.
             userid = fake_ludus.user_add_calls[0]["userid"]
-            cfg_path = (
-                Path(_smoke_env["CONFIG_STORAGE_DIR"])
-                / str(session_id)
-                / f"{userid}.conf"
-            )
+            cfg_path = Path(_smoke_env["CONFIG_STORAGE_DIR"]) / str(session_id) / f"{userid}.conf"
             assert cfg_path.exists(), f"expected config at {cfg_path}"
             on_disk = cfg_path.read_bytes()
             assert on_disk.startswith(b"[Interface]")

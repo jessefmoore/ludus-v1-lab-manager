@@ -240,9 +240,7 @@ def test_create_session_happy_path_returns_201_and_draft(
     assert body["created_at"] is not None
 
 
-def test_list_sessions_contains_created_row(
-    client: TestClient, lab_template: LabTemplate
-) -> None:
+def test_list_sessions_contains_created_row(client: TestClient, lab_template: LabTemplate) -> None:
     """A session created through POST appears in the GET list."""
     create = client.post(
         "/api/sessions",
@@ -259,10 +257,7 @@ def test_list_sessions_contains_created_row(
     assert resp.status_code == 200
     body = resp.json()
     assert isinstance(body, list)
-    assert any(
-        row["id"] == created_id and row["name"] == "Summer 2026 Cohort"
-        for row in body
-    )
+    assert any(row["id"] == created_id and row["name"] == "Summer 2026 Cohort" for row in body)
 
 
 def test_get_session_detail_returns_empty_students_list(
@@ -307,14 +302,8 @@ def test_get_session_detail_embeds_students_with_invite_urls(
     assert len(students) == 2
 
     by_userid = {s["ludus_userid"]: s for s in students}
-    assert (
-        by_userid["alice"]["invite_url"]
-        == f"{PUBLIC_BASE_URL}/invite/tok-alice"
-    )
-    assert (
-        by_userid["bob"]["invite_url"]
-        == f"{PUBLIC_BASE_URL}/invite/tok-bob"
-    )
+    assert by_userid["alice"]["invite_url"] == f"{PUBLIC_BASE_URL}/invite/tok-alice"
+    assert by_userid["bob"]["invite_url"] == f"{PUBLIC_BASE_URL}/invite/tok-bob"
     # Raw token must not leak.
     for student in students:
         assert "invite_token" not in student
@@ -338,17 +327,15 @@ def test_delete_active_session_returns_409(
     client: TestClient, db_session: OrmSession, lab_template: LabTemplate
 ) -> None:
     """Active sessions cannot be deleted via this endpoint."""
-    row = _create_session_row(
-        db_session, lab_template, status=SessionStatus.active
-    )
+    row = _create_session_row(db_session, lab_template, status=SessionStatus.active)
     resp = client.delete(f"/api/sessions/{row.id}")
     assert resp.status_code == 409
 
 
-def test_delete_draft_session_with_ready_student_returns_409(
+def test_delete_draft_session_with_ready_student_succeeds(
     client: TestClient, db_session: OrmSession, lab_template: LabTemplate
 ) -> None:
-    """A draft session with a ready student is still refused (state conflict)."""
+    """A draft session with a ready student can be deleted (cascade cleans up)."""
     row = _create_session_row(db_session, lab_template)
     _create_student_row(
         db_session,
@@ -358,7 +345,7 @@ def test_delete_draft_session_with_ready_student_returns_409(
         status=StudentStatus.ready,
     )
     resp = client.delete(f"/api/sessions/{row.id}")
-    assert resp.status_code == 409
+    assert resp.status_code == 204
 
 
 def test_delete_missing_session_returns_404(client: TestClient) -> None:
@@ -382,9 +369,7 @@ def test_create_session_writes_session_created_event(
     assert resp.status_code == 201
     created_id = resp.json()["id"]
 
-    event = db_session.execute(
-        select(Event).where(Event.action == "session.created")
-    ).scalar_one()
+    event = db_session.execute(select(Event).where(Event.action == "session.created")).scalar_one()
     assert event.session_id == created_id
     assert event.details_json is not None
     assert event.details_json["session_id"] == created_id

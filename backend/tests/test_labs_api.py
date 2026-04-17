@@ -16,6 +16,7 @@ from app.core.db import Base, get_db
 from app.core.deps import get_current_user
 from app.models.event import Event
 from app.models.lab_template import LabTemplate
+from app.models.session import Session, SessionMode, SessionStatus
 from app.models.user import User
 
 VALID_YAML = """\
@@ -220,9 +221,7 @@ def test_create_lab_with_non_dict_yaml_returns_422(client: TestClient) -> None:
     assert "mapping" in resp.json()["detail"]
 
 
-def test_create_lab_emits_audit_event(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_create_lab_emits_audit_event(client: TestClient, db_session: OrmSession) -> None:
     """A successful create writes an Event row with action=lab_template.created."""
     created = client.post("/api/labs", json=_create_payload()).json()
 
@@ -235,3 +234,127 @@ def test_create_lab_emits_audit_event(
     assert event.details_json is not None
     assert event.details_json.get("lab_template_id") == created["id"]
     assert event.details_json.get("name") == "Grand Line AD"
+
+
+# ---------------------------------------------------------------------------
+# PUT /api/labs/{lab_id}
+# ---------------------------------------------------------------------------
+
+
+def _create_lab_via_api(client: TestClient, **overrides: object) -> dict:
+    """Helper: POST a lab and return the response body."""
+    resp = client.post("/api/labs", json=_create_payload(**overrides))
+    assert resp.status_code == 201
+    return resp.json()
+
+
+def test_update_lab_name(client: TestClient, db_session: OrmSession) -> None:
+    created = _create_lab_via_api(client)
+
+    resp = client.put(f"/api/labs/{created['id']}", json={"name": "Renamed Lab"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "Renamed Lab"
+    assert body["description"] == created["description"]
+
+    stored = db_session.get(LabTemplate, created["id"])
+    assert stored is not None
+    assert stored.name == "Renamed Lab"
+
+
+def test_update_lab_invalid_yaml_returns_422(client: TestClient) -> None:
+    created = _create_lab_via_api(client)
+
+    resp = client.put(
+        f"/api/labs/{created['id']}",
+        json={"range_config_yaml": "not: : valid: yaml"},
+    )
+    assert resp.status_code == 422
+    assert "not valid YAML" in resp.json()["detail"]
+
+
+def test_update_lab_not_found_returns_404(client: TestClient) -> None:
+    resp = client.put("/api/labs/999999", json={"name": "Ghost"})
+    assert resp.status_code == 404
+
+
+def test_update_lab_emits_event(client: TestClient, db_session: OrmSession) -> None:
+    created = _create_lab_via_api(client)
+
+    client.put(f"/api/labs/{created['id']}", json={"name": "Updated"})
+
+    stmt = select(Event).where(Event.action == "lab_template.updated")
+    events = list(db_session.execute(stmt).scalars().all())
+    assert len(events) == 1
+    assert events[0].details_json["lab_template_id"] == created["id"]
+    assert "name" in events[0].details_json["changed_fields"]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/labs/{lab_id}
+# ---------------------------------------------------------------------------
+
+
+def test_delete_lab_success_returns_204(client: TestClient, db_session: OrmSession) -> None:
+    created = _create_lab_via_api(client)
+
+    resp = client.delete(f"/api/labs/{created['id']}")
+    assert resp.status_code == 204
+
+    assert db_session.get(LabTemplate, created["id"]) is None
+
+
+def test_delete_lab_not_found_returns_404(client: TestClient) -> None:
+    resp = client.delete("/api/labs/999999")
+    assert resp.status_code == 404
+
+
+def test_delete_lab_with_active_session_returns_409(
+    client: TestClient, db_session: OrmSession
+) -> None:
+    created = _create_lab_via_api(client)
+
+    session = Session(
+        name="Active Session",
+        lab_template_id=created["id"],
+        mode=SessionMode.shared,
+        status=SessionStatus.active,
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    resp = client.delete(f"/api/labs/{created['id']}")
+    assert resp.status_code == 409
+
+    # Lab should still exist.
+    assert db_session.get(LabTemplate, created["id"]) is not None
+
+
+def test_delete_lab_with_ended_sessions_succeeds(
+    client: TestClient, db_session: OrmSession
+) -> None:
+    created = _create_lab_via_api(client)
+
+    session = Session(
+        name="Ended Session",
+        lab_template_id=created["id"],
+        mode=SessionMode.shared,
+        status=SessionStatus.ended,
+    )
+    db_session.add(session)
+    db_session.commit()
+
+    resp = client.delete(f"/api/labs/{created['id']}")
+    assert resp.status_code == 204
+
+
+def test_delete_lab_emits_event(client: TestClient, db_session: OrmSession) -> None:
+    created = _create_lab_via_api(client)
+
+    client.delete(f"/api/labs/{created['id']}")
+
+    stmt = select(Event).where(Event.action == "lab_template.deleted")
+    events = list(db_session.execute(stmt).scalars().all())
+    assert len(events) == 1
+    assert events[0].details_json["lab_template_id"] == created["id"]
+    assert events[0].details_json["name"] == "Grand Line AD"

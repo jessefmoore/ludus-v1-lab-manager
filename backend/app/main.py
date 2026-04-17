@@ -28,7 +28,8 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.orm import Session as DBSession
 
-from app.api import auth, events, invite, labs, sessions, students
+from app.api import auth, events, invite, labs, ludus, sessions, students
+from app.api import settings as settings_api
 from app.core.config import Settings, get_settings
 from app.core.db import Base, SessionLocal, engine
 from app.core.deps import get_db
@@ -58,9 +59,7 @@ def _apply_schema(settings: Settings) -> None:
 
         from alembic import command as alembic_command
 
-        cfg = AlembicConfig(
-            str(Path(__file__).resolve().parent.parent / "alembic.ini")
-        )
+        cfg = AlembicConfig(str(Path(__file__).resolve().parent.parent / "alembic.ini"))
         cfg.set_main_option("sqlalchemy.url", settings.database_url)
         alembic_command.upgrade(cfg, "head")
         logger.info("alembic upgrade head complete")
@@ -112,6 +111,8 @@ app.add_middleware(CSRFMiddleware, allowed_host=_csrf_host)
 # Every router module already sets its own prefix — include without args.
 app.include_router(auth.router)
 app.include_router(labs.router)
+app.include_router(ludus.router)
+app.include_router(settings_api.router)
 app.include_router(sessions.router)
 app.include_router(students.router)
 app.include_router(events.router)

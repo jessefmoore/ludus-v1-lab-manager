@@ -342,11 +342,7 @@ def provision_session(
     db.commit()
 
     # Return students in a stable order so the response is deterministic.
-    ordered_stmt = (
-        select(Student)
-        .where(Student.session_id == session_id)
-        .order_by(Student.id)
-    )
+    ordered_stmt = select(Student).where(Student.session_id == session_id).order_by(Student.id)
     result.students = list(db.execute(ordered_stmt).scalars().all())
     return result
 

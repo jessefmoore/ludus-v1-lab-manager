@@ -170,9 +170,7 @@ WG_CONFIG = (
 )
 
 
-def test_user_wireguard_returns_text_from_json(
-    client: LudusClient, httpx_mock: HTTPXMock
-) -> None:
+def test_user_wireguard_returns_text_from_json(client: LudusClient, httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         method="GET",
         url=f"{_url('/user/wireguard')}?userID=alice",
@@ -317,6 +315,83 @@ def test_range_list_wraps_single_object(client: LudusClient, httpx_mock: HTTPXMo
 
 
 # ---------------------------------------------------------------------------
+# range_get_config
+# ---------------------------------------------------------------------------
+
+
+RANGE_CONFIG_YAML = """\
+ludus:
+  - vm_name: "{{ range_id }}-web"
+    hostname: "{{ range_id }}-web"
+    template: debian-12-x64-server-template
+    vlan: 10
+    ip_last_octet: 10
+"""
+
+
+def test_range_get_config_returns_yaml_from_json(
+    client: LudusClient, httpx_mock: HTTPXMock
+) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{_url('/range/config')}?userID=alice",
+        status_code=200,
+        json={"result": RANGE_CONFIG_YAML},
+    )
+
+    config = client.range_get_config(user_id="alice")
+    assert isinstance(config, str)
+    assert config == RANGE_CONFIG_YAML
+    assert "vm_name" in config
+
+
+def test_range_get_config_by_range_number(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{_url('/range/config')}?rangeNumber=1",
+        status_code=200,
+        json={"result": RANGE_CONFIG_YAML},
+    )
+
+    config = client.range_get_config(range_number=1)
+    assert isinstance(config, str)
+    assert config == RANGE_CONFIG_YAML
+
+
+def test_range_get_config_returns_yaml_from_raw_body(
+    client: LudusClient, httpx_mock: HTTPXMock
+) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{_url('/range/config')}?userID=alice",
+        status_code=200,
+        text=RANGE_CONFIG_YAML,
+        headers={"content-type": "text/plain"},
+    )
+
+    config = client.range_get_config(user_id="alice")
+    assert config == RANGE_CONFIG_YAML
+
+
+def test_range_get_config_not_found(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{_url('/range/config')}?rangeNumber=999",
+        status_code=404,
+        json={"error": "range not found"},
+    )
+    with pytest.raises(LudusNotFound):
+        client.range_get_config(range_number=999)
+
+
+def test_range_get_config_requires_exactly_one_param(client: LudusClient) -> None:
+    with pytest.raises(ValueError, match="Exactly one"):
+        client.range_get_config()
+    with pytest.raises(ValueError, match="Exactly one"):
+        client.range_get_config(user_id="alice", range_number=1)
+
+
+# ---------------------------------------------------------------------------
 # Error translation: timeout, 5xx
 # ---------------------------------------------------------------------------
 
@@ -387,6 +462,95 @@ def test_api_key_never_logged(
     assert API_KEY not in joined
     # Also ensure api key doesn't leak in exception messages flowing through logs.
     assert "super-secret" not in joined
+
+
+# ---------------------------------------------------------------------------
+# Context manager support
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# user_list
+# ---------------------------------------------------------------------------
+
+
+def test_user_list_returns_list(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=_url("/user/all"),
+        status_code=200,
+        json=[
+            {"userID": "alice", "name": "Alice"},
+            {"userID": "bob", "name": "Bob"},
+        ],
+    )
+    users = client.user_list()
+    assert isinstance(users, list)
+    assert len(users) == 2
+    assert users[0]["userID"] == "alice"
+
+
+def test_user_list_wraps_single_object(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="GET",
+        url=_url("/user/all"),
+        status_code=200,
+        json={"userID": "alice", "name": "Alice"},
+    )
+    users = client.user_list()
+    assert users == [{"userID": "alice", "name": "Alice"}]
+
+
+# ---------------------------------------------------------------------------
+# range_destroy
+# ---------------------------------------------------------------------------
+
+
+def test_range_destroy_success(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="DELETE",
+        url=f"{_url('/range')}?rangeNumber=1",
+        status_code=200,
+        json={"result": "range destroyed"},
+    )
+
+    result = client.range_destroy(1)
+    assert result is None
+
+
+def test_range_destroy_not_found(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="DELETE",
+        url=f"{_url('/range')}?rangeNumber=999",
+        status_code=404,
+        json={"error": "range not found"},
+    )
+    with pytest.raises(LudusNotFound):
+        client.range_destroy(999)
+
+
+# ---------------------------------------------------------------------------
+# range_deploy_existing
+# ---------------------------------------------------------------------------
+
+
+def test_range_deploy_existing_success(client: LudusClient, httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        method="POST",
+        url=f"{_url('/range/deploy')}?rangeNumber=1",
+        status_code=200,
+        json={"result": "deploy started"},
+    )
+
+    result = client.range_deploy_existing(range_number=1)
+    assert result is None
+
+
+def test_range_deploy_existing_requires_one_param(client: LudusClient) -> None:
+    with pytest.raises(ValueError, match="Exactly one"):
+        client.range_deploy_existing()
+    with pytest.raises(ValueError, match="Exactly one"):
+        client.range_deploy_existing(user_id="alice", range_number=1)
 
 
 # ---------------------------------------------------------------------------

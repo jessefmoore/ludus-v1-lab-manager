@@ -14,6 +14,9 @@ import type {
   StudentResetResponse,
   CSVImportResponse,
   EventRead,
+  LudusRangeListResponse,
+  LudusRangeConfigResponse,
+  PlatformSettings,
 } from "./types";
 
 export class ApiError extends Error {
@@ -141,6 +144,31 @@ export const students = {
       },
     );
   },
+};
+
+// Ludus Discovery
+export const ludus = {
+  ranges: () =>
+    request<LudusRangeListResponse>("/api/ludus/ranges"),
+
+  rangeConfig: (rangeNumber: number) =>
+    request<LudusRangeConfigResponse>(`/api/ludus/ranges/${rangeNumber}/config`),
+};
+
+// Settings
+export const settings = {
+  get: () => request<PlatformSettings>("/api/settings"),
+
+  testConnection: () =>
+    request<{ status: string; latency_ms: number }>("/api/settings/test-ludus", {
+      method: "POST",
+    }),
+
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    request<void>("/api/settings/change-password", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // Events (audit log)

@@ -5,7 +5,7 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   children: ReactNode;
 }
 
@@ -27,9 +27,16 @@ export default function Modal({
     return () => document.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  // Focus trap: focus the panel on open
   useEffect(() => {
-    if (open) panelRef.current?.focus();
+    if (open) {
+      document.body.style.overflow = "hidden";
+      panelRef.current?.focus();
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [open]);
 
   // Tab focus trap
@@ -64,7 +71,7 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -76,10 +83,10 @@ export default function Modal({
         aria-modal="true"
         aria-label={title}
         onKeyDown={handleKeyDown}
-        className={`${size === "sm" ? "max-w-[480px]" : "max-w-[640px]"} w-full mx-4 rounded-lg bg-bg-surface border border-border shadow-2xl p-6 outline-none`}
+        className={`${size === "lg" ? "max-w-[860px]" : size === "sm" ? "max-w-[480px]" : "max-w-[640px]"} w-full mx-4 rounded-lg bg-bg-surface border border-border shadow-2xl p-6 outline-none animate-scale-in`}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-text-primary">
+          <h2 className="text-xl font-semibold text-text-primary">
             {title}
           </h2>
           <button

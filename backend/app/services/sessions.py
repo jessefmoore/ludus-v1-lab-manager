@@ -13,12 +13,12 @@ and lives in a separate service introduced by task #21.
 
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.orm import joinedload
 
 from app.models import Session as SessionRow
-from app.models import Student, StudentStatus
+from app.models import Student
 from app.models.event import Event
 from app.models.lab_template import LabTemplate
 from app.models.session import SessionStatus
@@ -59,11 +59,7 @@ def get_session(db: DBSession, sid: int) -> SessionRow | None:
 
 def get_session_with_students(db: DBSession, sid: int) -> SessionRow | None:
     """Return one session by id with its ``students`` collection eagerly loaded."""
-    stmt = (
-        select(SessionRow)
-        .options(joinedload(SessionRow.students))
-        .where(SessionRow.id == sid)
-    )
+    stmt = select(SessionRow).options(joinedload(SessionRow.students)).where(SessionRow.id == sid)
     return db.execute(stmt).unique().scalar_one_or_none()
 
 
@@ -79,9 +75,7 @@ def create_session(db: DBSession, payload: SessionCreate) -> SessionRow:
             "session.create rejected: lab_template_id=%s not found",
             payload.lab_template_id,
         )
-        raise LabTemplateNotFound(
-            f"lab_template_id={payload.lab_template_id} does not exist"
-        )
+        raise LabTemplateNotFound(f"lab_template_id={payload.lab_template_id} does not exist")
 
     session_row = SessionRow(
         name=payload.name,
@@ -143,18 +137,23 @@ def delete_session(db: DBSession, sid: int) -> None:
             f"only {sorted(s.value for s in _DELETABLE_STATUSES)} may be deleted"
         )
 
-    ready_student_stmt = select(Student.id).where(
-        Student.session_id == sid,
-        Student.status == StudentStatus.ready,
+    name_snapshot = session_row.name
+
+    # Collect student ids before cascade deletes them.
+    student_ids = list(db.execute(
+        select(Student.id).where(Student.session_id == sid)
+    ).scalars().all())
+
+    # Null out FK references in events to avoid Postgres FK violations.
+    # The audit rows survive with session_id/student_id = NULL.
+    db.execute(
+        update(Event).where(Event.session_id == sid).values(session_id=None)
     )
-    has_ready_student = db.execute(ready_student_stmt).first() is not None
-    if has_ready_student:
-        raise SessionDeleteConflict(
-            "session has students in status=ready; "
-            "unenroll or reset them before deleting"
+    if student_ids:
+        db.execute(
+            update(Event).where(Event.student_id.in_(student_ids)).values(student_id=None)
         )
 
-    name_snapshot = session_row.name
     db.delete(session_row)
 
     event = Event(

@@ -6,6 +6,7 @@ import {
   PlayCircle,
   FileText,
   CheckCircle2,
+  Layers,
 } from "lucide-react";
 import { sessions, labs, ApiError } from "@/api";
 import type {
@@ -67,6 +68,12 @@ export default function Dashboard() {
       accent: "text-accent-info",
     },
     {
+      label: "Lab Templates",
+      value: labList.length,
+      icon: Layers,
+      accent: "text-accent-info",
+    },
+    {
       label: "Ended",
       value: count("ended"),
       icon: CheckCircle2,
@@ -91,18 +98,18 @@ export default function Dashboard() {
 
       <div className="p-8 space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">Sessions</h1>
-          <p className="text-sm text-text-secondary mt-1">
+          <h1 className="text-[32px] leading-tight font-bold text-text-primary">Sessions</h1>
+          <p className="text-[15px] text-text-secondary mt-1">
             Manage your training sessions and student deployments
           </p>
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {stats.map((s) => (
-            <Card key={s.label} className="flex items-start justify-between">
+            <Card key={s.label} variant="stat" className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-text-secondary">
+                <p className="text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                   {s.label}
                 </p>
                 <p className={`text-[28px] font-bold leading-none mt-2 ${s.accent}`}>
@@ -115,7 +122,8 @@ export default function Dashboard() {
         </div>
 
         {/* Sessions table */}
-        <Card className="p-0 overflow-hidden">
+        <Card variant="gradient" className="p-0 overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-accent-success via-accent-info/60 to-transparent" />
           <div className="px-5 py-4 border-b border-border">
             <h2 className="text-lg font-semibold text-text-primary">
               Recent Deployments
@@ -142,47 +150,48 @@ export default function Dashboard() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Name
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Lab Template
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Mode
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Status
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Created
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {sessionList.map((session) => {
+                {sessionList.map((session, i) => {
                   const lab = labList.find(
                     (l) => l.id === session.lab_template_id,
                   );
                   return (
                     <tr
                       key={session.id}
-                      className="border-b border-border hover:bg-bg-elevated/50 transition-colors cursor-pointer"
+                      className="border-b border-border hover:bg-bg-elevated/50 transition-colors cursor-pointer animate-fade-in"
+                      style={{ animationDelay: `${i * 30}ms`, animationFillMode: "backwards" }}
                       onClick={() => navigate(`/sessions/${session.id}`)}
                     >
-                      <td className="px-4 py-3 text-sm text-text-primary font-medium">
+                      <td className="px-4 py-3 text-[15px] text-text-primary font-medium">
                         {session.name}
                       </td>
-                      <td className="px-4 py-3 text-sm text-text-secondary">
+                      <td className="px-4 py-3 text-[15px] text-text-secondary">
                         {lab?.name ?? "—"}
                       </td>
-                      <td className="px-4 py-3 text-sm text-text-secondary capitalize">
+                      <td className="px-4 py-3 text-[15px] text-text-secondary capitalize">
                         {session.mode}
                       </td>
                       <td className="px-4 py-3">
                         <StatusPill status={session.status} />
                       </td>
-                      <td className="px-4 py-3 text-sm font-mono text-text-muted">
+                      <td className="px-4 py-3 text-[15px] font-mono text-text-muted">
                         {new Date(session.created_at).toLocaleDateString()}
                       </td>
                     </tr>
@@ -273,9 +282,9 @@ function CreateSessionModal({
 
   return (
     <Modal open={open} onClose={onClose} title="New Session">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
-          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-sm text-accent-danger">
+          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-[15px] text-accent-danger">
             {error}
           </div>
         )}
@@ -288,12 +297,12 @@ function CreateSessionModal({
           required
         />
 
-        <div className="space-y-1.5">
-          <label className="block text-xs uppercase tracking-wider text-text-secondary">
+        <div className="space-y-2">
+          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
             Lab Template
           </label>
           <select
-            className="w-full h-10 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
+            className="w-full h-11 px-3 rounded-md bg-bg-elevated border border-border text-[15px] text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
             value={labId}
             onChange={(e) =>
               setLabId(e.target.value ? Number(e.target.value) : "")
@@ -309,12 +318,12 @@ function CreateSessionModal({
           </select>
         </div>
 
-        <div className="space-y-1.5">
-          <label className="block text-xs uppercase tracking-wider text-text-secondary">
+        <div className="space-y-2">
+          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
             Mode
           </label>
           <select
-            className="w-full h-10 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
+            className="w-full h-11 px-3 rounded-md bg-bg-elevated border border-border text-[15px] text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
             value={mode}
             onChange={(e) => setMode(e.target.value as LabMode)}
           >

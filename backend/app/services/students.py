@@ -24,7 +24,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.models import Session as SessionRow
@@ -213,14 +213,20 @@ def delete_student(
                 student.ludus_userid,
             )
         except LudusError as exc:
-            logger.warning(
-                "student.delete: ludus user_rm failed for %s: %s",
-                student.ludus_userid,
-                exc,
-            )
-            raise LudusRemovalFailed(
-                f"Ludus user_rm failed: {exc}"
-            ) from exc
+            # Ludus sometimes returns non-404 status codes (e.g. 500)
+            # with "not found" in the body when the user doesn't exist.
+            if "not found" in str(exc).lower():
+                logger.info(
+                    "student.delete: ludus user %s already gone (non-404), proceeding",
+                    student.ludus_userid,
+                )
+            else:
+                logger.warning(
+                    "student.delete: ludus user_rm failed for %s: %s",
+                    student.ludus_userid,
+                    exc,
+                )
+                raise LudusRemovalFailed(f"Ludus user_rm failed: {exc}") from exc
 
     if student.wg_config_path:
         try:
@@ -237,6 +243,11 @@ def delete_student(
     session_id = student.session_id
     ludus_userid = student.ludus_userid
     range_id = student.range_id
+
+    # Null out FK references in events to avoid Postgres FK violations.
+    db.execute(
+        update(Event).where(Event.student_id == student_id).values(student_id=None)
+    )
 
     event = Event(
         session_id=session_id,
@@ -298,9 +309,7 @@ def reset_student(
         elapsed = datetime.now(UTC) - last_reset.created_at.replace(tzinfo=UTC)
         remaining = timedelta(seconds=_RESET_COOLDOWN_SECONDS) - elapsed
         if remaining.total_seconds() > 0:
-            raise ResetCooldown(
-                f"Reset cooldown: wait {int(remaining.total_seconds())} seconds"
-            )
+            raise ResetCooldown(f"Reset cooldown: wait {int(remaining.total_seconds())} seconds")
 
     try:
         ludus_client.snapshot_revert(student.ludus_userid, snapshot_name)

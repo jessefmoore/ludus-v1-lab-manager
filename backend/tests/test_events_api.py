@@ -147,9 +147,7 @@ def test_list_events_empty_returns_empty_list(client: TestClient) -> None:
     assert resp.json() == []
 
 
-def test_list_events_returns_seeded_events(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_list_events_returns_seeded_events(client: TestClient, db_session: OrmSession) -> None:
     _seed_events(db_session, 3)
     resp = client.get("/api/events")
     assert resp.status_code == 200
@@ -160,9 +158,7 @@ def test_list_events_returns_seeded_events(
     assert body[2]["action"] == "test.action.0"
 
 
-def test_list_events_filter_by_session_id(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_list_events_filter_by_session_id(client: TestClient, db_session: OrmSession) -> None:
     _seed_events(db_session, 2, session_id=1)
     _seed_events(db_session, 3, session_id=2)
     resp = client.get("/api/events?session_id=2")
@@ -172,36 +168,28 @@ def test_list_events_filter_by_session_id(
     assert all(ev["session_id"] == 2 for ev in body)
 
 
-def test_list_events_respects_limit(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_list_events_respects_limit(client: TestClient, db_session: OrmSession) -> None:
     _seed_events(db_session, 10)
     resp = client.get("/api/events?limit=3")
     assert resp.status_code == 200
     assert len(resp.json()) == 3
 
 
-def test_list_events_respects_offset(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_list_events_respects_offset(client: TestClient, db_session: OrmSession) -> None:
     _seed_events(db_session, 5)
     resp = client.get("/api/events?offset=3")
     assert resp.status_code == 200
     assert len(resp.json()) == 2
 
 
-def test_list_events_includes_details_json(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_list_events_includes_details_json(client: TestClient, db_session: OrmSession) -> None:
     _seed_events(db_session, 1)
     resp = client.get("/api/events")
     body = resp.json()
     assert body[0]["details_json"] == {"index": 0}
 
 
-def test_list_events_includes_expected_fields(
-    client: TestClient, db_session: OrmSession
-) -> None:
+def test_list_events_includes_expected_fields(client: TestClient, db_session: OrmSession) -> None:
     _seed_events(db_session, 1)
     resp = client.get("/api/events")
     ev = resp.json()[0]

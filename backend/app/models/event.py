@@ -15,12 +15,8 @@ class Event(Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    session_id: Mapped[int | None] = mapped_column(
-        ForeignKey("sessions.id"), nullable=True
-    )
-    student_id: Mapped[int | None] = mapped_column(
-        ForeignKey("students.id"), nullable=True
-    )
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("sessions.id"), nullable=True)
+    student_id: Mapped[int | None] = mapped_column(ForeignKey("students.id"), nullable=True)
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     details_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -53,13 +53,13 @@ export default function StatusPill({ status }: { status: Status }) {
   const c = config[status];
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-xl text-xs font-medium ${c.bg} ${c.text}`}
+      className={`inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold animate-fade-in ${c.bg} ${c.text}`}
     >
       {c.icon === "spin" && (
         <Loader2 className="h-3 w-3 animate-spin" />
       )}
       {c.icon === "alert" && <AlertTriangle className="h-3 w-3" />}
-      {c.icon === "dot" && <span className="text-[8px]">●</span>}
+      {c.icon === "dot" && <span className="text-[8px] drop-shadow-[0_0_4px_rgba(0,212,170,0.6)]">●</span>}
       {c.label}
     </span>
   );

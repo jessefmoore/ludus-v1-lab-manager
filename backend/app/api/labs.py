@@ -1,16 +1,16 @@
-"""Lab template endpoints: list, create, detail.
+"""Lab template endpoints: list, create, detail, update, delete.
 
 All routes require an authenticated instructor session (cookie-based).
-Delete is deliberately omitted from Phase 1.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.lab import LabTemplateCreate, LabTemplateRead
+from app.schemas.lab import LabTemplateCreate, LabTemplateRead, LabTemplateUpdate
 from app.services import labs as labs_service
+from app.services.labs import LabDeleteConflict, LabNotFound
 
 router = APIRouter(prefix="/api/labs", tags=["labs"])
 
@@ -60,3 +60,48 @@ def get_lab(
             detail="Lab template not found",
         )
     return LabTemplateRead.model_validate(lab)
+
+
+@router.put("/{lab_id}", response_model=LabTemplateRead)
+def update_lab(
+    lab_id: int,
+    payload: LabTemplateUpdate,
+    db: Session = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> LabTemplateRead:
+    """Partially update a lab template."""
+    try:
+        lab = labs_service.update_lab(db, lab_id, payload)
+    except LabNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    return LabTemplateRead.model_validate(lab)
+
+
+@router.delete("/{lab_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_lab(
+    lab_id: int,
+    db: Session = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> Response:
+    """Delete a lab template if no active sessions reference it."""
+    try:
+        labs_service.delete_lab(db, lab_id)
+    except LabNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except LabDeleteConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

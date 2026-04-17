@@ -129,9 +129,7 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
 
 
 @pytest.fixture
-def draft_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def draft_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Spring 2026 Cohort",
         lab_template_id=lab_template.id,
@@ -145,9 +143,7 @@ def draft_session(
 
 
 @pytest.fixture
-def ended_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def ended_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Old Cohort",
         lab_template_id=lab_template.id,
@@ -290,9 +286,7 @@ def test_create_student_happy_path_returns_201(
     assert all(c in "0123456789abcdef" for c in token)
 
     # Verify persisted row matches and Ludus was NOT called on add.
-    row = db_session.execute(
-        select(Student).where(Student.id == body["id"])
-    ).scalar_one()
+    row = db_session.execute(select(Student).where(Student.id == body["id"])).scalar_one()
     assert row.status == StudentStatus.pending
     assert row.range_id is None
     assert row.wg_config_path is None
@@ -326,9 +320,7 @@ def test_create_student_writes_created_event(
     assert resp.status_code == 201
     student_id = resp.json()["id"]
 
-    event = db_session.execute(
-        select(Event).where(Event.action == "student.created")
-    ).scalar_one()
+    event = db_session.execute(select(Event).where(Event.action == "student.created")).scalar_one()
     assert event.session_id == draft_session.id
     assert event.student_id == student_id
     assert event.details_json is not None
@@ -407,9 +399,7 @@ def test_delete_pending_student_skips_ludus(
     assert fake_ludus.user_rm_calls == []
     assert db_session.get(Student, sid) is None
 
-    event = db_session.execute(
-        select(Event).where(Event.action == "student.deleted")
-    ).scalar_one()
+    event = db_session.execute(select(Event).where(Event.action == "student.deleted")).scalar_one()
     assert event.session_id == draft_session.id
     assert event.details_json is not None
     assert event.details_json["ludus_userid"] == "pending-user"
@@ -460,6 +450,31 @@ def test_delete_ready_student_ludus_not_found_is_ok(
     assert db_session.get(Student, sid) is None
 
 
+def test_delete_ready_student_ludus_non_404_not_found_is_ok(
+    client: TestClient,
+    db_session: OrmSession,
+    draft_session: SessionRow,
+    fake_ludus: FakeLudus,
+) -> None:
+    """Ludus sometimes returns non-404 status with 'not found' in the body."""
+    student = _make_student(
+        db_session,
+        draft_session,
+        ludus_userid="gone-user",
+        invite_token="d" * 32,
+        status=StudentStatus.ready,
+    )
+    sid = student.id
+    fake_ludus.user_rm_exc = LudusError(
+        "User was not found in the Ludus database: sql: no rows in result set",
+        status_code=500,
+    )
+
+    resp = client.delete(f"/api/students/{sid}")
+    assert resp.status_code == 204
+    assert db_session.get(Student, sid) is None
+
+
 def test_delete_ready_student_ludus_error_returns_502(
     client: TestClient,
     db_session: OrmSession,
@@ -487,9 +502,7 @@ def test_delete_student_unlinks_wg_config_file(
     db_session: OrmSession,
     draft_session: SessionRow,
 ) -> None:
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".conf", delete=False
-    ) as tf:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as tf:
         tf.write("[Interface]\n")
         cfg_path = tf.name
 

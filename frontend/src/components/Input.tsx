@@ -8,8 +8,8 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
   ({ label, icon, error, className = "", ...props }, ref) => (
-    <div className="space-y-1.5">
-      <label className="block text-xs uppercase tracking-wider text-text-secondary">
+    <div className="space-y-2">
+      <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
         {label}
       </label>
       <div className="relative">
@@ -20,7 +20,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <input
           ref={ref}
-          className={`w-full h-10 ${icon ? "pl-10" : "pl-3"} pr-3 rounded-md bg-bg-elevated border ${error ? "border-accent-danger" : "border-border"} text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success ${className}`}
+          className={`w-full h-11 ${icon ? "pl-10" : "pl-3"} pr-3 rounded-md bg-bg-elevated border ${error ? "border-accent-danger" : "border-border"} text-[15px] text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success ${className}`}
           {...props}
         />
       </div>

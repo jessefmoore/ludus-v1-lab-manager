@@ -43,9 +43,7 @@ def invite_page(
 ) -> HTMLResponse:
     """Render the public invite landing page for a valid, unexpired token."""
     try:
-        student = invite_service.load_student_by_token(
-            db, token, settings.invite_token_ttl_hours
-        )
+        student = invite_service.load_student_by_token(db, token, settings.invite_token_ttl_hours)
     except invite_service.InviteNotFoundOrExpired as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -56,9 +54,7 @@ def invite_page(
     if student.session is not None:
         lab = db.get(LabTemplate, student.session.lab_template_id)
 
-    expires_at = student.created_at + timedelta(
-        hours=settings.invite_token_ttl_hours
-    )
+    expires_at = student.created_at + timedelta(hours=settings.invite_token_ttl_hours)
     download_url = f"/invite/{token}/config"
 
     return templates.TemplateResponse(

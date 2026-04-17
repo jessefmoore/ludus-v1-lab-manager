@@ -97,9 +97,7 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
 
 
 @pytest.fixture
-def active_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def active_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Spring 2026 Cohort",
         lab_template_id=lab_template.id,
@@ -250,10 +248,7 @@ def test_invite_config_ready_student_returns_file(
     resp = client.get(f"/invite/{'c' * 32}/config")
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/octet-stream"
-    assert (
-        resp.headers["content-disposition"]
-        == 'attachment; filename="alice-abcd12.conf"'
-    )
+    assert resp.headers["content-disposition"] == 'attachment; filename="alice-abcd12.conf"'
     assert resp.content == conf_bytes
 
 
@@ -307,11 +302,7 @@ def test_invite_config_first_call_sets_redeemed_and_logs_event(
     assert isinstance(refreshed.invite_redeemed_at, datetime)
 
     events = (
-        db_session.execute(
-            select(Event).where(Event.action == "invite.redeemed")
-        )
-        .scalars()
-        .all()
+        db_session.execute(select(Event).where(Event.action == "invite.redeemed")).scalars().all()
     )
     assert len(events) == 1
     assert events[0].student_id == student.id
@@ -355,9 +346,7 @@ def test_invite_config_second_call_logs_redownloaded_and_keeps_timestamp(
     assert refreshed2.invite_redeemed_at == first_redeemed_at
 
     redownloaded_events = (
-        db_session.execute(
-            select(Event).where(Event.action == "invite.redownloaded")
-        )
+        db_session.execute(select(Event).where(Event.action == "invite.redownloaded"))
         .scalars()
         .all()
     )
@@ -365,11 +354,7 @@ def test_invite_config_second_call_logs_redownloaded_and_keeps_timestamp(
     assert redownloaded_events[0].student_id == student.id
 
     redeemed_events = (
-        db_session.execute(
-            select(Event).where(Event.action == "invite.redeemed")
-        )
-        .scalars()
-        .all()
+        db_session.execute(select(Event).where(Event.action == "invite.redeemed")).scalars().all()
     )
     assert len(redeemed_events) == 1
 

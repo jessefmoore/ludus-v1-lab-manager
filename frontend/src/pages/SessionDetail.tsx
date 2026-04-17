@@ -307,24 +307,30 @@ export default function SessionDetail() {
       <div className="p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold text-text-primary">
+          <h1 className="text-[32px] font-bold leading-tight text-text-primary">
             {session.name}
           </h1>
           <StatusPill status={session.status} />
+          {totalStudents > 0 && (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl text-xs font-medium bg-[#262A36] text-text-secondary">
+              <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
+              0 / {totalStudents} VPN
+            </span>
+          )}
         </div>
 
         {/* Provisioning progress bar */}
         {totalStudents > 0 && (provisioning || session.status === "provisioning") && (
           <Card className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center justify-between text-[15px]">
               <span className="text-text-secondary">Provisioning progress</span>
               <span className="text-text-primary font-mono">
                 {readyCount} / {totalStudents}
               </span>
             </div>
-            <div className="h-2 bg-bg-elevated rounded-full overflow-hidden">
+            <div className="h-2.5 bg-bg-elevated rounded-full overflow-hidden">
               <div
-                className="h-full bg-accent-success rounded-full transition-all duration-500"
+                className="h-full bg-accent-success rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(0,212,170,0.3)]"
                 style={{ width: `${(readyCount / totalStudents) * 100}%` }}
               />
             </div>
@@ -333,14 +339,14 @@ export default function SessionDetail() {
 
         {/* Info cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="space-y-2">
+          <Card variant="stat" className="space-y-2">
             <div className="flex items-center gap-2 text-text-secondary">
               <Layers className="h-4 w-4" />
-              <span className="text-xs uppercase tracking-wider font-medium">
+              <span className="text-[13px] uppercase tracking-wider font-medium">
                 Lab Template
               </span>
             </div>
-            <p className="text-sm text-text-primary font-medium">
+            <p className="text-[15px] text-text-primary font-medium">
               {lab?.name ?? "Unknown"}
             </p>
             {lab?.entry_point_vm && (
@@ -353,14 +359,14 @@ export default function SessionDetail() {
             )}
           </Card>
 
-          <Card className="space-y-2">
+          <Card variant="stat" className="space-y-2">
             <div className="flex items-center gap-2 text-text-secondary">
               <Server className="h-4 w-4" />
-              <span className="text-xs uppercase tracking-wider font-medium">
+              <span className="text-[13px] uppercase tracking-wider font-medium">
                 Infrastructure Mode
               </span>
             </div>
-            <p className="text-sm text-text-primary font-medium capitalize">
+            <p className="text-[15px] text-text-primary font-medium capitalize">
               {session.mode}
             </p>
             {session.mode === "shared" && session.shared_range_id && (
@@ -373,14 +379,14 @@ export default function SessionDetail() {
             )}
           </Card>
 
-          <Card className="space-y-2">
+          <Card variant="stat" className="space-y-2">
             <div className="flex items-center gap-2 text-text-secondary">
               <CalendarRange className="h-4 w-4" />
-              <span className="text-xs uppercase tracking-wider font-medium">
+              <span className="text-[13px] uppercase tracking-wider font-medium">
                 Schedule
               </span>
             </div>
-            <p className="text-sm text-text-primary">
+            <p className="text-[15px] text-text-primary">
               {session.start_date
                 ? new Date(session.start_date).toLocaleDateString()
                 : "Not set"}{" "}
@@ -393,7 +399,8 @@ export default function SessionDetail() {
         </div>
 
         {/* Students */}
-        <Card className="p-0 overflow-hidden">
+        <Card variant="gradient" className="p-0 overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-accent-success via-accent-info/60 to-transparent" />
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 className="text-lg font-semibold text-text-primary">
               Students ({totalStudents})
@@ -459,22 +466,25 @@ export default function SessionDetail() {
                       aria-label="Select all students"
                     />
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Name / Email
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     UserID
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Range
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Status
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
+                    VPN
+                  </th>
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Invite
                   </th>
-                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                     Actions
                   </th>
                 </tr>
@@ -498,8 +508,8 @@ export default function SessionDetail() {
 
         {/* Bulk action bar */}
         {selected.size > 0 && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bg-surface border border-border rounded-lg shadow-lg px-6 py-3 flex items-center gap-4 z-40">
-            <span className="text-sm text-text-primary">
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-bg-surface border border-border rounded-lg shadow-glow px-6 py-3 flex items-center gap-4 z-40 animate-slide-up">
+            <span className="text-[15px] text-text-primary">
               {selected.size} selected
             </span>
             <Button
@@ -519,7 +529,7 @@ export default function SessionDetail() {
         )}
 
         {/* Activity log */}
-        <Card className="overflow-hidden">
+        <Card variant="default" className="overflow-hidden">
           <button
             className="flex items-center justify-between w-full text-left"
             onClick={() => setActivityOpen((o) => !o)}
@@ -545,7 +555,7 @@ export default function SessionDetail() {
                       className="flex items-start gap-3 py-2 px-3 rounded hover:bg-bg-elevated/50 transition-colors"
                     >
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-mono text-accent-info">
+                        <span className="text-[15px] font-mono text-accent-info">
                           {ev.action}
                         </span>
                         {ev.details_json && (
@@ -587,7 +597,7 @@ export default function SessionDetail() {
         title={confirmModal?.title ?? ""}
         size="sm"
       >
-        <p className="text-sm text-text-secondary mb-6">
+        <p className="text-[15px] text-text-secondary mb-6">
           {confirmModal?.message}
         </p>
         <div className="flex justify-end gap-3">
@@ -644,17 +654,23 @@ function StudentRow({
         />
       </td>
       <td className="px-4 py-3">
-        <div className="text-sm text-text-primary">{student.full_name}</div>
+        <div className="text-[15px] text-text-primary">{student.full_name}</div>
         <div className="text-xs text-text-muted">{student.email}</div>
       </td>
-      <td className="px-4 py-3 text-sm font-mono text-text-secondary">
+      <td className="px-4 py-3 text-[15px] font-mono text-text-secondary">
         {student.ludus_userid || "—"}
       </td>
-      <td className="px-4 py-3 text-sm font-mono text-text-secondary">
+      <td className="px-4 py-3 text-[15px] font-mono text-text-secondary">
         {student.range_id || "—"}
       </td>
       <td className="px-4 py-3">
         <StatusPill status={student.status} />
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
+          <span className="text-xs text-text-muted">Unknown</span>
+        </div>
       </td>
       <td className="px-4 py-3">
         {student.status === "ready" && student.invite_url ? (

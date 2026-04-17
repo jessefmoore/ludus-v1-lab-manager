@@ -39,15 +39,9 @@ class Session(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    start_date: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    end_date: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    lab_template_id: Mapped[int] = mapped_column(
-        ForeignKey("lab_templates.id"), nullable=False
-    )
+    start_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    lab_template_id: Mapped[int] = mapped_column(ForeignKey("lab_templates.id"), nullable=False)
     mode: Mapped[SessionMode] = mapped_column(
         SAEnum(SessionMode, name="session_mode"),
         nullable=False,

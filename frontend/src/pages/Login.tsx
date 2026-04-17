@@ -35,13 +35,21 @@ export default function Login() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-bg-base px-4">
-      <div className="w-full max-w-[420px] bg-bg-surface border border-border rounded-lg p-10">
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background:
+            "radial-gradient(600px circle at 50% 40%, rgba(0,212,170,0.04), transparent 70%)",
+        }}
+      />
+
+      <div className="relative w-full max-w-[420px] gradient-border rounded-lg p-10 animate-scale-in">
         {/* Logo */}
         <div className="mb-8">
           <div className="flex items-center gap-1.5">
-            <span className="text-2xl font-bold text-text-primary">insec</span>
-            <span className="text-2xl font-bold text-accent-success">.</span>
-            <span className="text-2xl font-bold text-text-primary">ml</span>
+            <span className="text-3xl font-bold text-text-primary">insec</span>
+            <span className="text-3xl font-bold text-accent-success">.</span>
+            <span className="text-3xl font-bold text-text-primary">ml</span>
           </div>
           <p className="text-sm text-text-secondary mt-2">
             Sign in to the instructor platform
@@ -87,7 +95,7 @@ export default function Login() {
         </form>
       </div>
 
-      <p className="mt-8 text-xs text-text-muted">
+      <p className="relative mt-8 text-xs text-text-muted">
         &copy; insec.ml &mdash; instructor access only
       </p>
     </div>

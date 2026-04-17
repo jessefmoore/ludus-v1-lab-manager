@@ -51,9 +51,7 @@ def load_student_by_token(db: DBSession, token: str, ttl_hours: int) -> Student:
             ``now - student.created_at > ttl_hours``. The same exception
             is used for both so we do not leak existence via the error.
     """
-    student = db.execute(
-        select(Student).where(Student.invite_token == token)
-    ).scalar_one_or_none()
+    student = db.execute(select(Student).where(Student.invite_token == token)).scalar_one_or_none()
     if student is None:
         raise InviteNotFoundOrExpired("Invite link not found or expired")
     if _is_expired(student, ttl_hours):
@@ -61,9 +59,7 @@ def load_student_by_token(db: DBSession, token: str, ttl_hours: int) -> Student:
     return student
 
 
-def prepare_config_download(
-    db: DBSession, token: str, ttl_hours: int
-) -> tuple[Student, Path]:
+def prepare_config_download(db: DBSession, token: str, ttl_hours: int) -> tuple[Student, Path]:
     """Resolve the ``(student, wg_config_path)`` tuple for a download.
 
     Applies the same 404 rule as ``load_student_by_token`` before
@@ -77,18 +73,12 @@ def prepare_config_download(
     """
     student = load_student_by_token(db, token, ttl_hours)
     if student.status != StudentStatus.ready:
-        raise InviteNotReady(
-            "Lab not ready yet — please check back after provisioning completes"
-        )
+        raise InviteNotReady("Lab not ready yet — please check back after provisioning completes")
     if not student.wg_config_path:
-        raise InviteNotReady(
-            "Lab not ready yet — please check back after provisioning completes"
-        )
+        raise InviteNotReady("Lab not ready yet — please check back after provisioning completes")
     path = Path(student.wg_config_path)
     if not path.is_file():
-        raise InviteNotReady(
-            "Lab not ready yet — please check back after provisioning completes"
-        )
+        raise InviteNotReady("Lab not ready yet — please check back after provisioning completes")
     return student, path
 
 

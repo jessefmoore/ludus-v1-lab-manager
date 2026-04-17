@@ -113,9 +113,7 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
 
 
 @pytest.fixture
-def draft_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def draft_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Spring 2026 Cohort",
         lab_template_id=lab_template.id,
@@ -129,9 +127,7 @@ def draft_session(
 
 
 @pytest.fixture
-def ended_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def ended_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Old Cohort",
         lab_template_id=lab_template.id,
@@ -218,11 +214,13 @@ def test_csv_import_without_auth_returns_401(
 def test_csv_import_happy_path(
     client: TestClient, db_session: OrmSession, draft_session: SessionRow
 ) -> None:
-    csv = _csv_bytes([
-        ["Alice Example", "alice@example.com"],
-        ["Bob Example", "bob@example.com"],
-        ["Carol Example", "carol@example.com"],
-    ])
+    csv = _csv_bytes(
+        [
+            ["Alice Example", "alice@example.com"],
+            ["Bob Example", "bob@example.com"],
+            ["Carol Example", "carol@example.com"],
+        ]
+    )
     resp = client.post(
         f"/api/sessions/{draft_session.id}/students/import",
         files={"file": ("students.csv", csv, "text/csv")},
@@ -257,11 +255,13 @@ def test_csv_import_missing_columns_returns_400(
 def test_csv_import_invalid_email_row_is_skipped(
     client: TestClient, db_session: OrmSession, draft_session: SessionRow
 ) -> None:
-    csv = _csv_bytes([
-        ["Alice Example", "alice@example.com"],
-        ["Bad Email", "not-an-email"],
-        ["Carol Example", "carol@example.com"],
-    ])
+    csv = _csv_bytes(
+        [
+            ["Alice Example", "alice@example.com"],
+            ["Bad Email", "not-an-email"],
+            ["Carol Example", "carol@example.com"],
+        ]
+    )
     resp = client.post(
         f"/api/sessions/{draft_session.id}/students/import",
         files={"file": ("students.csv", csv, "text/csv")},
@@ -315,18 +315,18 @@ def test_csv_import_empty_csv_returns_201_with_zero_counts(
 def test_csv_import_writes_student_created_events(
     client: TestClient, db_session: OrmSession, draft_session: SessionRow
 ) -> None:
-    csv = _csv_bytes([
-        ["Alice Example", "alice@example.com"],
-        ["Bob Example", "bob@example.com"],
-    ])
+    csv = _csv_bytes(
+        [
+            ["Alice Example", "alice@example.com"],
+            ["Bob Example", "bob@example.com"],
+        ]
+    )
     resp = client.post(
         f"/api/sessions/{draft_session.id}/students/import",
         files={"file": ("students.csv", csv, "text/csv")},
     )
     assert resp.status_code == 201
-    events = db_session.scalars(
-        select(Event).where(Event.action == "student.created")
-    ).all()
+    events = db_session.scalars(select(Event).where(Event.action == "student.created")).all()
     assert len(events) == 2
 
 

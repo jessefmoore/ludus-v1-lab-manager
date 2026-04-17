@@ -207,9 +207,7 @@ def test_round_trip_from_orm(orm_session: OrmSession) -> None:
 
     # LabTemplateRead from ORM instance
     lab_dto = LabTemplateRead.model_validate(
-        orm_session.execute(
-            select(LabTemplate).where(LabTemplate.id == template.id)
-        ).scalar_one()
+        orm_session.execute(select(LabTemplate).where(LabTemplate.id == template.id)).scalar_one()
     )
     assert lab_dto.id == template.id
     assert lab_dto.name == "AD Basics"

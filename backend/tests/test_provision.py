@@ -357,9 +357,7 @@ def test_provision_shared_session_happy_path_two_students(
 
     # Provisioned events emitted.
     provisioned_events = (
-        db_session.execute(
-            select(Event).where(Event.action == "student.provisioned")
-        )
+        db_session.execute(select(Event).where(Event.action == "student.provisioned"))
         .scalars()
         .all()
     )
@@ -392,9 +390,7 @@ def test_provision_shared_session_wireguard_timeout_marks_error(
         invite_token="b" * 32,
     )
 
-    fake_ludus.user_wireguard_overrides["bob-bbb"] = LudusTimeout(
-        "wireguard endpoint timed out"
-    )
+    fake_ludus.user_wireguard_overrides["bob-bbb"] = LudusTimeout("wireguard endpoint timed out")
 
     resp = client.post(f"/api/sessions/{session_row.id}/provision")
     assert resp.status_code == 200
@@ -407,9 +403,7 @@ def test_provision_shared_session_wireguard_timeout_marks_error(
     alice = db_session.execute(
         select(Student).where(Student.ludus_userid == "alice-aaa")
     ).scalar_one()
-    bob = db_session.execute(
-        select(Student).where(Student.ludus_userid == "bob-bbb")
-    ).scalar_one()
+    bob = db_session.execute(select(Student).where(Student.ludus_userid == "bob-bbb")).scalar_one()
     assert alice.status == StudentStatus.ready
     assert bob.status == StudentStatus.error
     assert bob.wg_config_path is None
@@ -463,9 +457,7 @@ def test_provision_ludus_user_exists_is_benign(
     assert body["failed"] == 0
 
     # range_assign + user_wireguard must have been attempted regardless.
-    assert fake_ludus.range_assign_calls == [
-        {"userid": "alice-aaa", "range_id": "42"}
-    ]
+    assert fake_ludus.range_assign_calls == [{"userid": "alice-aaa", "range_id": "42"}]
     assert fake_ludus.user_wireguard_calls == ["alice-aaa"]
 
     db_session.expire_all()
@@ -596,9 +588,7 @@ def test_provision_shared_session_missing_range_id_errors_everyone(
 
     # Failure events name the reason.
     failures = (
-        db_session.execute(
-            select(Event).where(Event.action == "student.provision_failed")
-        )
+        db_session.execute(select(Event).where(Event.action == "student.provision_failed"))
         .scalars()
         .all()
     )

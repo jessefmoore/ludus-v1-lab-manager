@@ -114,15 +114,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("students", schema=None) as batch_op:
-        batch_op.create_index(
-            batch_op.f("ix_students_invite_token"), ["invite_token"], unique=True
-        )
-        batch_op.create_index(
-            batch_op.f("ix_students_ludus_userid"), ["ludus_userid"], unique=True
-        )
-        batch_op.create_index(
-            batch_op.f("ix_students_session_id"), ["session_id"], unique=False
-        )
+        batch_op.create_index(batch_op.f("ix_students_invite_token"), ["invite_token"], unique=True)
+        batch_op.create_index(batch_op.f("ix_students_ludus_userid"), ["ludus_userid"], unique=True)
+        batch_op.create_index(batch_op.f("ix_students_session_id"), ["session_id"], unique=False)
 
     op.create_table(
         "events",

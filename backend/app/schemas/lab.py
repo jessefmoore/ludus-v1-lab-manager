@@ -33,4 +33,15 @@ class LabTemplateRead(BaseModel):
     created_at: datetime
 
 
-__all__ = ["LabTemplateCreate", "LabTemplateRead"]
+class LabTemplateUpdate(BaseModel):
+    """Partial update payload for a lab template (all fields optional)."""
+
+    name: str | None = None
+    description: str | None = None
+    range_config_yaml: str | None = None
+    default_mode: LabMode | None = None
+    ludus_server: str | None = None
+    entry_point_vm: str | None = None
+
+
+__all__ = ["LabTemplateCreate", "LabTemplateRead", "LabTemplateUpdate"]

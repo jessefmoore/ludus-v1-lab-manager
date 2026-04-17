@@ -21,6 +21,7 @@ Routes used here:
     POST   /api/v2/user                                   -> user_add
            body: {"userID", "name", "email", "password", "isAdmin"}
     DELETE /api/v2/user/{userID}                          -> user_rm
+    GET    /api/v2/user/all                               -> user_list
     POST   /api/v2/ranges/assign/{userID}/{rangeID}       -> range_assign
     GET    /api/v2/user/wireguard?userID=<userID>         -> user_wireguard
            returns JSON {"result": {"wireGuardConfig": "<.conf text>"}}
@@ -30,7 +31,10 @@ Routes used here:
            multipart form: file=<range-config.yml>, force=true
     POST   /api/v2/range/deploy?userID=<userID>           -> range_deploy (step 2)
            body: {"force": false}
+    POST   /api/v2/range/deploy?rangeNumber=<N>           -> range_deploy_existing
+    DELETE /api/v2/range?rangeNumber=<N>                  -> range_destroy
     GET    /api/v2/range/all                              -> range_list
+    GET    /api/v2/range/config?userID=|rangeNumber=      -> range_get_config
 ================================================================
 """
 
@@ -413,6 +417,150 @@ class LudusClient:
         raise LudusError(
             f"Unexpected range_list response shape: {type(data).__name__}",
             status_code=response.status_code,
+        )
+
+    def range_get_config(
+        self,
+        *,
+        user_id: str | None = None,
+        range_number: int | None = None,
+    ) -> str:
+        """Return the range-config YAML for a range.
+
+        Route:  GET /api/v2/range/config?userID=<userID>
+            or  GET /api/v2/range/config?rangeNumber=<N>
+
+        Exactly one of ``user_id`` or ``range_number`` must be provided.
+
+        Raises:
+            LudusAuthError on 401/403.
+            LudusNotFound on 404 (user or range missing).
+            LudusError on any other non-2xx or unexpected response shape.
+        Returns:
+            The raw YAML string.
+        """
+        if (user_id is None) == (range_number is None):
+            raise ValueError("Exactly one of user_id or range_number must be provided")
+
+        params: dict[str, str | int] = {}
+        if user_id is not None:
+            params["userID"] = user_id
+        else:
+            assert range_number is not None
+            params["rangeNumber"] = range_number
+
+        response = self._request(
+            "GET",
+            f"{API_BASE}/range/config",
+            params=params,
+        )
+
+        # Response can be JSON wrapping the config, or raw text — handle
+        # both the same way as user_wireguard.
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                body = response.json()
+            except ValueError as exc:
+                raise LudusError(
+                    "Ludus returned invalid JSON for range_get_config",
+                    status_code=response.status_code,
+                ) from exc
+            if isinstance(body, dict):
+                result = body.get("result")
+                if isinstance(result, str):
+                    return result
+                # Some versions nest under "rangeConfig"
+                cfg = body.get("rangeConfig")
+                if isinstance(cfg, str):
+                    return cfg
+            raise LudusError(
+                "Ludus range_get_config response missing config data",
+                status_code=response.status_code,
+            )
+        # Fall back to raw text (e.g. text/plain, application/x-yaml).
+        return response.text
+
+    # -- user listing --------------------------------------------------------
+
+    def user_list(self) -> list[dict]:
+        """List all users visible to the current API key.
+
+        Route:  GET /api/v2/user/all
+        Raises:
+            LudusAuthError on 401/403.
+            LudusError on any other non-2xx.
+        Returns:
+            A list of user dicts. If Ludus returns a single user object,
+            it is wrapped in a one-element list for caller convenience.
+        """
+        response = self._request("GET", f"{API_BASE}/user/all")
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise LudusError(
+                "Ludus returned invalid JSON for user_list",
+                status_code=response.status_code,
+            ) from exc
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+        raise LudusError(
+            f"Unexpected user_list response shape: {type(data).__name__}",
+            status_code=response.status_code,
+        )
+
+    # -- range deploy (existing) / destroy ----------------------------------
+
+    def range_deploy_existing(
+        self,
+        *,
+        user_id: str | None = None,
+        range_number: int | None = None,
+    ) -> None:
+        """Deploy an already-configured range.
+
+        Route:  POST /api/v2/range/deploy?userID=<userID>
+            or  POST /api/v2/range/deploy?rangeNumber=<N>
+
+        Exactly one of ``user_id`` or ``range_number`` must be provided.
+
+        Raises:
+            LudusAuthError on 401/403.
+            LudusNotFound on 404.
+            LudusError on any other non-2xx.
+        """
+        if (user_id is None) == (range_number is None):
+            raise ValueError("Exactly one of user_id or range_number must be provided")
+
+        params: dict[str, str | int] = {}
+        if user_id is not None:
+            params["userID"] = user_id
+        else:
+            assert range_number is not None
+            params["rangeNumber"] = range_number
+
+        self._request(
+            "POST",
+            f"{API_BASE}/range/deploy",
+            params=params,
+            json={},
+        )
+
+    def range_destroy(self, range_number: int) -> None:
+        """Destroy a range by its number.
+
+        Route:  DELETE /api/v2/range?rangeNumber=<N>
+        Raises:
+            LudusAuthError on 401/403.
+            LudusNotFound on 404.
+            LudusError on any other non-2xx.
+        """
+        self._request(
+            "DELETE",
+            f"{API_BASE}/range",
+            params={"rangeNumber": range_number},
         )
 
 

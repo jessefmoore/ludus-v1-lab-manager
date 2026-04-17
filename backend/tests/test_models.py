@@ -181,8 +181,6 @@ def test_session_students_relationship(orm_session: OrmSession) -> None:
     orm_session.add_all([s1, s2])
     orm_session.commit()
 
-    refreshed = orm_session.execute(
-        select(Session).where(Session.id == sess.id)
-    ).scalar_one()
+    refreshed = orm_session.execute(select(Session).where(Session.id == sess.id)).scalar_one()
     assert {s.ludus_userid for s in refreshed.students} == {"bob", "carol"}
     assert refreshed.students[0].session.id == refreshed.id

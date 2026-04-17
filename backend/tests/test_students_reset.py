@@ -128,9 +128,7 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
 
 
 @pytest.fixture
-def draft_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def draft_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Spring 2026 Cohort",
         lab_template_id=lab_template.id,
@@ -233,9 +231,7 @@ def test_reset_without_auth_returns_401(
     assert resp.status_code == 401
 
 
-def test_reset_missing_student_returns_404(
-    client: TestClient, fake_ludus: FakeLudus
-) -> None:
+def test_reset_missing_student_returns_404(client: TestClient, fake_ludus: FakeLudus) -> None:
     resp = client.post("/api/students/9999/reset", json={})
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Student not found"
@@ -304,9 +300,7 @@ def test_reset_ready_student_default_snapshot_returns_202(
     }
     assert fake_ludus.snapshot_revert_calls == [(userid, "ctf-initial")]
 
-    event = db_session.execute(
-        select(Event).where(Event.action == "student.reset")
-    ).scalar_one()
+    event = db_session.execute(select(Event).where(Event.action == "student.reset")).scalar_one()
     assert event.student_id == sid
     assert event.session_id == draft_session.id
     assert event.details_json is not None
@@ -332,9 +326,7 @@ def test_reset_ready_student_no_body_uses_default_snapshot(
     resp = client.post(f"/api/students/{student.id}/reset")
     assert resp.status_code == 202
     assert resp.json()["snapshot_name"] == "ctf-initial"
-    assert fake_ludus.snapshot_revert_calls == [
-        (student.ludus_userid, "ctf-initial")
-    ]
+    assert fake_ludus.snapshot_revert_calls == [(student.ludus_userid, "ctf-initial")]
 
 
 def test_reset_ready_student_custom_snapshot(
@@ -359,9 +351,7 @@ def test_reset_ready_student_custom_snapshot(
         "status": "reset_triggered",
         "snapshot_name": "lab-clean",
     }
-    assert fake_ludus.snapshot_revert_calls == [
-        (student.ludus_userid, "lab-clean")
-    ]
+    assert fake_ludus.snapshot_revert_calls == [(student.ludus_userid, "lab-clean")]
 
 
 def test_reset_ludus_error_returns_502(
@@ -377,9 +367,7 @@ def test_reset_ludus_error_returns_502(
         invite_token="9" * 32,
         status=StudentStatus.ready,
     )
-    fake_ludus.snapshot_revert_exc = LudusError(
-        "ludus is on fire", status_code=500
-    )
+    fake_ludus.snapshot_revert_exc = LudusError("ludus is on fire", status_code=500)
 
     resp = client.post(f"/api/students/{student.id}/reset", json={})
     assert resp.status_code == 502
@@ -387,10 +375,6 @@ def test_reset_ludus_error_returns_502(
 
     # No reset event should have been recorded on failure.
     events = (
-        db_session.execute(
-            select(Event).where(Event.action == "student.reset")
-        )
-        .scalars()
-        .all()
+        db_session.execute(select(Event).where(Event.action == "student.reset")).scalars().all()
     )
     assert events == []

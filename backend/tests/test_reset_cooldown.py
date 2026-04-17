@@ -116,9 +116,7 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
 
 
 @pytest.fixture
-def draft_session(
-    db_session: OrmSession, lab_template: LabTemplate
-) -> SessionRow:
+def draft_session(db_session: OrmSession, lab_template: LabTemplate) -> SessionRow:
     row = SessionRow(
         name="Spring 2026 Cohort",
         lab_template_id=lab_template.id,
@@ -242,10 +240,14 @@ def test_reset_after_cooldown_expires_succeeds(
     assert resp1.status_code == 202
 
     # Manually backdate the event to simulate cooldown expiry
-    event = db_session.query(Event).filter(
-        Event.action == "student.reset",
-        Event.student_id == student.id,
-    ).one()
+    event = (
+        db_session.query(Event)
+        .filter(
+            Event.action == "student.reset",
+            Event.student_id == student.id,
+        )
+        .one()
+    )
     event.created_at = datetime.now(UTC) - timedelta(seconds=130)
     db_session.commit()
 
@@ -263,12 +265,14 @@ def test_cooldown_is_per_student(
 ) -> None:
     """Resetting student A should not block resetting student B."""
     student_a = _make_ready_student(
-        db_session, draft_session,
+        db_session,
+        draft_session,
         ludus_userid="student-a",
         invite_token="a" * 32,
     )
     student_b = _make_ready_student(
-        db_session, draft_session,
+        db_session,
+        draft_session,
         ludus_userid="student-b",
         invite_token="b" * 32,
     )

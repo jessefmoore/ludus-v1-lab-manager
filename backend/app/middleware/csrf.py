@@ -31,9 +31,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.allowed_host = allowed_host
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method not in _STATE_CHANGING:
             return await call_next(request)
 
