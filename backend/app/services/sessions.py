@@ -27,6 +27,7 @@ from app.schemas.session import SessionCreate
 logger = logging.getLogger(__name__)
 
 _DELETABLE_STATUSES = {SessionStatus.draft, SessionStatus.ended}
+_ENDABLE_STATUSES = {SessionStatus.active, SessionStatus.provisioning}
 
 
 class LabTemplateNotFound(Exception):  # noqa: N818 -- spec-mandated name
@@ -39,6 +40,10 @@ class SessionNotFound(Exception):  # noqa: N818 -- spec-mandated name
 
 class SessionDeleteConflict(Exception):  # noqa: N818 -- spec-mandated name
     """Raised when a session cannot be deleted due to status/student state."""
+
+
+class SessionEndConflict(Exception):  # noqa: N818 -- spec-mandated name
+    """Raised when a session cannot be ended (e.g. already ended or still draft)."""
 
 
 def list_sessions(db: DBSession) -> list[SessionRow]:
@@ -164,12 +169,46 @@ def delete_session(db: DBSession, sid: int) -> None:
     logger.info("session.deleted id=%s name=%s", sid, name_snapshot)
 
 
+def end_session(db: DBSession, sid: int) -> SessionRow:
+    """Transition a session to ``ended`` status.
+
+    Only ``active`` or ``provisioning`` sessions may be ended. Draft or
+    already-ended sessions raise ``SessionEndConflict``.
+    """
+    session_row = db.get(SessionRow, sid)
+    if session_row is None:
+        raise SessionNotFound(f"session id={sid} does not exist")
+
+    if session_row.status not in _ENDABLE_STATUSES:
+        raise SessionEndConflict(
+            f"session is in status={session_row.status.value}; "
+            f"only {sorted(s.value for s in _ENDABLE_STATUSES)} may be ended"
+        )
+
+    session_row.status = SessionStatus.ended
+
+    event = Event(
+        session_id=session_row.id,
+        student_id=None,
+        action="session.ended",
+        details_json={"session_id": session_row.id, "name": session_row.name},
+    )
+    db.add(event)
+
+    db.commit()
+    db.refresh(session_row)
+    logger.info("session.ended id=%s name=%s", sid, session_row.name)
+    return session_row
+
+
 __all__ = [
     "LabTemplateNotFound",
     "SessionDeleteConflict",
+    "SessionEndConflict",
     "SessionNotFound",
     "create_session",
     "delete_session",
+    "end_session",
     "get_session",
     "get_session_with_students",
     "list_sessions",

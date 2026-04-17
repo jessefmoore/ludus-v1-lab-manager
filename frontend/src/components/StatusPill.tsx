@@ -28,7 +28,7 @@ const config: Record<
   ended: {
     label: "Ended",
     bg: "bg-[#262A36]",
-    text: "text-text-muted",
+    text: "text-text-secondary",
   },
   // Student statuses
   ready: {

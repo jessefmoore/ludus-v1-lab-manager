@@ -138,22 +138,23 @@ export default function Dashboard() {
               </Button>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Name
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Lab Template
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Mode
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Status
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Created
                   </th>
                 </tr>
@@ -189,6 +190,7 @@ export default function Dashboard() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
       </div>

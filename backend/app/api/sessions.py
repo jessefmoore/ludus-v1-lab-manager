@@ -134,6 +134,28 @@ def delete_session(
     return None
 
 
+@router.post("/{session_id}/end", response_model=SessionRead)
+def end_session(
+    session_id: int,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> SessionRead:
+    """Transition an active/provisioning session to ``ended``."""
+    try:
+        session_row = sessions_service.end_session(db, session_id)
+    except sessions_service.SessionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        ) from exc
+    except sessions_service.SessionEndConflict as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    return SessionRead.model_validate(session_row)
+
+
 @router.post(
     "/{session_id}/provision",
     response_model=SessionProvisionResponse,

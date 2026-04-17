@@ -139,6 +139,13 @@ async def import_students_csv(
         )
 
     raw = await file.read()
+
+    if len(raw) > 1_048_576:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="CSV file exceeds 1 MB limit",
+        )
+
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -158,7 +165,13 @@ async def import_students_csv(
 
     created = 0
     errors: list[str] = []
+    max_rows = 500
     for row_num, row in enumerate(reader, start=2):
+        if row_num - 1 > max_rows:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"CSV exceeds {max_rows} row limit",
+            )
         try:
             payload = StudentCreate(
                 full_name=row.get("full_name", "").strip(),

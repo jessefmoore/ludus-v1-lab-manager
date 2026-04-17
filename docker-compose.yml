@@ -11,14 +11,14 @@ services:
       # Force production so the lifespan handler applies alembic migrations
       # rather than the dev-only Base.metadata.create_all fallback.
       APP_ENV: production
-      # Container-local paths for the mounted volume.
-      DATABASE_URL: sqlite:////app/data/insec.db
+      DATABASE_URL: postgresql://insec:${POSTGRES_PASSWORD:-insec-dev-password}@postgres:5432/insec
       CONFIG_STORAGE_DIR: /app/data/configs
-    ports:
-      - "8000:8000"
     volumes:
-      # Single mount covers both the SQLite DB file and WireGuard configs/.
+      # WireGuard configs + any local storage.
       - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - insec
     healthcheck:
@@ -33,6 +33,24 @@ services:
       retries: 3
       start_period: 10s
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: insec-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: insec
+      POSTGRES_USER: insec
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-insec-dev-password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - insec
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U insec"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   frontend:
     build:
       context: ./frontend
@@ -40,12 +58,33 @@ services:
     image: insec-platform-frontend
     container_name: insec-frontend
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     depends_on:
       - backend
     networks:
       - insec
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: insec-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    depends_on:
+      - frontend
+    networks:
+      - insec
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
 
 networks:
   insec:

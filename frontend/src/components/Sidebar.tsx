@@ -1,5 +1,6 @@
-import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Layers, LogOut } from "lucide-react";
+import { useState, useEffect } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import { LayoutDashboard, Layers, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
@@ -7,11 +8,11 @@ const navItems = [
   { to: "/labs", icon: Layers, label: "Lab Templates" },
 ];
 
-export default function Sidebar() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
 
   return (
-    <aside className="flex flex-col w-60 h-screen bg-bg-surface shrink-0">
+    <>
       {/* Logo */}
       <div className="p-6">
         <div className="flex items-center gap-1.5">
@@ -31,6 +32,7 @@ export default function Sidebar() {
             key={to}
             to={to}
             end={to === "/"}
+            onClick={onNavigate}
             className={({ isActive }) =>
               `flex items-center gap-3 h-10 px-4 rounded-md text-sm transition-colors ${
                 isActive
@@ -65,6 +67,58 @@ export default function Sidebar() {
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export default function Sidebar() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  return (
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        className="fixed top-4 left-4 z-50 h-10 w-10 rounded-md bg-bg-surface border border-border inline-flex items-center justify-center text-text-secondary hover:text-text-primary md:hidden"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Mobile slide-in sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex flex-col w-60 bg-bg-surface transform transition-transform duration-200 md:hidden ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <button
+          className="absolute top-4 right-4 h-8 w-8 rounded-md inline-flex items-center justify-center text-text-secondary hover:text-text-primary"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <SidebarContent onNavigate={() => setMobileOpen(false)} />
+      </aside>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-60 h-screen bg-bg-surface shrink-0">
+        <SidebarContent />
+      </aside>
+    </>
   );
 }

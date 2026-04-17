@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useCallback, type ReactNode } from "react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -32,6 +32,34 @@ export default function Modal({
     if (open) panelRef.current?.focus();
   }, [open]);
 
+  // Tab focus trap
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Tab" || !panelRef.current) return;
+
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    },
+    [],
+  );
+
   if (!open) return null;
 
   return (
@@ -44,6 +72,10 @@ export default function Modal({
       <div
         ref={panelRef}
         tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onKeyDown={handleKeyDown}
         className={`${size === "sm" ? "max-w-[480px]" : "max-w-[640px]"} w-full mx-4 rounded-lg bg-bg-surface border border-border shadow-2xl p-6 outline-none`}
       >
         <div className="flex items-center justify-between mb-6">

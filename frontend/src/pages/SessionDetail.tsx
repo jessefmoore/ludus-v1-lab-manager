@@ -40,6 +40,7 @@ export default function SessionDetail() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [provisioning, setProvisioning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [ending, setEnding] = useState(false);
 
   // Activity log
   const [activityEvents, setActivityEvents] = useState<EventRead[]>([]);
@@ -138,6 +139,25 @@ export default function SessionDetail() {
           toast("error", err instanceof ApiError ? err.detail : "Failed to delete session");
         } finally {
           setDeleting(false);
+        }
+      },
+    });
+  };
+
+  const handleEndSession = () => {
+    setConfirmModal({
+      title: "End Session",
+      message: `End "${session.name}"? Students will no longer be able to connect.`,
+      action: async () => {
+        setEnding(true);
+        try {
+          await sessions.end(session.id);
+          toast("success", "Session ended");
+          fetchSession();
+        } catch (err) {
+          toast("error", err instanceof ApiError ? err.detail : "Failed to end session");
+        } finally {
+          setEnding(false);
         }
       },
     });
@@ -254,7 +274,7 @@ export default function SessionDetail() {
           { label: session.name },
         ]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             {pendingCount > 0 && (
               <Button
                 variant="primary"
@@ -262,6 +282,15 @@ export default function SessionDetail() {
                 onClick={handleProvision}
               >
                 Provision All ({pendingCount})
+              </Button>
+            )}
+            {(session.status === "active" || session.status === "provisioning") && (
+              <Button
+                variant="danger"
+                loading={ending}
+                onClick={handleEndSession}
+              >
+                End Session
               </Button>
             )}
             <Button
@@ -414,10 +443,11 @@ export default function SessionDetail() {
               </Button>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="w-10 px-4 py-3">
+                  <th scope="col" className="w-10 px-4 py-3">
                     <input
                       type="checkbox"
                       checked={
@@ -426,24 +456,25 @@ export default function SessionDetail() {
                       }
                       onChange={toggleAll}
                       className="accent-accent-success"
+                      aria-label="Select all students"
                     />
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Name / Email
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     UserID
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Range
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Status
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Invite
                   </th>
-                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
+                  <th scope="col" className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-text-secondary">
                     Actions
                   </th>
                 </tr>
@@ -461,6 +492,7 @@ export default function SessionDetail() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </Card>
 
@@ -631,6 +663,7 @@ function StudentRow({
               onClick={copyInvite}
               className="h-7 px-2 rounded text-xs font-medium inline-flex items-center gap-1 bg-bg-elevated border border-border text-text-secondary hover:text-text-primary transition-colors"
               title="Copy invite URL"
+              aria-label="Copy invite URL"
             >
               {copied ? (
                 <Check className="h-3.5 w-3.5 text-accent-success" />
@@ -656,6 +689,7 @@ function StudentRow({
               variant="icon"
               onClick={onReset}
               title="Reset student environment"
+              aria-label="Reset student environment"
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -664,6 +698,7 @@ function StudentRow({
             variant="icon"
             onClick={onDelete}
             title="Remove student"
+            aria-label="Remove student"
           >
             <Trash2 className="h-4 w-4" />
           </Button>

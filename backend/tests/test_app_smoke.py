@@ -72,6 +72,8 @@ def _smoke_env(_smoke_tmp_dir: Path) -> Iterator[dict[str, str]]:
     db_path = _smoke_tmp_dir / "test.db"
     configs_dir = _smoke_tmp_dir / "configs"
 
+    configs_dir.mkdir(parents=True, exist_ok=True)
+
     patched: dict[str, str] = {
         "DATABASE_URL": f"sqlite:///{db_path}",
         "APP_ENV": "development",
@@ -117,10 +119,13 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
 
     try:
         with TestClient(app) as client:
-            # 1. Liveness.
+            # 1. Liveness. DB + storage ok; Ludus unreachable in tests.
             r = client.get("/health")
             assert r.status_code == 200
-            assert r.json() == {"status": "ok"}
+            body = r.json()
+            assert body["status"] == "ok"
+            assert body["db"] is True
+            assert body["storage"] is True
 
             # 2. Login with the admin creds the lifespan seeded.
             r = client.post(

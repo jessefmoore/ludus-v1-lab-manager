@@ -102,6 +102,9 @@ export const sessions = {
   delete: (id: number) =>
     request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
 
+  end: (id: number) =>
+    request<SessionRead>(`/api/sessions/${id}/end`, { method: "POST" }),
+
   provision: (id: number) =>
     request<SessionProvisionResponse>(
       `/api/sessions/${id}/provision`,

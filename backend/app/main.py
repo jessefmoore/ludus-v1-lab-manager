@@ -18,13 +18,23 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
-from fastapi import FastAPI
+import httpx
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from sqlalchemy import text
+from sqlalchemy.orm import Session as DBSession
 
 from app.api import auth, events, invite, labs, sessions, students
 from app.core.config import Settings, get_settings
 from app.core.db import Base, SessionLocal, engine
+from app.core.deps import get_db
+from app.core.limiter import limiter
+from app.middleware.csrf import CSRFMiddleware
+from app.middleware.logging import RequestLoggingMiddleware
 from app.services.bootstrap import ensure_admin_user
 
 logging.basicConfig(
@@ -80,6 +90,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS: deduplicate + filter None/empty before handing to Starlette.
 _origins = list({o for o in (settings.public_base_url, "http://localhost:3000") if o})
@@ -91,6 +103,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(RequestLoggingMiddleware)
+
+# CSRF: reject cross-origin state-changing requests.
+_csrf_host = urlparse(settings.public_base_url).hostname or "localhost"
+app.add_middleware(CSRFMiddleware, allowed_host=_csrf_host)
+
 # Every router module already sets its own prefix — include without args.
 app.include_router(auth.router)
 app.include_router(labs.router)
@@ -101,6 +119,40 @@ app.include_router(invite.router)
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    """Liveness probe."""
-    return {"status": "ok"}
+def health(
+    response: Response,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+) -> dict:
+    """Health check with DB, storage, and Ludus connectivity."""
+    # DB check
+    db_ok = True
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
+
+    # Storage check
+    storage_ok = Path(settings.config_storage_dir).exists()
+
+    # Ludus check
+    ludus_ok = True
+    try:
+        httpx.get(
+            f"{settings.ludus_default_url}/api/status",
+            timeout=3.0,
+            verify=settings.ludus_default_verify_tls,
+        )
+    except Exception:
+        ludus_ok = False
+
+    healthy = db_ok and storage_ok
+    if not healthy:
+        response.status_code = 503
+
+    return {
+        "status": "ok" if healthy else "degraded",
+        "db": db_ok,
+        "storage": storage_ok,
+        "ludus": ludus_ok,
+    }

@@ -1,10 +1,11 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppLayout from "@/components/AppLayout";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import SessionDetail from "@/pages/SessionDetail";
 import LabTemplates from "@/pages/LabTemplates";
+import NotFound from "@/pages/NotFound";
 
 export default function App() {
   return (
@@ -17,7 +18,7 @@ export default function App() {
           <Route path="/labs" element={<LabTemplates />} />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
