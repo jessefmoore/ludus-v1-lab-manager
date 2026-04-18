@@ -5,11 +5,14 @@ translating ``ValueError`` into HTTP 422 and for access control.
 """
 
 import logging
+import time
+from pathlib import Path
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session as DBSession
 
+from app.core.config import get_settings
 from app.models.event import Event
 from app.models.lab_template import LabTemplate
 from app.models.session import Session as SessionModel
@@ -31,11 +34,113 @@ class LabDeleteConflict(Exception):  # noqa: N818 — spec-mandated name
 # Keeps 422 responses short when pyyaml emits multi-line diagnostics.
 _YAML_ERROR_SNIPPET_MAX = 240
 
+# Allowed MIME types for cover images.
+_ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
-def list_labs(db: DBSession) -> list[LabTemplate]:
-    """Return every lab template, oldest first (stable id order)."""
-    stmt = select(LabTemplate).order_by(LabTemplate.id)
-    return list(db.execute(stmt).scalars().all())
+# Extension mapping from content-type.
+_IMAGE_EXTENSIONS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+
+# 5 MB limit.
+_MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+def _uploads_dir() -> Path:
+    """Return (and create if needed) the lab cover image upload directory."""
+    settings = get_settings()
+    d = Path(settings.config_storage_dir).parent / "uploads" / "labs"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def save_lab_image(db: DBSession, lab_id: int, data: bytes, content_type: str) -> LabTemplate:
+    """Validate, save an image file to disk, and update the DB column.
+
+    Raises:
+        LabNotFound: if ``lab_id`` does not exist.
+        ValueError: if content type or size is invalid.
+    """
+    lab = db.get(LabTemplate, lab_id)
+    if lab is None:
+        raise LabNotFound(f"Lab template {lab_id} not found")
+
+    if content_type not in _ALLOWED_IMAGE_TYPES:
+        raise ValueError(
+            f"Unsupported image type '{content_type}'. "
+            f"Allowed: {', '.join(sorted(_ALLOWED_IMAGE_TYPES))}"
+        )
+
+    if len(data) > _MAX_IMAGE_SIZE:
+        raise ValueError(f"Image too large ({len(data)} bytes). Max: {_MAX_IMAGE_SIZE} bytes")
+
+    ext = _IMAGE_EXTENSIONS[content_type]
+    filename = f"{lab_id}_{int(time.time())}.{ext}"
+    upload_dir = _uploads_dir()
+
+    # Delete old image if it exists.
+    if lab.cover_image and lab.cover_image != filename:
+        old_path = upload_dir / lab.cover_image
+        old_path.unlink(missing_ok=True)
+
+    (upload_dir / filename).write_bytes(data)
+
+    lab.cover_image = filename
+    db.commit()
+    db.refresh(lab)
+    logger.info("lab_template.cover_image saved id=%s file=%s", lab_id, filename)
+    return lab
+
+
+def get_lab_image_path(db: DBSession, lab_id: int) -> Path | None:
+    """Return the absolute path to a lab's cover image, or ``None``."""
+    lab = db.get(LabTemplate, lab_id)
+    if lab is None or lab.cover_image is None:
+        return None
+    path = _uploads_dir() / lab.cover_image
+    if not path.is_file():
+        return None
+    return path
+
+
+def delete_lab_image(db: DBSession, lab_id: int) -> None:
+    """Remove cover image file from disk and clear the DB column.
+
+    Raises:
+        LabNotFound: if ``lab_id`` does not exist.
+    """
+    lab = db.get(LabTemplate, lab_id)
+    if lab is None:
+        raise LabNotFound(f"Lab template {lab_id} not found")
+
+    if lab.cover_image:
+        path = _uploads_dir() / lab.cover_image
+        path.unlink(missing_ok=True)
+        lab.cover_image = None
+        db.commit()
+        logger.info("lab_template.cover_image deleted id=%s", lab_id)
+
+
+def list_labs(db: DBSession) -> list[dict]:
+    """Return every lab template with session counts, oldest first."""
+    count_sub = (
+        select(func.count(SessionModel.id))
+        .where(SessionModel.lab_template_id == LabTemplate.id)
+        .correlate(LabTemplate)
+        .scalar_subquery()
+        .label("session_count")
+    )
+    stmt = select(LabTemplate, count_sub).order_by(LabTemplate.id)
+    rows = db.execute(stmt).all()
+    results = []
+    for lab, count in rows:
+        d = {c.key: getattr(lab, c.key) for c in LabTemplate.__table__.columns}
+        d["session_count"] = count
+        results.append(d)
+    return results
 
 
 def get_lab(db: DBSession, lab_id: int) -> LabTemplate | None:
@@ -172,6 +277,11 @@ def delete_lab(db: DBSession, lab_id: int) -> None:
             f"is in status '{blocking.status}'"
         )
 
+    # Clean up cover image file from disk.
+    if lab.cover_image:
+        image_path = _uploads_dir() / lab.cover_image
+        image_path.unlink(missing_ok=True)
+
     event = Event(
         session_id=None,
         student_id=None,
@@ -190,7 +300,10 @@ __all__ = [
     "LabNotFound",
     "create_lab",
     "delete_lab",
+    "delete_lab_image",
     "get_lab",
+    "get_lab_image_path",
     "list_labs",
+    "save_lab_image",
     "update_lab",
 ]

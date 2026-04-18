@@ -38,7 +38,18 @@ export interface LabTemplateRead {
   default_mode: LabMode;
   ludus_server: string;
   entry_point_vm: string | null;
+  cover_image: string | null;
   created_at: string;
+  session_count: number;
+}
+
+export interface LabTemplateUpdate {
+  name?: string;
+  description?: string | null;
+  range_config_yaml?: string;
+  default_mode?: LabMode;
+  ludus_server?: string;
+  entry_point_vm?: string | null;
 }
 
 // Sessions
@@ -160,11 +171,28 @@ export interface SnapshotRevertRequest {
 export interface LudusTemplate {
   name: string;
   os?: string;
+  built?: boolean;
+  status?: string; // "built", "not_built", "building"
   [key: string]: unknown;
 }
 
 export interface LudusTemplateListResponse {
   templates: LudusTemplate[];
+}
+
+export interface TemplateBuildRequest {
+  templates: string[];
+  parallel?: number;
+}
+
+export interface LudusTemplateBuildStatus {
+  template: string;
+  user?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusTemplateBuildStatusResponse {
+  status: LudusTemplateBuildStatus[];
 }
 
 // Ludus Management Actions
@@ -375,6 +403,7 @@ export interface LudusUser {
   dateCreated?: string;
   proxmoxUsername?: string;
   rangeNumber?: number;
+  userNumber?: number;
   [key: string]: unknown;
 }
 

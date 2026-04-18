@@ -32,6 +32,7 @@ class LabTemplate(Base):
     )
     ludus_server: Mapped[str] = mapped_column(String(64), nullable=False, default="default")
     entry_point_vm: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cover_image: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

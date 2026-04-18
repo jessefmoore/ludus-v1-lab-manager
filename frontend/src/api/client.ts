@@ -4,6 +4,7 @@ import type {
   UserRead,
   LabTemplateCreate,
   LabTemplateRead,
+  LabTemplateUpdate,
   SessionCreate,
   SessionRead,
   SessionDetailRead,
@@ -26,10 +27,12 @@ import type {
   LudusAccessibleRangesResponse,
   LudusSnapshotListResponse,
   LudusTemplateListResponse,
+  LudusTemplateBuildStatusResponse,
   LudusActionResponse,
   PowerActionRequest,
   SnapshotCreateRequest,
   SnapshotRevertRequest,
+  TemplateBuildRequest,
   TestingStartRequest,
   TestingStopRequest,
   TestingAllowDenyRequest,
@@ -116,6 +119,28 @@ export const labs = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  update: (id: number, data: LabTemplateUpdate) =>
+    request<LabTemplateRead>(`/api/labs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: number) =>
+    request<void>(`/api/labs/${id}`, { method: "DELETE" }),
+
+  uploadImage: (id: number, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request<LabTemplateRead>(`/api/labs/${id}/image`, {
+      method: "POST",
+      body: form,
+      headers: {},
+    });
+  },
+
+  deleteImage: (id: number) =>
+    request<void>(`/api/labs/${id}/image`, { method: "DELETE" }),
 };
 
 // Sessions
@@ -194,9 +219,10 @@ export const ludus = {
   rangeConfig: (rangeNumber: number, server?: string) =>
     request<LudusRangeConfigResponse>(`/api/ludus/ranges/${rangeNumber}/config${serverQs(server)}`),
 
-  deployRange: (rangeNumber: number, server?: string) =>
+  deployRange: (rangeNumber: number, data: { user_id: string }, server?: string) =>
     request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}/deploy${serverQs(server)}`, {
       method: "POST",
+      body: JSON.stringify(data),
     }),
 
   destroyRange: (rangeNumber: number, server?: string, force?: boolean) =>
@@ -254,6 +280,23 @@ export const ludus = {
     request<LudusActionResponse>(`/api/ludus/templates/${encodeURIComponent(name)}${serverQs(server)}`, {
       method: "DELETE",
     }),
+
+  buildTemplates: (data: TemplateBuildRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/templates/build${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  abortTemplateBuild: (server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/templates/abort${serverQs(server)}`, {
+      method: "POST",
+    }),
+
+  templateBuildStatus: (server?: string) =>
+    request<LudusTemplateBuildStatusResponse>(`/api/ludus/templates/build-status${serverQs(server)}`),
+
+  templateBuildLogs: (server?: string) =>
+    request<LudusTextResponse>(`/api/ludus/templates/build-logs${serverQs(server)}`),
 
   // Range detail / VM operations
   rangeVms: (params?: { range_id?: number; user_id?: string; server?: string }) => {

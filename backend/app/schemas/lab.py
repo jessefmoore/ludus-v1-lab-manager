@@ -30,7 +30,9 @@ class LabTemplateRead(BaseModel):
     default_mode: LabMode
     ludus_server: str = "default"
     entry_point_vm: str | None = None
+    cover_image: str | None = None
     created_at: datetime
+    session_count: int = 0
 
 
 class LabTemplateUpdate(BaseModel):
