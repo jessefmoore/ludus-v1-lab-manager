@@ -44,8 +44,37 @@ start a fresh `[Unreleased]` block.
 - **Reset cooldown** — 2-minute server-side cooldown between student resets
   (HTTP 429); frontend shows info toast with remaining time.
 
+- **Ludus management page** — full-featured `/ludus` page with 8 tabbed
+  sections: Ranges (power on/off, deploy, destroy), Snapshots (create,
+  revert, delete per range), Templates (list, delete), Users (create, delete,
+  WireGuard download), Groups (create, delete, view members), Ansible
+  (installed roles/collections), Testing (start/stop, allow/deny rules),
+  Logs (deployment history with output viewer).
+- **Ludus user management** — `POST /api/ludus/users` (create, returns
+  one-time API key), `DELETE /api/ludus/users/{user_id}`,
+  `GET /api/ludus/users/{user_id}/wireguard` (file download). Frontend
+  Users tab with DataTable, search, create modal, API key copy dialog,
+  WireGuard download, and delete confirmation. 12 backend tests.
+- **Ludus management API** — 40+ new endpoints wrapping the full Ludus API:
+  range detail/VMs, power management, snapshot CRUD, template management,
+  group CRUD, ansible role/collection management, testing mode, deployment
+  logs, range config/etchosts/sshconfig/rdpconfigs/ansibleinventory.
+- **Multi-server support** — `LudusClientRegistry` resolving multiple Ludus
+  servers from `LUDUS_<NAME>_URL` / `LUDUS_<NAME>_API_KEY` env vars; server
+  selector dropdown in Ludus management UI; `?server=` query param on all
+  Ludus endpoints.
+- **Command palette** — `Ctrl+K` / `Cmd+K` quick-navigate overlay with
+  fuzzy search across all pages.
+- **Settings page** — view platform config, change password, test Ludus
+  connection, multi-server status display.
+- **Reusable UI components** — `DataTable` (sortable columns, pagination,
+  search), `Tabs`, `Skeleton` (loading placeholders), `PageTransition`
+  (fade-in animation).
+
 ### Changed
-- (nothing yet)
+- Dashboard and SessionDetail pages refactored to use new shared components
+  (DataTable, Tabs, etc.).
+- Sidebar tagline font bumped from `text-xs` to `text-sm`.
 
 ### Fixed
 - (nothing yet)

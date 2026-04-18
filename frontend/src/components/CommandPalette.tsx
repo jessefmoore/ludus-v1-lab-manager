@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   CalendarRange,
   Layers,
+  Server,
   Settings,
 } from "lucide-react";
 import { sessions as sessionsApi, labs as labsApi } from "@/api";
@@ -22,6 +23,7 @@ const NAV_ITEMS: Omit<PaletteItem, "action">[] = [
   { id: "nav-dashboard", icon: LayoutDashboard, label: "Dashboard", description: "/" },
   { id: "nav-sessions", icon: CalendarRange, label: "Sessions", description: "View all sessions" },
   { id: "nav-labs", icon: Layers, label: "Lab Templates", description: "Manage lab configs" },
+  { id: "nav-ludus", icon: Server, label: "Ludus", description: "Ranges, snapshots, templates" },
   { id: "nav-settings", icon: Settings, label: "Settings", description: "Platform configuration" },
 ];
 
@@ -29,6 +31,7 @@ const NAV_ROUTES: Record<string, string> = {
   "nav-dashboard": "/",
   "nav-sessions": "/",
   "nav-labs": "/labs",
+  "nav-ludus": "/ludus",
   "nav-settings": "/settings",
 };
 

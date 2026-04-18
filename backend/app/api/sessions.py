@@ -13,7 +13,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_current_user, get_db, get_ludus_client
+from app.core.deps import (
+    LudusClientRegistry,
+    get_current_user,
+    get_db,
+    get_ludus_client_registry,
+)
 from app.models import Session as SessionRow
 from app.models import Student
 from app.models.user import User
@@ -21,7 +26,6 @@ from app.schemas.session import SessionCreate, SessionDetailRead, SessionRead
 from app.schemas.student import StudentRead
 from app.services import provision as provision_service
 from app.services import sessions as sessions_service
-from app.services.ludus import LudusClient
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -163,7 +167,7 @@ def end_session(
 def provision_session(
     session_id: int,
     db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
-    ludus_client: LudusClient = Depends(get_ludus_client),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
     settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
 ) -> SessionProvisionResponse:
@@ -173,11 +177,14 @@ def provision_session(
     returned ``students`` list (``status="error"``) and never abort the
     batch. Already-``ready`` students are counted as ``skipped`` and do
     not touch Ludus.
+
+    The Ludus server is determined by the session's lab template
+    ``ludus_server`` field.
     """
     try:
         result = provision_service.provision_session(
             db=db,
-            ludus=ludus_client,
+            registry=registry,
             session_id=session_id,
             settings=settings,
         )
@@ -185,6 +192,11 @@ def provision_session(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
         ) from exc
 
     return SessionProvisionResponse(

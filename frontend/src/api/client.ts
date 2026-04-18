@@ -16,7 +16,36 @@ import type {
   EventRead,
   LudusRangeListResponse,
   LudusRangeConfigResponse,
+  LudusRangeDetailResponse,
+  LudusRangeTagsResponse,
+  LudusRangeLogsResponse,
+  LudusLogHistoryResponse,
+  LudusLogEntryDetailResponse,
+  LudusTextResponse,
+  LudusRangeUsersResponse,
+  LudusAccessibleRangesResponse,
+  LudusSnapshotListResponse,
+  LudusTemplateListResponse,
+  LudusActionResponse,
+  PowerActionRequest,
+  SnapshotCreateRequest,
+  SnapshotRevertRequest,
+  TestingStartRequest,
+  TestingStopRequest,
+  TestingAllowDenyRequest,
+  TestingAllowDenyResponse,
+  TestingUpdateRequest,
+  LudusGroupListResponse,
+  LudusGroupUsersResponse,
+  LudusGroupRangesResponse,
+  LudusSubscriptionRolesResponse,
+  LudusRoleVarsResponse,
+  LudusInstalledRolesResponse,
+  LudusUserListResponse,
+  UserCreateRequest,
+  UserCreateResponse,
   PlatformSettings,
+  LudusServersResponse,
 } from "./types";
 
 export class ApiError extends Error {
@@ -146,23 +175,372 @@ export const students = {
   },
 };
 
-// Ludus Discovery
-export const ludus = {
-  ranges: () =>
-    request<LudusRangeListResponse>("/api/ludus/ranges"),
+/** Build a query string appending ``server`` if it's not ``"default"``. */
+function serverQs(server?: string, extra?: Record<string, string>): string {
+  const qs = new URLSearchParams();
+  if (server && server !== "default") qs.set("server", server);
+  if (extra) {
+    for (const [k, v] of Object.entries(extra)) qs.set(k, v);
+  }
+  const q = qs.toString();
+  return q ? `?${q}` : "";
+}
 
-  rangeConfig: (rangeNumber: number) =>
-    request<LudusRangeConfigResponse>(`/api/ludus/ranges/${rangeNumber}/config`),
+// Ludus Discovery & Management
+export const ludus = {
+  ranges: (server?: string) =>
+    request<LudusRangeListResponse>(`/api/ludus/ranges${serverQs(server)}`),
+
+  rangeConfig: (rangeNumber: number, server?: string) =>
+    request<LudusRangeConfigResponse>(`/api/ludus/ranges/${rangeNumber}/config${serverQs(server)}`),
+
+  deployRange: (rangeNumber: number, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}/deploy${serverQs(server)}`, {
+      method: "POST",
+    }),
+
+  destroyRange: (rangeNumber: number, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}${serverQs(server)}`, {
+      method: "DELETE",
+    }),
+
+  powerOn: (rangeNumber: number, data: PowerActionRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}/power-on${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  powerOff: (rangeNumber: number, data: PowerActionRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}/power-off${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  snapshots: (params?: { user_id?: string; range_number?: number; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    if (params?.range_number != null) qs.set("range_number", String(params.range_number));
+    const q = qs.toString();
+    return request<LudusSnapshotListResponse>(`/api/ludus/snapshots${q ? `?${q}` : ""}`);
+  },
+
+  createSnapshot: (data: SnapshotCreateRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/snapshots${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  revertSnapshot: (data: SnapshotRevertRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/snapshots/revert${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteSnapshot: (name: string, userId: string, server?: string) => {
+    const extra: Record<string, string> = { user_id: userId };
+    if (server && server !== "default") extra.server = server;
+    const qs = new URLSearchParams(extra).toString();
+    return request<LudusActionResponse>(`/api/ludus/snapshots/${encodeURIComponent(name)}?${qs}`, {
+      method: "DELETE",
+    });
+  },
+
+  templates: (server?: string) =>
+    request<LudusTemplateListResponse>(`/api/ludus/templates${serverQs(server)}`),
+
+  deleteTemplate: (name: string, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/templates/${encodeURIComponent(name)}${serverQs(server)}`, {
+      method: "DELETE",
+    }),
+
+  // Range detail / VM operations
+  rangeVms: (params?: { range_id?: number; user_id?: string; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.range_id != null) qs.set("range_id", String(params.range_id));
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    const q = qs.toString();
+    return request<LudusRangeDetailResponse>(`/api/ludus/range/vms${q ? `?${q}` : ""}`);
+  },
+
+  destroyVm: (vmId: number, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/vm/${vmId}${serverQs(server)}`, {
+      method: "DELETE",
+    }),
+
+  abortRange: (data: { range_id?: number; user_id?: string }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/range/abort${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteRangeVms: (rangeId: number, userId?: string, server?: string) => {
+    const extra: Record<string, string> = {};
+    if (userId) extra.user_id = userId;
+    return request<LudusActionResponse>(
+      `/api/ludus/range/${rangeId}/vms${serverQs(server, extra)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  rangeTags: (server?: string) =>
+    request<LudusRangeTagsResponse>(`/api/ludus/range/tags${serverQs(server)}`),
+
+  rangeConfigExample: (server?: string) =>
+    request<LudusTextResponse>(`/api/ludus/range/config/example${serverQs(server)}`),
+
+  rangeLogs: (params?: {
+    range_id?: number; user_id?: string; tail?: number; cursor?: string; server?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.range_id != null) qs.set("range_id", String(params.range_id));
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    if (params?.tail != null) qs.set("tail", String(params.tail));
+    if (params?.cursor) qs.set("cursor", params.cursor);
+    const q = qs.toString();
+    return request<LudusRangeLogsResponse>(`/api/ludus/range/logs${q ? `?${q}` : ""}`);
+  },
+
+  rangeLogsHistory: (params?: { range_id?: number; user_id?: string; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.range_id != null) qs.set("range_id", String(params.range_id));
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    const q = qs.toString();
+    return request<LudusLogHistoryResponse>(`/api/ludus/range/logs/history${q ? `?${q}` : ""}`);
+  },
+
+  rangeLogEntry: (logId: number, server?: string) =>
+    request<LudusLogEntryDetailResponse>(`/api/ludus/range/logs/history/${logId}${serverQs(server)}`),
+
+  rangeEtcHosts: (params?: { range_id?: number; user_id?: string; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.range_id != null) qs.set("range_id", String(params.range_id));
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    const q = qs.toString();
+    return request<LudusTextResponse>(`/api/ludus/range/etchosts${q ? `?${q}` : ""}`);
+  },
+
+  rangeSshConfig: (server?: string) =>
+    request<LudusTextResponse>(`/api/ludus/range/sshconfig${serverQs(server)}`),
+
+  rangeRdpConfigs: async (params?: { range_id?: number; user_id?: string; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.range_id != null) qs.set("range_id", String(params.range_id));
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    const q = qs.toString();
+    const res = await fetch(`/api/ludus/range/rdpconfigs${q ? `?${q}` : ""}`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new ApiError(res.status, "Failed to download RDP configs");
+    return res.blob();
+  },
+
+  rangeAnsibleInventory: (params?: { range_id?: number; user_id?: string; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.range_id != null) qs.set("range_id", String(params.range_id));
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    const q = qs.toString();
+    return request<LudusTextResponse>(`/api/ludus/range/ansibleinventory${q ? `?${q}` : ""}`);
+  },
+
+  createRange: (data: { name: string; range_id: number }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/create${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  revokeRange: (data: { user_id: string; range_id: number; force?: boolean }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/revoke${serverQs(server)}`, {
+      method: "DELETE",
+      body: JSON.stringify(data),
+    }),
+
+  rangeUsers: (rangeId: number, server?: string) =>
+    request<LudusRangeUsersResponse>(`/api/ludus/ranges/${rangeId}/users${serverQs(server)}`),
+
+  accessibleRanges: (server?: string) =>
+    request<LudusAccessibleRangesResponse>(`/api/ludus/ranges/accessible${serverQs(server)}`),
+
+  users: (server?: string) =>
+    request<LudusUserListResponse>(`/api/ludus/users${serverQs(server)}`),
+
+  createUser: (data: UserCreateRequest, server?: string) =>
+    request<UserCreateResponse>(`/api/ludus/users${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteUser: (userId: string, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/users/${encodeURIComponent(userId)}${serverQs(server)}`, {
+      method: "DELETE",
+    }),
+
+  userWireguard: async (userId: string, server?: string) => {
+    const res = await fetch(
+      `/api/ludus/users/${encodeURIComponent(userId)}/wireguard${serverQs(server)}`,
+      { credentials: "include" },
+    );
+    if (!res.ok) throw new ApiError(res.status, "Failed to download WireGuard config");
+    return res.blob();
+  },
+};
+
+// Ludus Testing
+export const ludusTesting = {
+  start: (data: TestingStartRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/testing/start${serverQs(server)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  stop: (data: TestingStopRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/testing/stop${serverQs(server)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
+  allow: (data: TestingAllowDenyRequest, server?: string) =>
+    request<TestingAllowDenyResponse>(`/api/ludus/testing/allow${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deny: (data: TestingAllowDenyRequest, server?: string) =>
+    request<TestingAllowDenyResponse>(`/api/ludus/testing/deny${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  update: (data: TestingUpdateRequest, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/testing/update${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// Ludus Groups
+export const ludusGroups = {
+  list: (server?: string) =>
+    request<LudusGroupListResponse>(`/api/ludus/groups${serverQs(server)}`),
+
+  create: (data: { name: string; description?: string }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/groups${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  delete: (groupName: string, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}${serverQs(server)}`, {
+      method: "DELETE",
+    }),
+
+  users: (groupName: string, server?: string) =>
+    request<LudusGroupUsersResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}/users${serverQs(server)}`),
+
+  addUsers: (groupName: string, data: { user_ids: string[]; managers?: boolean }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}/users${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  removeUsers: (groupName: string, data: { user_ids: string[] }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}/users${serverQs(server)}`, {
+      method: "DELETE",
+      body: JSON.stringify(data),
+    }),
+
+  ranges: (groupName: string, server?: string) =>
+    request<LudusGroupRangesResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}/ranges${serverQs(server)}`),
+
+  addRanges: (groupName: string, data: { range_ids: number[] }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}/ranges${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  removeRanges: (groupName: string, data: { range_ids: number[] }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/groups/${encodeURIComponent(groupName)}/ranges${serverQs(server)}`, {
+      method: "DELETE",
+      body: JSON.stringify(data),
+    }),
+};
+
+// Ludus Ansible
+export const ludusAnsible = {
+  subscriptionRoles: (server?: string) =>
+    request<LudusSubscriptionRolesResponse>(`/api/ludus/ansible/subscription-roles${serverQs(server)}`),
+
+  installSubscriptionRoles: (data: { roles: string[]; global_?: boolean; force?: boolean }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ansible/subscription-roles${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  roleVars: (data: { roles: string[] }, server?: string) =>
+    request<LudusRoleVarsResponse>(`/api/ludus/ansible/role/vars${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  list: (params?: { user_id?: string; server?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.server && params.server !== "default") qs.set("server", params.server);
+    if (params?.user_id) qs.set("user_id", params.user_id);
+    const q = qs.toString();
+    return request<LudusInstalledRolesResponse>(`/api/ludus/ansible${q ? `?${q}` : ""}`);
+  },
+
+  changeRoleScope: (data: { roles: string[]; global_?: boolean; copy?: boolean }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ansible/role/scope${serverQs(server)}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  manageRole: (data: { role: string; action: string; version?: string; force?: boolean; global_?: boolean }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ansible/role${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  installRoleFromTar: async (file: File, force?: boolean, server?: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    const qs = new URLSearchParams();
+    if (server && server !== "default") qs.set("server", server);
+    if (force) qs.set("force", "true");
+    const q = qs.toString();
+    return request<LudusActionResponse>(`/api/ludus/ansible/role/fromtar${q ? `?${q}` : ""}`, {
+      method: "PUT",
+      body: form,
+      headers: {}, // let browser set multipart boundary
+    });
+  },
+
+  installCollection: (data: { collection: string; version?: string; force?: boolean }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ansible/collection${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // Settings
 export const settings = {
   get: () => request<PlatformSettings>("/api/settings"),
 
-  testConnection: () =>
-    request<{ status: string; latency_ms: number }>("/api/settings/test-ludus", {
-      method: "POST",
-    }),
+  ludusServers: () =>
+    request<LudusServersResponse>("/api/settings/ludus-servers"),
+
+  testConnection: (server?: string) =>
+    request<{ status: string; latency_ms: number }>(
+      `/api/settings/test-ludus${serverQs(server)}`,
+      { method: "POST" },
+    ),
 
   changePassword: (data: { current_password: string; new_password: string }) =>
     request<void>("/api/settings/change-password", {

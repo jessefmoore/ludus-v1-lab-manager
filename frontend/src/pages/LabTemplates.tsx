@@ -1,14 +1,15 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { Layers, Plus, Search, Download, Loader2, Server, Monitor, Globe } from "lucide-react";
-import { labs, ludus, ApiError } from "@/api";
-import type { LabTemplateRead, LabMode, LudusRange } from "@/api";
+import { labs, ludus, settings as settingsApi, ApiError } from "@/api";
+import type { LabTemplateRead, LabMode, LudusRange, LudusServerInfo } from "@/api";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Input from "@/components/Input";
 import StatusPill from "@/components/StatusPill";
-import LoadingScreen from "@/components/LoadingScreen";
+import { TableSkeleton } from "@/components/Skeleton";
+import PageTransition from "@/components/PageTransition";
 
 interface CreateLabInitialValues {
   name?: string;
@@ -39,8 +40,6 @@ export default function LabTemplates() {
     setShowCreate(true);
   };
 
-  if (loading && templates.length === 0) return <LoadingScreen />;
-
   return (
     <>
       <TopBar
@@ -68,7 +67,7 @@ export default function LabTemplates() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <PageTransition className="p-8 space-y-6">
         <div>
           <h1 className="text-[32px] font-bold leading-tight text-text-primary">
             Lab Templates
@@ -78,7 +77,9 @@ export default function LabTemplates() {
           </p>
         </div>
 
-        {templates.length === 0 ? (
+        {loading && templates.length === 0 ? (
+          <TableSkeleton rows={3} cols={4} />
+        ) : templates.length === 0 ? (
           <Card variant="gradient" className="p-0 overflow-hidden flex flex-col items-center justify-center">
             <div className="h-1 w-full bg-gradient-to-r from-accent-success via-accent-info/60 to-transparent" />
             <Layers className="h-12 w-12 text-text-muted mb-4 mt-16" />
@@ -101,7 +102,7 @@ export default function LabTemplates() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {templates.map((lab) => (
-              <Card key={lab.id} variant="gradient" className="p-0 overflow-hidden group">
+              <Card key={lab.id} variant="gradient" className="p-0 overflow-hidden group hover:shadow-card-hover transition-shadow duration-150">
                 {/* Gradient accent bar */}
                 <div className="h-1 bg-gradient-to-r from-accent-success via-accent-info/60 to-transparent" />
 
@@ -152,7 +153,7 @@ export default function LabTemplates() {
             ))}
           </div>
         )}
-      </div>
+      </PageTransition>
 
       <DiscoverRangesModal
         open={showDiscover}
@@ -186,28 +187,35 @@ function DiscoverRangesModal({
   onClose: () => void;
   onImport: (values: CreateLabInitialValues) => void;
 }) {
+  const [servers, setServers] = useState<LudusServerInfo[]>([]);
+  const [selectedServer, setSelectedServer] = useState("default");
   const [ranges, setRanges] = useState<LudusRange[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [importing, setImporting] = useState<number | null>(null);
+
+  // Fetch server list on mount
+  useEffect(() => {
+    settingsApi.ludusServers().then((res) => setServers(res.servers)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     setError("");
     setLoading(true);
     ludus
-      .ranges()
+      .ranges(selectedServer)
       .then((res) => setRanges(res.ranges))
       .catch((err) =>
         setError(err instanceof ApiError ? err.detail : "Failed to fetch ranges"),
       )
       .finally(() => setLoading(false));
-  }, [open]);
+  }, [open, selectedServer]);
 
   const handleImportRange = async (range: LudusRange) => {
     setImporting(range.rangeNumber);
     try {
-      const res = await ludus.rangeConfig(range.rangeNumber);
+      const res = await ludus.rangeConfig(range.rangeNumber, selectedServer);
       onImport({ name: range.name || range.rangeID, yaml: res.config_yaml });
     } catch (err) {
       setError(
@@ -221,6 +229,20 @@ function DiscoverRangesModal({
   return (
     <Modal open={open} onClose={onClose} title="Discover Ludus Ranges" size="lg">
       <div className="space-y-4">
+        {servers.length > 1 && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-text-secondary">Server:</label>
+            <select
+              className="h-9 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success"
+              value={selectedServer}
+              onChange={(e) => setSelectedServer(e.target.value)}
+            >
+              {servers.map((s) => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         {error && (
           <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-[15px] text-accent-danger">
             {error}
@@ -316,8 +338,15 @@ function CreateLabModal({
   const [yaml, setYaml] = useState("");
   const [mode, setMode] = useState<LabMode>("shared");
   const [entryPoint, setEntryPoint] = useState("");
+  const [ludusServer, setLudusServer] = useState("default");
+  const [servers, setServers] = useState<LudusServerInfo[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Fetch servers on mount
+  useEffect(() => {
+    settingsApi.ludusServers().then((res) => setServers(res.servers)).catch(() => {});
+  }, []);
 
   // Apply initial values when modal opens with pre-fill data
   useEffect(() => {
@@ -331,6 +360,7 @@ function CreateLabModal({
       setYaml("");
       setMode("shared");
       setEntryPoint("");
+      setLudusServer("default");
       setError("");
     }
   }, [open, initialValues]);
@@ -345,6 +375,7 @@ function CreateLabModal({
         description: description || null,
         range_config_yaml: yaml,
         default_mode: mode,
+        ludus_server: ludusServer,
         entry_point_vm: entryPoint || null,
       });
       onCreated();
@@ -410,6 +441,23 @@ function CreateLabModal({
             <option value="dedicated">Dedicated</option>
           </select>
         </div>
+
+        {servers.length > 1 && (
+          <div className="space-y-2">
+            <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
+              Ludus Server
+            </label>
+            <select
+              className="w-full h-11 px-3 rounded-md bg-bg-elevated border border-border text-[15px] text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
+              value={ludusServer}
+              onChange={(e) => setLudusServer(e.target.value)}
+            >
+              {servers.map((s) => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <Input
           label="Entry Point VM"

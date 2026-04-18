@@ -19,14 +19,14 @@ export default function Card({ children, className = "", variant = "default" }: 
 
   if (variant === "stat") {
     return (
-      <div className={`rounded-lg bg-bg-surface border border-border p-5 stat-glow bg-gradient-surface ${className}`}>
+      <div className={`rounded-lg bg-bg-surface border border-border p-4 md:p-5 stat-glow bg-gradient-surface ${className}`}>
         {children}
       </div>
     );
   }
 
   return (
-    <div className={`rounded-lg bg-bg-surface border border-border p-5 transition-colors duration-150 ${className}`}>
+    <div className={`rounded-lg bg-bg-surface border border-border p-4 md:p-5 transition-colors duration-150 ${className}`}>
       {children}
     </div>
   );

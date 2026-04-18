@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from app.api.ludus import router as ludus_router
 from app.core.config import Settings, get_settings
-from app.core.deps import get_current_user, get_ludus_client
+from app.core.deps import get_current_user, get_ludus_client_registry
 from app.models.user import User
 from app.services.exceptions import LudusError, LudusNotFound
 from app.services.ludus import LudusClient
@@ -44,6 +44,22 @@ def mock_ludus() -> MagicMock:
     return MagicMock(spec=LudusClient)
 
 
+class _MockRegistry:
+    """Wrap a MagicMock so it quacks like ``LudusClientRegistry``."""
+
+    def __init__(self, mock: MagicMock) -> None:
+        self._mock = mock
+
+    def get(self, name: str = "default") -> MagicMock:
+        if name != "default":
+            raise ValueError(f"Unknown Ludus server '{name}'")
+        return self._mock
+
+    @property
+    def server_names(self) -> list[str]:
+        return ["default"]
+
+
 def _build_app(
     settings: Settings,
     mock_ludus: MagicMock,
@@ -55,11 +71,10 @@ def _build_app(
     def _override_get_settings() -> Settings:
         return settings
 
-    def _override_get_ludus_client() -> MagicMock:
-        return mock_ludus
+    registry = _MockRegistry(mock_ludus)
 
     app.dependency_overrides[get_settings] = _override_get_settings
-    app.dependency_overrides[get_ludus_client] = _override_get_ludus_client
+    app.dependency_overrides[get_ludus_client_registry] = lambda: registry
 
     if current_user is not None:
 

@@ -12,17 +12,23 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.deps import get_current_user, get_db, get_ludus_client
+from app.core.deps import (
+    LudusClientRegistry,
+    get_current_user,
+    get_db,
+    get_ludus_client_registry,
+)
 from app.core.security import hash_password, verify_password
 from app.models.event import Event
 from app.models.user import User
 from app.schemas.settings import (
     ChangePasswordRequest,
+    LudusServerInfo,
+    LudusServersResponse,
     LudusTestResponse,
     PlatformSettingsResponse,
 )
 from app.services.exceptions import LudusError
-from app.services.ludus import LudusClient
 
 logger = logging.getLogger(__name__)
 
@@ -52,18 +58,45 @@ def get_settings_view(
     )
 
 
+@router.get("/ludus-servers", response_model=LudusServersResponse)
+def list_ludus_servers(
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+) -> LudusServersResponse:
+    """Return all configured Ludus servers with masked API keys."""
+    servers = [
+        LudusServerInfo(
+            name=cfg.name,
+            url=cfg.url,
+            api_key_masked=_mask_key(cfg.api_key),
+            verify_tls=cfg.verify_tls,
+        )
+        for cfg in registry.servers.values()
+    ]
+    return LudusServersResponse(servers=servers)
+
+
 @router.post("/test-ludus", response_model=LudusTestResponse)
 def test_ludus_connection(
+    server: str = "default",
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
-    ludus: LudusClient = Depends(get_ludus_client),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
 ) -> LudusTestResponse:
-    """Test connectivity to the Ludus server by listing ranges."""
+    """Test connectivity to a Ludus server by listing ranges."""
+    try:
+        client = registry.get(server)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
     try:
         t0 = time.monotonic()
-        ludus.range_list()
+        client.range_list()
         latency_ms = int((time.monotonic() - t0) * 1000)
     except LudusError as exc:
-        logger.warning("Ludus connectivity test failed: %s", exc)
+        logger.warning("Ludus connectivity test failed (server=%s): %s", server, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Ludus error: {exc}",

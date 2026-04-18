@@ -40,6 +40,7 @@ from app.services.exceptions import LudusError, LudusUserExists
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session as DBSession
 
+    from app.core.deps import LudusClientRegistry
     from app.services.ludus import LudusClient
 
 logger = logging.getLogger(__name__)
@@ -268,17 +269,24 @@ def _provision_one(
 
 def provision_session(
     db: DBSession,
-    ludus: LudusClient,
     session_id: int,
     settings: Settings,
+    *,
+    ludus: LudusClient | None = None,
+    registry: LudusClientRegistry | None = None,
 ) -> ProvisionResult:
     """Drive the full Ludus provisioning flow for every student in a session.
 
     See module docstring for the per-student pipeline. Returns a
     :class:`ProvisionResult` with counts + the refreshed student rows.
 
+    The Ludus client is resolved from the lab template's ``ludus_server``
+    field via *registry*. For backwards compatibility, a single *ludus*
+    client can be passed directly (used by older call-sites / tests).
+
     Raises :class:`SessionNotFound` if the session id is unknown; the
-    caller maps that to HTTP 404.
+    caller maps that to HTTP 404. Raises ``ValueError`` if the lab
+    template's ``ludus_server`` is not configured in the registry.
     """
     stmt = (
         select(SessionRow)
@@ -297,6 +305,14 @@ def provision_session(
             f"session id={session_id} references missing lab_template_id="
             f"{session_row.lab_template_id}"
         )
+
+    # Resolve the Ludus client: prefer registry (server-aware), fall back
+    # to the explicitly-passed client for backwards compat.
+    if ludus is None:
+        if registry is None:
+            raise ValueError("Either ludus or registry must be provided")
+        server_name = getattr(lab_template, "ludus_server", "default") or "default"
+        ludus = registry.get(server_name)  # raises ValueError on unknown
 
     result = ProvisionResult()
 

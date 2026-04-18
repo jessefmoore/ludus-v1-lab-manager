@@ -34,12 +34,12 @@ export default function Login() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-bg-base px-4">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-bg-base bg-gradient-surface-deep px-4">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(600px circle at 50% 40%, rgba(0,212,170,0.04), transparent 70%)",
+            "radial-gradient(600px circle at 50% 40%, rgba(0,212,170,0.06), transparent 70%)",
         }}
       />
 

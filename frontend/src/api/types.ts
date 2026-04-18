@@ -130,6 +130,54 @@ export interface LudusRangeConfigResponse {
   config_yaml: string;
 }
 
+// Ludus Snapshots
+export interface LudusSnapshot {
+  name: string;
+  description?: string;
+  vmids?: number[];
+  [key: string]: unknown;
+}
+
+export interface LudusSnapshotListResponse {
+  snapshots: LudusSnapshot[];
+}
+
+export interface SnapshotCreateRequest {
+  user_id: string;
+  name: string;
+  description?: string;
+  include_ram?: boolean;
+  vmids?: number[];
+}
+
+export interface SnapshotRevertRequest {
+  user_id: string;
+  name: string;
+  vmids?: number[];
+}
+
+// Ludus Templates
+export interface LudusTemplate {
+  name: string;
+  os?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusTemplateListResponse {
+  templates: LudusTemplate[];
+}
+
+// Ludus Management Actions
+export interface PowerActionRequest {
+  user_id: string;
+  machines?: string[];
+}
+
+export interface LudusActionResponse {
+  status: string;
+  detail?: string;
+}
+
 // Platform Settings
 export interface PlatformSettings {
   ludus_server_url: string;
@@ -138,6 +186,212 @@ export interface PlatformSettings {
   admin_email: string;
   invite_token_ttl_hours: number;
   public_base_url: string;
+}
+
+// Ludus Servers
+export interface LudusServerInfo {
+  name: string;
+  url: string;
+  api_key_masked: string;
+  verify_tls: boolean;
+}
+
+export interface LudusServersResponse {
+  servers: LudusServerInfo[];
+}
+
+// Ludus Range Detail / VMs
+export interface LudusVM {
+  vmID?: number;
+  name?: string;
+  hostname?: string;
+  powerState?: string;
+  testingState?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusRangeDetail {
+  rangeID?: string;
+  rangeNumber?: number;
+  vms: LudusVM[];
+  [key: string]: unknown;
+}
+
+export interface LudusRangeDetailResponse {
+  ranges: LudusRangeDetail[];
+}
+
+export interface LudusRangeTagsResponse {
+  tags: string[];
+}
+
+export interface LudusRangeLogsResponse {
+  result?: string;
+  cursor?: string;
+}
+
+export interface LudusLogHistoryEntry {
+  logID?: number;
+  timestamp?: string;
+  action?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusLogHistoryResponse {
+  entries: LudusLogHistoryEntry[];
+}
+
+export interface LudusLogEntryDetailResponse {
+  logID?: number;
+  output?: string;
+  timestamp?: string;
+  action?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusTextResponse {
+  content: string;
+}
+
+export interface LudusRangeUser {
+  userID: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusRangeUsersResponse {
+  users: LudusRangeUser[];
+}
+
+export interface LudusAccessibleRange {
+  rangeID?: string;
+  rangeNumber?: number;
+  name?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusAccessibleRangesResponse {
+  ranges: LudusAccessibleRange[];
+}
+
+// Ludus Testing
+export interface TestingStartRequest {
+  range_id?: number;
+  user_id?: string;
+}
+
+export interface TestingStopRequest {
+  range_id?: number;
+  user_id?: string;
+  force?: boolean;
+}
+
+export interface TestingAllowDenyRequest {
+  range_id?: number;
+  user_id?: string;
+  domains?: string[];
+  ips?: string[];
+}
+
+export interface TestingAllowDenyResponse {
+  result?: string;
+  domains?: string[];
+  ips?: string[];
+  [key: string]: unknown;
+}
+
+export interface TestingUpdateRequest {
+  name: string;
+  range_id?: number;
+  user_id?: string;
+}
+
+// Ludus Groups
+export interface LudusGroup {
+  name: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusGroupListResponse {
+  groups: LudusGroup[];
+}
+
+export interface LudusGroupUser {
+  userID: string;
+  name?: string;
+  manager?: boolean;
+  [key: string]: unknown;
+}
+
+export interface LudusGroupUsersResponse {
+  users: LudusGroupUser[];
+}
+
+export interface LudusGroupRangesResponse {
+  ranges: LudusAccessibleRange[];
+}
+
+// Ludus Ansible
+export interface LudusSubscriptionRole {
+  name: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusSubscriptionRolesResponse {
+  roles: LudusSubscriptionRole[];
+}
+
+export interface LudusRoleVar {
+  name?: string;
+  default?: string;
+  description?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusRoleVarsResponse {
+  vars: LudusRoleVar[];
+}
+
+export interface LudusInstalledRole {
+  name: string;
+  version?: string;
+  scope?: string;
+  type?: string;
+  [key: string]: unknown;
+}
+
+export interface LudusInstalledRolesResponse {
+  roles: LudusInstalledRole[];
+}
+
+// Ludus Users
+export interface LudusUser {
+  userID: string;
+  name?: string;
+  dateCreated?: string;
+  proxmoxUsername?: string;
+  rangeNumber?: number;
+  [key: string]: unknown;
+}
+
+export interface LudusUserListResponse {
+  users: LudusUser[];
+}
+
+export interface UserCreateRequest {
+  user_id: string;
+  name: string;
+  email: string;
+}
+
+export interface UserCreateResponse {
+  userID: string;
+  apiKey?: string;
+  [key: string]: unknown;
 }
 
 // Events (audit log)

@@ -111,11 +111,23 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
     get_settings.cache_clear()
 
     # Import app LAZILY, after env vars are in place.
-    from app.core.deps import get_ludus_client
+    from app.core.deps import get_ludus_client, get_ludus_client_registry
     from app.main import app
 
     fake_ludus = FakeLudus()
+
+    class _FakeRegistry:
+        def get(self, name: str = "default") -> FakeLudus:
+            if name != "default":
+                raise ValueError(f"Unknown Ludus server '{name}'")
+            return fake_ludus
+
+        @property
+        def server_names(self) -> list[str]:
+            return ["default"]
+
     app.dependency_overrides[get_ludus_client] = lambda: fake_ludus
+    app.dependency_overrides[get_ludus_client_registry] = lambda: _FakeRegistry()
 
     try:
         with TestClient(app) as client:
@@ -238,3 +250,4 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
         # Leave no dependency override behind for subsequent test modules
         # that might import ``app.main`` and share its module-level app.
         app.dependency_overrides.pop(get_ludus_client, None)
+        app.dependency_overrides.pop(get_ludus_client_registry, None)

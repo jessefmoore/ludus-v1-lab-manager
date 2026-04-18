@@ -91,6 +91,42 @@ body {
     );
   }
 
+  /* Skeleton loader with shimmer effect */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      #1c1f28 25%,
+      #262a36 50%,
+      #1c1f28 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 3s ease-in-out infinite;
+    border-radius: 6px;
+  }
+
+  /* Page enter animation */
+  .page-enter {
+    animation: page-enter 200ms ease-out;
+  }
+
+  /* Interactive table row hover */
+  .table-row-interactive {
+    transition: background-color 100ms ease;
+  }
+  .table-row-interactive:hover {
+    background-color: rgba(28, 31, 40, 0.5);
+  }
+
+  /* Sortable table header */
+  .th-sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: color 100ms ease;
+  }
+  .th-sortable:hover {
+    color: #e8eaf0;
+  }
+
   /* Kbd styling for command palette */
   .kbd {
     display: inline-flex;

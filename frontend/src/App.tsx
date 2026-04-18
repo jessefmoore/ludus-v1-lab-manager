@@ -6,6 +6,7 @@ import Dashboard from "@/pages/Dashboard";
 import SessionDetail from "@/pages/SessionDetail";
 import LabTemplates from "@/pages/LabTemplates";
 import Settings from "@/pages/Settings";
+import LudusManagement from "@/pages/LudusManagement";
 import NotFound from "@/pages/NotFound";
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/sessions/:id" element={<SessionDetail />} />
           <Route path="/labs" element={<LabTemplates />} />
+          <Route path="/ludus" element={<LudusManagement />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Route>

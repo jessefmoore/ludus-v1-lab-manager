@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Layers,
+  Server,
   Settings,
   LogOut,
   Menu,
@@ -14,6 +15,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/labs", icon: Layers, label: "Lab Templates" },
+  { to: "/ludus", icon: Server, label: "Ludus" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
@@ -27,12 +29,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="p-7 pb-6 border-b border-border/50">
         <div className="flex items-center gap-1.5">
-          <span className="text-2xl font-bold text-text-primary">insec</span>
-          <span className="text-2xl font-bold text-accent-success">.</span>
-          <span className="text-2xl font-bold text-text-primary">ml</span>
+          <span className="text-3xl font-bold text-text-primary">insec</span>
+          <span className="text-3xl font-bold text-accent-success">.</span>
+          <span className="text-3xl font-bold text-text-primary">ml</span>
         </div>
-        <p className="text-xs text-text-muted mt-1 tracking-normal">
-          Instructor Platform
+        <p className="text-sm text-text-muted mt-1 tracking-normal">
+          Ludus Labs Manager
         </p>
       </div>
 

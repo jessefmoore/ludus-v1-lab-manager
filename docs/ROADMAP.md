@@ -37,14 +37,21 @@
 
 **Exit criteria:** Click-through from login to inviting a student in the browser. **MET**
 
-## Phase 3 — Polish
+## Phase 3 — Polish :white_check_mark:
 
-- [ ] CSV bulk import for students
-- [ ] Provisioning progress indicator (SSE or polling)
-- [ ] Rate-limited reset button
-- [ ] Session teardown confirmation modal
-- [ ] Audit log view
-- [ ] Basic error handling + toast notifications
+- [x] CSV bulk import for students
+- [x] Provisioning progress indicator (polling-based progress bar)
+- [x] Rate-limited reset button (2-min cooldown, HTTP 429)
+- [x] Session teardown confirmation modal
+- [x] Audit log view (`GET /api/events` + collapsible Activity Log panel)
+- [x] Basic error handling + toast notifications
+- [x] Ludus management page (8 tabs: ranges, snapshots, templates, users, groups, ansible, testing, logs)
+- [x] Ludus user management (create/delete users, WireGuard config download, API key display)
+- [x] Full Ludus API wrapper (40+ endpoints: power, snapshots, templates, groups, ansible, testing, logs, range detail)
+- [x] Multi-Ludus-server support (`LudusClientRegistry`, server selector UI, `?server=` query param)
+- [x] Command palette (`Ctrl+K` quick-navigate)
+- [x] Settings page (platform config, password change, Ludus connection test)
+- [x] Reusable UI components (DataTable, Tabs, Skeleton, PageTransition)
 
 **Exit criteria:** Run first real training on the platform.
 
@@ -55,5 +62,4 @@
 - [ ] Multi-instructor / RBAC
 - [ ] Postgres migration
 - [ ] Background job queue (Celery + Redis)
-- [ ] Multi-Ludus-server support (lab1, lab2, etc. selectable per session)
 - [ ] Public signup / landing page for insec.ml

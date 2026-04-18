@@ -40,11 +40,15 @@ export default {
           "radial-gradient(ellipse at 50% 0%, rgba(0,212,170,0.08) 0%, transparent 60%)",
         "gradient-surface":
           "linear-gradient(180deg, rgba(0,212,170,0.03) 0%, transparent 40%)",
+        "gradient-surface-deep":
+          "linear-gradient(180deg, rgba(0,212,170,0.05) 0%, rgba(108,142,255,0.02) 50%, transparent 100%)",
       },
       boxShadow: {
         glow: "0 0 20px rgba(0,212,170,0.1)",
         "glow-sm": "0 0 10px rgba(0,212,170,0.08)",
         "glow-lg": "0 0 40px rgba(0,212,170,0.15)",
+        "inner-glow": "inset 0 1px 0 rgba(0,212,170,0.06), 0 0 20px rgba(0,212,170,0.08)",
+        "card-hover": "0 4px 24px rgba(0,0,0,0.3), 0 0 20px rgba(0,212,170,0.06)",
       },
       keyframes: {
         "slide-in": {
@@ -63,6 +67,10 @@ export default {
           from: { opacity: "0", transform: "translateY(8px)" },
           to: { opacity: "1", transform: "translateY(0)" },
         },
+        "page-enter": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
         shimmer: {
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
@@ -73,6 +81,7 @@ export default {
         "fade-in": "fade-in 150ms ease-out",
         "scale-in": "scale-in 150ms ease-out",
         "slide-up": "slide-up 200ms ease-out",
+        "page-enter": "page-enter 200ms ease-out",
         shimmer: "shimmer 3s ease-in-out infinite",
       },
     },

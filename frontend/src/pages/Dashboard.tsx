@@ -21,7 +21,9 @@ import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Input from "@/components/Input";
 import StatusPill from "@/components/StatusPill";
-import LoadingScreen from "@/components/LoadingScreen";
+import DataTable, { type Column } from "@/components/DataTable";
+import { TableSkeleton } from "@/components/Skeleton";
+import PageTransition from "@/components/PageTransition";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -43,7 +45,50 @@ export default function Dashboard() {
 
   useEffect(fetchData, []);
 
-  if (loading && sessionList.length === 0) return <LoadingScreen />;
+  const sessionColumns: Column<SessionRead>[] = [
+    {
+      key: "name",
+      label: "Name",
+      sortable: true,
+      sortValue: (s) => s.name.toLowerCase(),
+      render: (s) => (
+        <span className="text-[15px] text-text-primary font-medium">{s.name}</span>
+      ),
+    },
+    {
+      key: "lab",
+      label: "Lab Template",
+      render: (s) => {
+        const lab = labList.find((l) => l.id === s.lab_template_id);
+        return <span className="text-text-secondary">{lab?.name ?? "\u2014"}</span>;
+      },
+    },
+    {
+      key: "mode",
+      label: "Mode",
+      render: (s) => (
+        <span className="text-text-secondary capitalize">{s.mode}</span>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      sortValue: (s) => s.status,
+      render: (s) => <StatusPill status={s.status} />,
+    },
+    {
+      key: "created",
+      label: "Created",
+      sortable: true,
+      sortValue: (s) => s.created_at,
+      render: (s) => (
+        <span className="font-mono text-text-muted">
+          {new Date(s.created_at).toLocaleDateString()}
+        </span>
+      ),
+    },
+  ];
 
   const count = (status: SessionStatus) =>
     sessionList.filter((s) => s.status === status).length;
@@ -96,7 +141,7 @@ export default function Dashboard() {
         }
       />
 
-      <div className="p-8 space-y-6">
+      <PageTransition className="p-8 space-y-6">
         <div>
           <h1 className="text-[32px] leading-tight font-bold text-text-primary">Sessions</h1>
           <p className="text-[15px] text-text-secondary mt-1">
@@ -107,7 +152,7 @@ export default function Dashboard() {
         {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {stats.map((s) => (
-            <Card key={s.label} variant="stat" className="flex items-start justify-between">
+            <Card key={s.label} variant="stat" className="flex items-start justify-between hover:shadow-inner-glow">
               <div>
                 <p className="text-[13px] font-medium uppercase tracking-wider text-text-secondary">
                   {s.label}
@@ -130,79 +175,39 @@ export default function Dashboard() {
             </h2>
           </div>
 
-          {sessionList.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <CalendarRange className="h-12 w-12 text-text-muted mb-4" />
-              <p className="text-text-secondary mb-1">No sessions yet</p>
-              <p className="text-sm text-text-muted mb-6">
-                Create your first training session
-              </p>
-              <Button
-                variant="primary"
-                icon={<Plus />}
-                onClick={() => setShowCreate(true)}
-              >
-                New Session
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Name
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Lab Template
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Mode
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Status
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Created
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {sessionList.map((session, i) => {
-                  const lab = labList.find(
-                    (l) => l.id === session.lab_template_id,
-                  );
-                  return (
-                    <tr
-                      key={session.id}
-                      className="border-b border-border hover:bg-bg-elevated/50 transition-colors cursor-pointer animate-fade-in"
-                      style={{ animationDelay: `${i * 30}ms`, animationFillMode: "backwards" }}
-                      onClick={() => navigate(`/sessions/${session.id}`)}
-                    >
-                      <td className="px-4 py-3 text-[15px] text-text-primary font-medium">
-                        {session.name}
-                      </td>
-                      <td className="px-4 py-3 text-[15px] text-text-secondary">
-                        {lab?.name ?? "—"}
-                      </td>
-                      <td className="px-4 py-3 text-[15px] text-text-secondary capitalize">
-                        {session.mode}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusPill status={session.status} />
-                      </td>
-                      <td className="px-4 py-3 text-[15px] font-mono text-text-muted">
-                        {new Date(session.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-          )}
+          <div className="p-5">
+            {loading ? (
+              <TableSkeleton rows={5} cols={5} />
+            ) : sessionList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16">
+                <CalendarRange className="h-12 w-12 text-text-muted mb-4" />
+                <p className="text-text-secondary mb-1">No sessions yet</p>
+                <p className="text-sm text-text-muted mb-6">
+                  Create your first training session
+                </p>
+                <Button
+                  variant="primary"
+                  icon={<Plus />}
+                  onClick={() => setShowCreate(true)}
+                >
+                  New Session
+                </Button>
+              </div>
+            ) : (
+              <DataTable
+                columns={sessionColumns}
+                data={sessionList}
+                keyExtractor={(s) => s.id}
+                searchable
+                searchPlaceholder="Search sessions..."
+                searchFilter={(s, q) => s.name.toLowerCase().includes(q)}
+                onRowClick={(s) => navigate(`/sessions/${s.id}`)}
+                pageSize={10}
+              />
+            )}
+          </div>
         </Card>
-      </div>
+      </PageTransition>
 
       <CreateSessionModal
         open={showCreate}

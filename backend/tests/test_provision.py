@@ -29,7 +29,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.sessions import router as sessions_router
 from app.core.config import Settings, get_settings
 from app.core.db import Base, get_db
-from app.core.deps import get_current_user, get_ludus_client
+from app.core.deps import get_current_user, get_ludus_client_registry
 from app.models import (
     Event,
     LabTemplate,
@@ -176,6 +176,22 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
     return template
 
 
+class FakeRegistry:
+    """Wraps a FakeLudus so it can be used as a ``LudusClientRegistry``."""
+
+    def __init__(self, fake: FakeLudus) -> None:
+        self._fake = fake
+
+    def get(self, name: str = "default") -> FakeLudus:  # type: ignore[override]
+        if name != "default":
+            raise ValueError(f"Unknown Ludus server '{name}'")
+        return self._fake
+
+    @property
+    def server_names(self) -> list[str]:
+        return ["default"]
+
+
 @pytest.fixture
 def fake_ludus() -> FakeLudus:
     return FakeLudus()
@@ -198,9 +214,11 @@ def app_factory(
         def _override_get_settings() -> Settings:
             return settings
 
+        fake_registry = FakeRegistry(fake_ludus)
+
         app.dependency_overrides[get_db] = _override_get_db
         app.dependency_overrides[get_settings] = _override_get_settings
-        app.dependency_overrides[get_ludus_client] = lambda: fake_ludus
+        app.dependency_overrides[get_ludus_client_registry] = lambda: fake_registry
         if authenticated:
             app.dependency_overrides[get_current_user] = lambda: fake_user
         return app

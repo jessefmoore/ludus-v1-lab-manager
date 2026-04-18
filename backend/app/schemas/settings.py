@@ -28,3 +28,18 @@ class LudusTestResponse(BaseModel):
 
     status: str
     latency_ms: int
+
+
+class LudusServerInfo(BaseModel):
+    """Info about a single configured Ludus server (API key masked)."""
+
+    name: str
+    url: str
+    api_key_masked: str
+    verify_tls: bool
+
+
+class LudusServersResponse(BaseModel):
+    """List of all configured Ludus servers."""
+
+    servers: list[LudusServerInfo]

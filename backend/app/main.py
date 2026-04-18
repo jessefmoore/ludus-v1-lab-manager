@@ -28,7 +28,18 @@ from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.orm import Session as DBSession
 
-from app.api import auth, events, invite, labs, ludus, sessions, students
+from app.api import (
+    auth,
+    events,
+    invite,
+    labs,
+    ludus,
+    ludus_ansible,
+    ludus_groups,
+    ludus_testing,
+    sessions,
+    students,
+)
 from app.api import settings as settings_api
 from app.core.config import Settings, get_settings
 from app.core.db import Base, SessionLocal, engine
@@ -112,6 +123,9 @@ app.add_middleware(CSRFMiddleware, allowed_host=_csrf_host)
 app.include_router(auth.router)
 app.include_router(labs.router)
 app.include_router(ludus.router)
+app.include_router(ludus_testing.router)
+app.include_router(ludus_groups.router)
+app.include_router(ludus_ansible.router)
 app.include_router(settings_api.router)
 app.include_router(sessions.router)
 app.include_router(students.router)

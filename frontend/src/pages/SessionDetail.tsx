@@ -26,7 +26,9 @@ import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Input from "@/components/Input";
 import StatusPill from "@/components/StatusPill";
-import LoadingScreen from "@/components/LoadingScreen";
+import DataTable, { type Column } from "@/components/DataTable";
+import { TableSkeleton } from "@/components/Skeleton";
+import PageTransition from "@/components/PageTransition";
 import { useToast } from "@/components/Toast";
 
 export default function SessionDetail() {
@@ -111,7 +113,16 @@ export default function SessionDetail() {
       .finally(() => setActivityLoading(false));
   }, [activityOpen, session?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading || !session) return <LoadingScreen />;
+  if (loading || !session) {
+    return (
+      <>
+        <TopBar breadcrumbs={[{ label: "Sessions", to: "/" }, { label: "Loading..." }]} />
+        <div className="p-8 space-y-6">
+          <TableSkeleton rows={5} cols={6} />
+        </div>
+      </>
+    );
+  }
 
   const handleProvision = async () => {
     setProvisioning(true);
@@ -194,22 +205,121 @@ export default function SessionDetail() {
     }
   };
 
-  const toggleSelect = (studentId: number) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(studentId)) next.delete(studentId);
-      else next.add(studentId);
-      return next;
-    });
-  };
-
-  const toggleAll = () => {
-    if (selected.size === session.students.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(session.students.map((s) => s.id)));
-    }
-  };
+  const studentColumns: Column<StudentRead>[] = [
+    {
+      key: "name",
+      label: "Name / Email",
+      sortable: true,
+      sortValue: (s) => s.full_name.toLowerCase(),
+      render: (s) => (
+        <div>
+          <div className="text-[15px] text-text-primary">{s.full_name}</div>
+          <div className="text-xs text-text-muted">{s.email}</div>
+        </div>
+      ),
+    },
+    {
+      key: "userid",
+      label: "UserID",
+      render: (s) => (
+        <span className="text-[15px] font-mono text-text-secondary">
+          {s.ludus_userid || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "range",
+      label: "Range",
+      render: (s) => (
+        <span className="text-[15px] font-mono text-text-secondary">
+          {s.range_id || "—"}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      label: "Status",
+      sortable: true,
+      sortValue: (s) => s.status,
+      render: (s) => <StatusPill status={s.status} />,
+    },
+    {
+      key: "vpn",
+      label: "VPN",
+      sortable: true,
+      sortValue: (s) =>
+        s.status === "ready" && s.invite_redeemed_at
+          ? 3
+          : s.status === "ready"
+            ? 2
+            : s.status === "error"
+              ? 1
+              : 0,
+      render: (s) => {
+        if (s.status === "ready" && s.invite_redeemed_at) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-accent-success" />
+              <span className="text-xs text-accent-success">Downloaded</span>
+            </div>
+          );
+        }
+        if (s.status === "ready") {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-accent-warning" />
+              <span className="text-xs text-accent-warning">Awaiting</span>
+            </div>
+          );
+        }
+        if (s.status === "error") {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block h-2 w-2 rounded-full bg-accent-danger" />
+              <span className="text-xs text-accent-danger">Error</span>
+            </div>
+          );
+        }
+        return (
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
+            <span className="text-xs text-text-muted">—</span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "invite",
+      label: "Invite",
+      render: (s) => <InviteCell student={s} />,
+    },
+    {
+      key: "actions",
+      label: "Actions",
+      render: (s) => (
+        <div className="flex items-center gap-1">
+          {s.status === "ready" && (
+            <Button
+              variant="icon"
+              onClick={() => handleResetStudent(s.id)}
+              title="Reset student environment"
+              aria-label="Reset student environment"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="icon"
+            onClick={() => handleDeleteStudent(s.id)}
+            title="Remove student"
+            aria-label="Remove student"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   const handleBulkDelete = () => {
     setConfirmModal({
@@ -264,6 +374,9 @@ export default function SessionDetail() {
   const readyCount = session.students.filter(
     (s) => s.status === "ready",
   ).length;
+  const vpnCount = session.students.filter(
+    (s) => s.status === "ready" && s.invite_redeemed_at,
+  ).length;
   const totalStudents = session.students.length;
 
   return (
@@ -274,19 +387,22 @@ export default function SessionDetail() {
           { label: session.name },
         ]}
         actions={
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="flex items-center gap-2">
             {pendingCount > 0 && (
-              <Button
-                variant="primary"
-                loading={provisioning}
-                onClick={handleProvision}
-              >
-                Provision All ({pendingCount})
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  loading={provisioning}
+                  onClick={handleProvision}
+                >
+                  Provision All ({pendingCount})
+                </Button>
+                <span className="hidden sm:block h-5 w-px bg-border/60" />
+              </>
             )}
             {(session.status === "active" || session.status === "provisioning") && (
               <Button
-                variant="danger"
+                variant="secondary"
                 loading={ending}
                 onClick={handleEndSession}
               >
@@ -294,17 +410,22 @@ export default function SessionDetail() {
               </Button>
             )}
             <Button
-              variant="danger"
-              loading={deleting}
+              variant="icon"
               onClick={handleDeleteSession}
+              title="Delete session"
+              aria-label="Delete session"
             >
-              Delete Session
+              {deleting ? (
+                <span className="h-4 w-4 border-2 border-accent-danger/30 border-t-accent-danger rounded-full animate-spin" />
+              ) : (
+                <Trash2 className="h-4 w-4 text-text-muted hover:text-accent-danger transition-colors" />
+              )}
             </Button>
           </div>
         }
       />
 
-      <div className="p-8 space-y-6">
+      <PageTransition className="p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
           <h1 className="text-[32px] font-bold leading-tight text-text-primary">
@@ -313,8 +434,8 @@ export default function SessionDetail() {
           <StatusPill status={session.status} />
           {totalStudents > 0 && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl text-xs font-medium bg-[#262A36] text-text-secondary">
-              <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
-              0 / {totalStudents} VPN
+              <span className={`inline-block h-2 w-2 rounded-full ${vpnCount > 0 ? "bg-accent-success" : "bg-text-muted"}`} />
+              {vpnCount} / {totalStudents} VPN
             </span>
           )}
         </div>
@@ -434,76 +555,39 @@ export default function SessionDetail() {
             </div>
           </div>
 
-          {totalStudents === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16">
-              <UserPlus className="h-12 w-12 text-text-muted mb-4" />
-              <p className="text-text-secondary mb-1">No students enrolled</p>
-              <p className="text-sm text-text-muted mb-6">
-                Add students to start provisioning their lab environments
-              </p>
-              <Button
-                variant="primary"
-                icon={<Plus />}
-                onClick={() => setShowAddStudent(true)}
-              >
-                Add Student
-              </Button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th scope="col" className="w-10 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      checked={
-                        selected.size === totalStudents &&
-                        totalStudents > 0
-                      }
-                      onChange={toggleAll}
-                      className="accent-accent-success"
-                      aria-label="Select all students"
-                    />
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Name / Email
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    UserID
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Range
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Status
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    VPN
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Invite
-                  </th>
-                  <th scope="col" className="text-left px-4 py-3 text-[13px] font-medium uppercase tracking-wider text-text-secondary">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {session.students.map((student) => (
-                  <StudentRow
-                    key={student.id}
-                    student={student}
-                    selected={selected.has(student.id)}
-                    onToggle={() => toggleSelect(student.id)}
-                    onDelete={() => handleDeleteStudent(student.id)}
-                    onReset={() => handleResetStudent(student.id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-            </div>
-          )}
+          <div className="px-5 py-4">
+            <DataTable
+              columns={studentColumns}
+              data={session.students}
+              keyExtractor={(s) => s.id}
+              selectable
+              selected={selected}
+              onSelectionChange={setSelected as (s: Set<string | number>) => void}
+              searchable
+              searchPlaceholder="Search students..."
+              searchFilter={(s, q) =>
+                s.full_name.toLowerCase().includes(q) ||
+                s.email.toLowerCase().includes(q)
+              }
+              pageSize={10}
+              emptyState={
+                <div className="flex flex-col items-center justify-center py-8">
+                  <UserPlus className="h-12 w-12 text-text-muted mb-4" />
+                  <p className="text-text-secondary mb-1">No students enrolled</p>
+                  <p className="text-sm text-text-muted mb-6">
+                    Add students to start provisioning their lab environments
+                  </p>
+                  <Button
+                    variant="primary"
+                    icon={<Plus />}
+                    onClick={() => setShowAddStudent(true)}
+                  >
+                    Add Student
+                  </Button>
+                </div>
+              }
+            />
+          </div>
         </Card>
 
         {/* Bulk action bar */}
@@ -577,7 +661,7 @@ export default function SessionDetail() {
             </div>
           )}
         </Card>
-      </div>
+      </PageTransition>
 
       <AddStudentModal
         open={showAddStudent}
@@ -621,19 +705,7 @@ export default function SessionDetail() {
   );
 }
 
-function StudentRow({
-  student,
-  selected,
-  onToggle,
-  onDelete,
-  onReset,
-}: {
-  student: StudentRead;
-  selected: boolean;
-  onToggle: () => void;
-  onDelete: () => void;
-  onReset: () => void;
-}) {
+function InviteCell({ student }: { student: StudentRead }) {
   const [copied, setCopied] = useState(false);
 
   const copyInvite = async () => {
@@ -643,84 +715,31 @@ function StudentRow({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (student.status !== "ready" || !student.invite_url) {
+    return <span className="text-xs text-text-muted">—</span>;
+  }
+
   return (
-    <tr className="border-b border-border hover:bg-bg-elevated/50 transition-colors">
-      <td className="w-10 px-4 py-3">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggle}
-          className="accent-accent-success"
-        />
-      </td>
-      <td className="px-4 py-3">
-        <div className="text-[15px] text-text-primary">{student.full_name}</div>
-        <div className="text-xs text-text-muted">{student.email}</div>
-      </td>
-      <td className="px-4 py-3 text-[15px] font-mono text-text-secondary">
-        {student.ludus_userid || "—"}
-      </td>
-      <td className="px-4 py-3 text-[15px] font-mono text-text-secondary">
-        {student.range_id || "—"}
-      </td>
-      <td className="px-4 py-3">
-        <StatusPill status={student.status} />
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
-          <span className="text-xs text-text-muted">Unknown</span>
-        </div>
-      </td>
-      <td className="px-4 py-3">
-        {student.status === "ready" && student.invite_url ? (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={copyInvite}
-              className="h-7 px-2 rounded text-xs font-medium inline-flex items-center gap-1 bg-bg-elevated border border-border text-text-secondary hover:text-text-primary transition-colors"
-              title="Copy invite URL"
-              aria-label="Copy invite URL"
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-accent-success" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-              {copied ? "Copied" : "Copy"}
-            </button>
-            {student.invite_redeemed_at ? (
-              <span className="text-xs text-accent-success">Redeemed</span>
-            ) : (
-              <span className="text-xs text-text-muted">Pending</span>
-            )}
-          </div>
+    <div className="flex items-center gap-2">
+      <button
+        onClick={copyInvite}
+        className="h-7 px-2 rounded text-xs font-medium inline-flex items-center gap-1 bg-bg-elevated border border-border text-text-secondary hover:text-text-primary transition-colors"
+        title="Copy invite URL"
+        aria-label="Copy invite URL"
+      >
+        {copied ? (
+          <Check className="h-3.5 w-3.5 text-accent-success" />
         ) : (
-          <span className="text-xs text-text-muted">—</span>
+          <Copy className="h-3.5 w-3.5" />
         )}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
-          {student.status === "ready" && (
-            <Button
-              variant="icon"
-              onClick={onReset}
-              title="Reset student environment"
-              aria-label="Reset student environment"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          )}
-          <Button
-            variant="icon"
-            onClick={onDelete}
-            title="Remove student"
-            aria-label="Remove student"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </td>
-    </tr>
+        {copied ? "Copied" : "Copy"}
+      </button>
+      {student.invite_redeemed_at ? (
+        <span className="text-xs text-accent-success">Redeemed</span>
+      ) : (
+        <span className="text-xs text-text-muted">Pending</span>
+      )}
+    </div>
   );
 }
 

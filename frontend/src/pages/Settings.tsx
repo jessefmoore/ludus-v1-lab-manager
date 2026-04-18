@@ -1,12 +1,14 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { Server, Shield, Clock, Link as LinkIcon, Eye, EyeOff } from "lucide-react";
 import { settings, ApiError } from "@/api";
-import type { PlatformSettings } from "@/api";
+import type { PlatformSettings, LudusServerInfo } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
+import PageTransition from "@/components/PageTransition";
+import { Skeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
 
 export default function Settings() {
@@ -14,6 +16,7 @@ export default function Settings() {
   const { toast } = useToast();
   const [config, setConfig] = useState<PlatformSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [servers, setServers] = useState<LudusServerInfo[]>([]);
 
   useEffect(() => {
     settings
@@ -21,13 +24,14 @@ export default function Settings() {
       .then(setConfig)
       .catch(() => setConfig(null))
       .finally(() => setLoading(false));
+    settings.ludusServers().then((res) => setServers(res.servers)).catch(() => {});
   }, []);
 
   return (
     <>
       <TopBar breadcrumbs={[{ label: "Settings" }]} />
 
-      <div className="p-8 space-y-6">
+      <PageTransition className="p-8 space-y-6">
         <div>
           <h1 className="text-[32px] font-bold leading-tight text-text-primary">Settings</h1>
           <p className="text-[15px] text-text-secondary mt-1">
@@ -35,10 +39,14 @@ export default function Settings() {
           </p>
         </div>
 
-        <LudusServerCard config={config} loading={loading} />
+        {servers.length > 1 ? (
+          <LudusMultiServerCard servers={servers} />
+        ) : (
+          <LudusServerCard config={config} loading={loading} />
+        )}
         <AdminAccountCard email={user?.email ?? ""} toast={toast} />
         <PlatformCard config={config} loading={loading} />
-      </div>
+      </PageTransition>
     </>
   );
 }
@@ -75,8 +83,6 @@ function LudusServerCard({
     }
   };
 
-  const skeleton = "animate-pulse bg-bg-elevated rounded h-11";
-
   return (
     <Card className="space-y-6">
       <div className="flex items-center gap-2.5 text-text-secondary">
@@ -91,7 +97,7 @@ function LudusServerCard({
             Server URL
           </label>
           {loading ? (
-            <div className={skeleton} />
+            <Skeleton variant="rect" height="44px" />
           ) : (
             <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center">
               <span className="text-[15px] font-mono text-text-primary truncate">
@@ -107,7 +113,7 @@ function LudusServerCard({
             API Key
           </label>
           {loading ? (
-            <div className={skeleton} />
+            <Skeleton variant="rect" height="44px" />
           ) : (
             <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center justify-between gap-2">
               <span className="text-[15px] font-mono text-text-primary truncate">
@@ -136,7 +142,7 @@ function LudusServerCard({
             TLS Verification
           </label>
           {loading ? (
-            <div className={skeleton} />
+            <Skeleton variant="rect" height="44px" />
           ) : (
             <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center gap-2">
               <span
@@ -164,6 +170,110 @@ function LudusServerCard({
             </span>
           )}
         </div>
+      </div>
+    </Card>
+  );
+}
+
+/* ── Ludus Multi-Server Card ────────────────────────────────────── */
+
+function LudusMultiServerCard({ servers }: { servers: LudusServerInfo[] }) {
+  const [testingServer, setTestingServer] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<
+    Record<string, { ok: boolean; message: string }>
+  >({});
+
+  const handleTest = async (serverName: string) => {
+    setTestingServer(serverName);
+    setTestResults((prev) => {
+      const next = { ...prev };
+      delete next[serverName];
+      return next;
+    });
+    try {
+      const res = await settings.testConnection(serverName);
+      setTestResults((prev) => ({
+        ...prev,
+        [serverName]: { ok: true, message: `Connected (${res.latency_ms}ms)` },
+      }));
+    } catch (err) {
+      setTestResults((prev) => ({
+        ...prev,
+        [serverName]: {
+          ok: false,
+          message: err instanceof ApiError ? err.detail : "Connection failed",
+        },
+      }));
+    } finally {
+      setTestingServer(null);
+    }
+  };
+
+  return (
+    <Card className="space-y-6">
+      <div className="flex items-center gap-2.5 text-text-secondary">
+        <Server className="h-5 w-5" />
+        <h2 className="text-xl font-semibold text-text-primary">Ludus Servers</h2>
+      </div>
+
+      <div className="space-y-4">
+        {servers.map((s) => (
+          <div
+            key={s.name}
+            className="p-4 rounded-md bg-bg-elevated border border-border space-y-3"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-[15px] font-semibold text-text-primary capitalize">
+                {s.name}
+              </h3>
+              <div className="flex items-center gap-3">
+                {testResults[s.name] && (
+                  <span
+                    className={`text-sm ${
+                      testResults[s.name].ok
+                        ? "text-accent-success"
+                        : "text-accent-danger"
+                    }`}
+                  >
+                    {testResults[s.name].message}
+                  </span>
+                )}
+                <Button
+                  variant="secondary"
+                  onClick={() => handleTest(s.name)}
+                  loading={testingServer === s.name}
+                  className="text-[13px]"
+                >
+                  Test
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="text-text-muted text-[12px] uppercase tracking-wider">URL</span>
+                <p className="font-mono text-text-primary truncate">{s.url}</p>
+              </div>
+              <div>
+                <span className="text-text-muted text-[12px] uppercase tracking-wider">API Key</span>
+                <p className="font-mono text-text-secondary">{s.api_key_masked}</p>
+              </div>
+              <div>
+                <span className="text-text-muted text-[12px] uppercase tracking-wider">TLS</span>
+                <p className="flex items-center gap-1.5">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      s.verify_tls ? "bg-accent-success" : "bg-accent-warning"
+                    }`}
+                  />
+                  <span className="text-text-primary">
+                    {s.verify_tls ? "Enabled" : "Disabled"}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   );
@@ -286,8 +396,6 @@ function PlatformCard({
   config: PlatformSettings | null;
   loading: boolean;
 }) {
-  const skeleton = "animate-pulse bg-bg-elevated rounded h-11";
-
   return (
     <Card className="space-y-6">
       <div className="flex items-center gap-2.5 text-text-secondary">
@@ -302,7 +410,7 @@ function PlatformCard({
             Invite Link TTL
           </label>
           {loading ? (
-            <div className={skeleton} />
+            <Skeleton variant="rect" height="44px" />
           ) : (
             <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center gap-2">
               <Clock className="h-4 w-4 text-text-muted shrink-0" />
@@ -322,7 +430,7 @@ function PlatformCard({
             Public Base URL
           </label>
           {loading ? (
-            <div className={skeleton} />
+            <Skeleton variant="rect" height="44px" />
           ) : (
             <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center gap-2">
               <LinkIcon className="h-4 w-4 text-text-muted shrink-0" />
