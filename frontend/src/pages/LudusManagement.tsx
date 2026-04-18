@@ -300,8 +300,8 @@ function RangesTab({ server }: { server: string }) {
 
 function SnapshotsTab({ server }: { server: string }) {
   const { toast } = useToast();
-  const [ranges, setRanges] = useState<LudusRange[]>([]);
-  const [selectedRange, setSelectedRange] = useState<string>("");
+  const [users, setUsers] = useState<LudusUser[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string>("");
   const [snapshots, setSnapshots] = useState<LudusSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
@@ -316,11 +316,11 @@ function SnapshotsTab({ server }: { server: string }) {
   useEffect(() => {
     setLoading(true);
     ludus
-      .ranges(server)
+      .users(server)
       .then((res) => {
-        setRanges(res.ranges);
-        if (res.ranges.length > 0) {
-          setSelectedRange(res.ranges[0].rangeID);
+        setUsers(res.users);
+        if (res.users.length > 0) {
+          setSelectedUser(res.users[0].userID);
         }
       })
       .catch(() => {})
@@ -328,25 +328,25 @@ function SnapshotsTab({ server }: { server: string }) {
   }, [server]);
 
   const fetchSnapshots = useCallback(() => {
-    if (!selectedRange) return;
+    if (!selectedUser) return;
     setSnapshotLoading(true);
     ludus
-      .snapshots({ user_id: selectedRange, server })
+      .snapshots({ user_id: selectedUser, server })
       .then((res) => setSnapshots(res.snapshots))
       .catch((err) =>
         toast("error", err instanceof ApiError ? err.detail : "Failed to load snapshots"),
       )
       .finally(() => setSnapshotLoading(false));
-  }, [selectedRange, toast, server]);
+  }, [selectedUser, toast, server]);
 
   useEffect(fetchSnapshots, [fetchSnapshots]);
 
   const handleRevert = (snap: LudusSnapshot) => {
     setConfirmModal({
       title: "Revert Snapshot",
-      message: `Revert to snapshot "${snap.name}" for user ${selectedRange}?`,
+      message: `Revert to snapshot "${snap.name}" for user ${selectedUser}?`,
       action: async () => {
-        await ludus.revertSnapshot({ user_id: selectedRange, name: snap.name }, server);
+        await ludus.revertSnapshot({ user_id: selectedUser, name: snap.name }, server);
         toast("success", `Revert to "${snap.name}" started`);
       },
     });
@@ -357,7 +357,7 @@ function SnapshotsTab({ server }: { server: string }) {
       title: "Delete Snapshot",
       message: `Delete snapshot "${snap.name}"? This cannot be undone.`,
       action: async () => {
-        await ludus.deleteSnapshot(snap.name, selectedRange, server);
+        await ludus.deleteSnapshot(snap.name, selectedUser, server);
         toast("success", `Snapshot "${snap.name}" deleted`);
         fetchSnapshots();
       },
@@ -414,15 +414,15 @@ function SnapshotsTab({ server }: { server: string }) {
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <label className="text-sm text-text-secondary">Range:</label>
+          <label className="text-sm text-text-secondary">User:</label>
           <select
             className="h-9 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success"
-            value={selectedRange}
-            onChange={(e) => setSelectedRange(e.target.value)}
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
           >
-            {ranges.map((r) => (
-              <option key={r.rangeNumber} value={r.rangeID}>
-                {r.rangeID} ({r.name || `#${r.rangeNumber}`})
+            {users.map((u) => (
+              <option key={u.userID} value={u.userID}>
+                {u.userID} ({u.name || u.userID})
               </option>
             ))}
           </select>
@@ -431,7 +431,7 @@ function SnapshotsTab({ server }: { server: string }) {
           variant="primary"
           icon={<Camera />}
           onClick={() => setShowCreate(true)}
-          disabled={!selectedRange}
+          disabled={!selectedUser}
         >
           Create Snapshot
         </Button>
@@ -445,14 +445,14 @@ function SnapshotsTab({ server }: { server: string }) {
           data={snapshots}
           keyExtractor={(s) => s.name}
           pageSize={10}
-          emptyState="No snapshots found for this range"
+          emptyState="No snapshots found for this user"
         />
       )}
 
       <CreateSnapshotModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        userId={selectedRange}
+        userId={selectedUser}
         server={server}
         onCreated={() => {
           setShowCreate(false);

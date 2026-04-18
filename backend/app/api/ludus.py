@@ -352,7 +352,29 @@ def list_snapshots(
             detail=f"Ludus error: {exc}",
         ) from exc
 
-    snapshots = [LudusSnapshot.model_validate(s) for s in raw]
+    # Ludus returns [{"snapshots": [{name, vmid, vmname, ...}, ...]}].
+    # Flatten the per-VM entries and deduplicate by snapshot name.
+    flat: list[dict] = []
+    for item in raw:
+        if isinstance(item, dict) and "snapshots" in item:
+            flat.extend(item["snapshots"])
+        else:
+            flat.append(item)
+
+    by_name: dict[str, dict] = {}
+    for entry in flat:
+        name = entry.get("name", "")
+        if name not in by_name:
+            by_name[name] = {
+                "name": name,
+                "description": entry.get("description"),
+                "vmids": [],
+            }
+        vmid = entry.get("vmid")
+        if vmid is not None:
+            by_name[name]["vmids"].append(vmid)
+
+    snapshots = [LudusSnapshot.model_validate(s) for s in by_name.values()]
     return LudusSnapshotListResponse(snapshots=snapshots)
 
 

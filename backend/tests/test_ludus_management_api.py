@@ -213,6 +213,29 @@ def test_list_snapshots_success(client: TestClient, mock_ludus: MagicMock) -> No
     assert body["snapshots"][0]["name"] == "ctf-initial"
 
 
+def test_list_snapshots_nested_ludus_format(client: TestClient, mock_ludus: MagicMock) -> None:
+    """Ludus returns [{snapshots: [{name, vmid, vmname, ...}, ...]}]."""
+    mock_ludus.snapshot_list.return_value = [
+        {
+            "snapshots": [
+                {"name": "current", "description": "You are here!", "vmid": 104, "vmname": "RZ-router"},
+                {"name": "current", "description": "You are here!", "vmid": 105, "vmname": "RZ-DC"},
+                {"name": "clean", "description": "Initial", "vmid": 104, "vmname": "RZ-router"},
+            ],
+        },
+    ]
+
+    resp = client.get("/api/ludus/snapshots", params={"user_id": "RZ"})
+    assert resp.status_code == 200
+    body = resp.json()
+    snapshots = body["snapshots"]
+    assert len(snapshots) == 2  # deduplicated by name: "current" + "clean"
+    names = {s["name"] for s in snapshots}
+    assert names == {"current", "clean"}
+    current = next(s for s in snapshots if s["name"] == "current")
+    assert set(current["vmids"]) == {104, 105}
+
+
 def test_list_snapshots_empty(client: TestClient, mock_ludus: MagicMock) -> None:
     mock_ludus.snapshot_list.return_value = []
 
