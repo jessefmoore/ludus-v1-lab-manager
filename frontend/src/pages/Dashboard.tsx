@@ -7,6 +7,9 @@ import {
   FileText,
   CheckCircle2,
   Layers,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from "lucide-react";
 import { sessions, labs, ApiError } from "@/api";
 import type {
@@ -93,12 +96,36 @@ export default function Dashboard() {
   const count = (status: SessionStatus) =>
     sessionList.filter((s) => s.status === status).length;
 
-  const stats = [
+  const computeTrend = (status?: SessionStatus) => {
+    const now = Date.now();
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const items = status ? sessionList.filter((s) => s.status === status) : sessionList;
+    const thisWeek = items.filter((s) => now - new Date(s.created_at).getTime() < weekMs).length;
+    const prevWeek = items.filter((s) => {
+      const age = now - new Date(s.created_at).getTime();
+      return age >= weekMs && age < weekMs * 2;
+    }).length;
+    const delta = thisWeek - prevWeek;
+    const direction: "up" | "down" | "flat" = delta > 0 ? "up" : delta < 0 ? "down" : "flat";
+    return { delta, direction };
+  };
+
+  const activeTrend = computeTrend("active");
+  const totalTrend = computeTrend();
+
+  const stats: {
+    label: string;
+    value: number;
+    icon: typeof PlayCircle;
+    accent: string;
+    trend?: { delta: number; direction: "up" | "down" | "flat" };
+  }[] = [
     {
       label: "Active Sessions",
       value: count("active"),
       icon: PlayCircle,
       accent: "text-accent-success",
+      trend: activeTrend,
     },
     {
       label: "Draft",
@@ -111,6 +138,7 @@ export default function Dashboard() {
       value: sessionList.length,
       icon: CalendarRange,
       accent: "text-accent-info",
+      trend: totalTrend,
     },
     {
       label: "Lab Templates",
@@ -160,6 +188,20 @@ export default function Dashboard() {
                 <p className={`text-[28px] font-bold leading-none mt-2 ${s.accent}`}>
                   {s.value}
                 </p>
+                {s.trend && (
+                  <div className={`flex items-center gap-1 mt-1.5 text-xs ${
+                    s.trend.direction === "up" ? "text-accent-success" :
+                    s.trend.direction === "down" ? "text-accent-danger" :
+                    "text-text-muted"
+                  }`}>
+                    {s.trend.direction === "up" && <TrendingUp className="h-3 w-3" />}
+                    {s.trend.direction === "down" && <TrendingDown className="h-3 w-3" />}
+                    {s.trend.direction === "flat" && <Minus className="h-3 w-3" />}
+                    <span>
+                      {s.trend.direction === "up" ? "+" : ""}{s.trend.delta} this week
+                    </span>
+                  </div>
+                )}
               </div>
               <s.icon className={`h-6 w-6 ${s.accent} opacity-60`} />
             </Card>

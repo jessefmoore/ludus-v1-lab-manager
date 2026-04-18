@@ -53,6 +53,8 @@ class LudusUser(BaseModel):
     name: str | None = None
     dateCreated: str | None = None  # noqa: N815 — matches Ludus JSON key
     proxmoxUsername: str | None = None  # noqa: N815 — matches Ludus JSON key
+    rangeNumber: int | None = None  # noqa: N815 — matches Ludus JSON key
+    userNumber: int | None = None  # noqa: N815 — matches Ludus JSON key
 
 
 class LudusUserListResponse(BaseModel):
@@ -97,6 +99,12 @@ class PowerActionRequest(BaseModel):
 
     user_id: str
     machines: list[str] = ["all"]
+
+
+class DeployRequest(BaseModel):
+    """Request body for range deploy action."""
+
+    user_id: str
 
 
 # -- Snapshot management -----------------------------------------------------
@@ -160,12 +168,36 @@ class LudusTemplate(BaseModel):
 
     name: str
     os: str | None = None
+    built: bool | None = None
+    status: str | None = None  # "built", "not_built", "building"
 
 
 class LudusTemplateListResponse(BaseModel):
     """Wrapper returned by ``GET /api/ludus/templates``."""
 
     templates: list[LudusTemplate]
+
+
+class TemplateBuildRequest(BaseModel):
+    """Request body for building templates."""
+
+    templates: list[str]
+    parallel: int = 1
+
+
+class LudusTemplateBuildStatus(BaseModel):
+    """A single entry in the template build queue."""
+
+    model_config = ConfigDict(extra="allow")
+
+    template: str
+    user: str | None = None
+
+
+class LudusTemplateBuildStatusResponse(BaseModel):
+    """Wrapper for template build status endpoint."""
+
+    status: list[LudusTemplateBuildStatus]
 
 
 # -- Range detail / VM operations -------------------------------------------

@@ -75,6 +75,10 @@ export default {
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
         },
+        "timeline-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(0, 212, 170, 0.4)" },
+          "50%": { boxShadow: "0 0 0 6px rgba(0, 212, 170, 0)" },
+        },
       },
       animation: {
         "slide-in": "slide-in 200ms ease-out",
@@ -83,6 +87,7 @@ export default {
         "slide-up": "slide-up 200ms ease-out",
         "page-enter": "page-enter 200ms ease-out",
         shimmer: "shimmer 3s ease-in-out infinite",
+        "timeline-pulse": "timeline-pulse 2s ease-in-out infinite",
       },
     },
   },

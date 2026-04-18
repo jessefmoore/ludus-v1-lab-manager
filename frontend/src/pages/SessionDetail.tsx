@@ -12,6 +12,7 @@ import {
   CalendarRange,
   Server,
   ChevronDown,
+  Clock,
 } from "lucide-react";
 import { sessions, students, labs, events, ApiError } from "@/api";
 import type {
@@ -30,6 +31,7 @@ import DataTable, { type Column } from "@/components/DataTable";
 import { TableSkeleton } from "@/components/Skeleton";
 import PageTransition from "@/components/PageTransition";
 import { useToast } from "@/components/Toast";
+import SessionTimeline from "@/components/SessionTimeline";
 
 export default function SessionDetail() {
   const { id } = useParams<{ id: string }>();
@@ -140,7 +142,7 @@ export default function SessionDetail() {
   const handleDeleteSession = () => {
     setConfirmModal({
       title: "Delete Session",
-      message: `Delete "${session.name}"? This cannot be undone.`,
+      message: `This will delete "${session.name}" and remove ${totalStudents} student(s). This cannot be undone.`,
       action: async () => {
         setDeleting(true);
         try {
@@ -158,7 +160,7 @@ export default function SessionDetail() {
   const handleEndSession = () => {
     setConfirmModal({
       title: "End Session",
-      message: `End "${session.name}"? Students will no longer be able to connect.`,
+      message: `This will end "${session.name}". ${readyCount} student(s) will lose VPN access.`,
       action: async () => {
         setEnding(true);
         try {
@@ -178,7 +180,7 @@ export default function SessionDetail() {
     const student = session.students.find((s) => s.id === studentId);
     setConfirmModal({
       title: "Remove Student",
-      message: `Remove ${student?.full_name ?? "this student"} from the session?`,
+      message: `Remove ${student?.full_name ?? "this student"} (${student?.email ?? ""}) from the session? Their Ludus user and VPN config will be deleted.`,
       action: async () => {
         try {
           await students.delete(studentId);
@@ -324,7 +326,7 @@ export default function SessionDetail() {
   const handleBulkDelete = () => {
     setConfirmModal({
       title: "Remove Students",
-      message: `Remove ${selected.size} selected student(s)?`,
+      message: `Remove ${selected.size} selected student(s)? Their Ludus users and VPN configs will be deleted.`,
       action: async () => {
         let removed = 0;
         for (const sid of selected) {
@@ -439,6 +441,9 @@ export default function SessionDetail() {
             </span>
           )}
         </div>
+
+        {/* Session timeline */}
+        <SessionTimeline status={session.status} />
 
         {/* Provisioning progress bar */}
         {totalStudents > 0 && (provisioning || session.status === "provisioning") && (
@@ -630,7 +635,11 @@ export default function SessionDetail() {
               {activityLoading ? (
                 <p className="text-sm text-text-muted">Loading events...</p>
               ) : activityEvents.length === 0 ? (
-                <p className="text-sm text-text-muted">No events yet</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Clock className="h-12 w-12 text-text-muted mb-4" />
+                  <p className="text-text-secondary mb-1">No activity recorded yet</p>
+                  <p className="text-sm text-text-muted">Events appear as students are provisioned</p>
+                </div>
               ) : (
                 <div className="max-h-80 overflow-y-auto space-y-1">
                   {activityEvents.map((ev) => (

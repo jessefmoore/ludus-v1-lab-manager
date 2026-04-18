@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, type ReactNode } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { Search, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
 export interface Column<T> {
@@ -44,6 +44,8 @@ export default function DataTable<T>({
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [showScrollHint, setShowScrollHint] = useState(false);
 
   // Debounced search is unnecessary at this scale — filter directly
   const filtered = useMemo(() => {
@@ -65,6 +67,24 @@ export default function DataTable<T>({
       return 0;
     });
   }, [filtered, sortKey, sortDir, columns]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const check = () => {
+      const overflows = el.scrollWidth > el.clientWidth;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+      setShowScrollHint(overflows && !atEnd);
+    };
+    check();
+    el.addEventListener("scroll", check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", check);
+      ro.disconnect();
+    };
+  }, [sorted.length]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages - 1);
@@ -130,7 +150,8 @@ export default function DataTable<T>({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="relative">
+      <div ref={scrollRef} className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-border bg-bg-elevated/50">
@@ -217,6 +238,10 @@ export default function DataTable<T>({
             )}
           </tbody>
         </table>
+      </div>
+      {showScrollHint && (
+        <div className="absolute right-0 top-0 bottom-0 w-8 scroll-hint-gradient pointer-events-none rounded-r-lg md:hidden" />
+      )}
       </div>
 
       {/* Pagination */}

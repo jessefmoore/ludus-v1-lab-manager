@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type FormEvent } from "react";
+import { useState, useEffect, useCallback, useRef, type FormEvent } from "react";
 import {
   Power,
   PowerOff,
@@ -15,6 +15,9 @@ import {
   Plus,
   X,
   Download,
+  Loader2,
+  Square,
+  Hammer,
 } from "lucide-react";
 import { ludus, ludusTesting, ludusGroups, ludusAnsible, settings as settingsApi, ApiError } from "@/api";
 import type {
@@ -33,21 +36,37 @@ import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import Input from "@/components/Input";
-import Tabs, { type Tab } from "@/components/Tabs";
+import Tabs, { type TabGroup } from "@/components/Tabs";
 import DataTable, { type Column } from "@/components/DataTable";
 import { TableSkeleton } from "@/components/Skeleton";
 import PageTransition from "@/components/PageTransition";
 import { useToast } from "@/components/Toast";
+import RangeStatePill from "@/components/RangeStatePill";
 
-const TABS: Tab[] = [
-  { id: "ranges", label: "Ranges", icon: <Power className="h-4 w-4" /> },
-  { id: "snapshots", label: "Snapshots", icon: <Camera className="h-4 w-4" /> },
-  { id: "templates", label: "Templates", icon: <Play className="h-4 w-4" /> },
-  { id: "users", label: "Users", icon: <UserPlus className="h-4 w-4" /> },
-  { id: "groups", label: "Groups", icon: <Users className="h-4 w-4" /> },
-  { id: "ansible", label: "Ansible", icon: <Package className="h-4 w-4" /> },
-  { id: "testing", label: "Testing", icon: <Shield className="h-4 w-4" /> },
-  { id: "logs", label: "Logs", icon: <FileText className="h-4 w-4" /> },
+const TAB_GROUPS: TabGroup[] = [
+  {
+    label: "Infrastructure",
+    tabs: [
+      { id: "ranges", label: "Ranges", icon: <Power className="h-4 w-4" /> },
+      { id: "snapshots", label: "Snapshots", icon: <Camera className="h-4 w-4" /> },
+      { id: "templates", label: "Templates", icon: <Play className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "Access",
+    tabs: [
+      { id: "users", label: "Users", icon: <UserPlus className="h-4 w-4" /> },
+      { id: "groups", label: "Groups", icon: <Users className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: "Operations",
+    tabs: [
+      { id: "ansible", label: "Ansible", icon: <Package className="h-4 w-4" /> },
+      { id: "testing", label: "Testing", icon: <Shield className="h-4 w-4" /> },
+      { id: "logs", label: "Logs", icon: <FileText className="h-4 w-4" /> },
+    ],
+  },
 ];
 
 export default function LudusManagement() {
@@ -98,7 +117,7 @@ export default function LudusManagement() {
         </div>
 
         <Card className="p-0 overflow-hidden">
-          <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+          <Tabs groups={TAB_GROUPS} activeTab={activeTab} onChange={setActiveTab} />
           <div className="p-5">
             {activeTab === "ranges" && <RangesTab server={selectedServer} />}
             {activeTab === "snapshots" && <SnapshotsTab server={selectedServer} />}
@@ -122,7 +141,10 @@ export default function LudusManagement() {
 function RangesTab({ server }: { server: string }) {
   const { toast } = useToast();
   const [ranges, setRanges] = useState<LudusRange[]>([]);
+  const [rangeToUser, setRangeToUser] = useState<Map<number, string>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [activeOps, setActiveOps] = useState<Map<number, string>>(new Map());
+  const pollCountRef = useRef<Map<number, number>>(new Map());
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
     message: string;
@@ -130,52 +152,164 @@ function RangesTab({ server }: { server: string }) {
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
+  const addOp = (rangeNumber: number, op: string) => {
+    setActiveOps((prev) => new Map(prev).set(rangeNumber, op));
+    pollCountRef.current.set(rangeNumber, 0);
+  };
+
   const fetchRanges = useCallback(() => {
     setLoading(true);
-    ludus
-      .ranges(server)
-      .then((res) => setRanges(res.ranges))
+    Promise.all([ludus.ranges(server), ludus.users(server)])
+      .then(([rangesRes, usersRes]) => {
+        const filtered = rangesRes.ranges.filter(
+          (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
+        );
+        setRanges(filtered);
+        const mapping = new Map<number, string>();
+        for (const u of usersRes.users) {
+          if (u.userNumber != null) {
+            mapping.set(u.userNumber, u.userID);
+          }
+        }
+        setRangeToUser(mapping);
+        // Auto-detect in-progress operations from range state
+        const detected = new Map<number, string>();
+        for (const r of filtered) {
+          if (r.rangeState === "DEPLOYING" || r.rangeState === "DESTROYING") {
+            detected.set(r.rangeNumber, r.rangeState);
+          }
+        }
+        if (detected.size > 0) {
+          setActiveOps((prev) => {
+            const next = new Map(prev);
+            for (const [k, v] of detected) {
+              if (!next.has(k)) {
+                next.set(k, v);
+                pollCountRef.current.set(k, 0);
+              }
+            }
+            return next;
+          });
+        }
+      })
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load ranges"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load ranges", {
+          label: "Retry",
+          onClick: () => fetchRanges(),
+        }),
       )
       .finally(() => setLoading(false));
   }, [toast, server]);
 
   useEffect(fetchRanges, [fetchRanges]);
 
+  // Poll while there are active operations
+  useEffect(() => {
+    if (activeOps.size === 0) return;
+
+    const interval = setInterval(() => {
+      Promise.all([ludus.ranges(server), ludus.users(server)])
+        .then(([rangesRes, usersRes]) => {
+          const filtered = rangesRes.ranges.filter(
+            (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
+          );
+          setRanges(filtered);
+          const mapping = new Map<number, string>();
+          for (const u of usersRes.users) {
+            if (u.userNumber != null) {
+              mapping.set(u.userNumber, u.userID);
+            }
+          }
+          setRangeToUser(mapping);
+
+          // Check each active op for completion
+          setActiveOps((prev) => {
+            const next = new Map(prev);
+            for (const [rangeNum, op] of prev) {
+              const range = filtered.find((r) => r.rangeNumber === rangeNum);
+
+              if (op === "DEPLOYING") {
+                if (range?.rangeState === "SUCCESS") {
+                  next.delete(rangeNum);
+                  pollCountRef.current.delete(rangeNum);
+                  toast("success", `Range ${rangeNum} deployed successfully`);
+                } else if (range?.rangeState === "ERROR") {
+                  next.delete(rangeNum);
+                  pollCountRef.current.delete(rangeNum);
+                  toast("error", `Range ${rangeNum} deploy failed`);
+                }
+              } else if (op === "DESTROYING") {
+                if (!range || range.rangeState === "NEVER DEPLOYED") {
+                  next.delete(rangeNum);
+                  pollCountRef.current.delete(rangeNum);
+                  toast("success", `Range ${rangeNum} destroyed`);
+                }
+              } else if (op === "POWERING ON" || op === "POWERING OFF") {
+                const count = (pollCountRef.current.get(rangeNum) ?? 0) + 1;
+                pollCountRef.current.set(rangeNum, count);
+                if (count >= 2) {
+                  next.delete(rangeNum);
+                  pollCountRef.current.delete(rangeNum);
+                  toast(
+                    "success",
+                    op === "POWERING ON"
+                      ? `Range ${rangeNum} powered on`
+                      : `Range ${rangeNum} powered off`,
+                  );
+                }
+              }
+            }
+            return next;
+          });
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeOps.size, server, toast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const getUserId = (range: LudusRange): string => rangeToUser.get(range.rangeNumber) ?? range.rangeID;
+
   const handlePowerOn = (range: LudusRange) => {
     ludus
-      .powerOn(range.rangeNumber, { user_id: range.rangeID }, server)
-      .then(() => toast("success", `Power on initiated for range ${range.rangeNumber}`))
+      .powerOn(range.rangeNumber, { user_id: getUserId(range) }, server)
+      .then(() => {
+        toast("success", `Power on initiated for range ${range.rangeNumber}`);
+        addOp(range.rangeNumber, "POWERING ON");
+      })
       .catch((err) => toast("error", err instanceof ApiError ? err.detail : "Power on failed"));
   };
 
   const handlePowerOff = (range: LudusRange) => {
     setConfirmModal({
       title: "Power Off Range",
-      message: `Power off all VMs in range ${range.rangeNumber} (${range.name || range.rangeID})?`,
+      message: `This will power off ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}).`,
       action: async () => {
-        await ludus.powerOff(range.rangeNumber, { user_id: range.rangeID }, server);
+        await ludus.powerOff(range.rangeNumber, { user_id: getUserId(range) }, server);
         toast("success", `Power off initiated for range ${range.rangeNumber}`);
+        addOp(range.rangeNumber, "POWERING OFF");
       },
     });
   };
 
   const handleDeploy = (range: LudusRange) => {
     ludus
-      .deployRange(range.rangeNumber, server)
-      .then(() => toast("success", `Deploy started for range ${range.rangeNumber}`))
+      .deployRange(range.rangeNumber, { user_id: getUserId(range) }, server)
+      .then(() => {
+        toast("success", `Deploy started for range ${range.rangeNumber}`);
+        addOp(range.rangeNumber, "DEPLOYING");
+      })
       .catch((err) => toast("error", err instanceof ApiError ? err.detail : "Deploy failed"));
   };
 
   const handleDestroy = (range: LudusRange) => {
     setConfirmModal({
       title: "Destroy Range",
-      message: `Permanently destroy range ${range.rangeNumber} (${range.name || range.rangeID})? This cannot be undone.`,
+      message: `This will destroy ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}). This action cannot be undone.`,
       action: async () => {
         await ludus.destroyRange(range.rangeNumber, server, true);
-        toast("success", `Range ${range.rangeNumber} destroyed`);
-        fetchRanges();
+        toast("success", `Destroy started for range ${range.rangeNumber}`);
+        addOp(range.rangeNumber, "DESTROYING");
       },
     });
   };
@@ -221,7 +355,9 @@ function RangesTab({ server }: { server: string }) {
     {
       key: "state",
       label: "State",
-      render: (r) => <span className="text-text-secondary">{r.rangeState || "\u2014"}</span>,
+      render: (r) => (
+        <RangeStatePill state={activeOps.get(r.rangeNumber) || r.rangeState || "UNKNOWN"} />
+      ),
     },
     {
       key: "lastDeploy",
@@ -237,22 +373,25 @@ function RangesTab({ server }: { server: string }) {
     {
       key: "actions",
       label: "Actions",
-      render: (r) => (
-        <div className="flex items-center gap-1">
-          <Button variant="icon" onClick={() => handlePowerOn(r)} title="Power On">
-            <Power className="h-4 w-4 text-accent-success" />
-          </Button>
-          <Button variant="icon" onClick={() => handlePowerOff(r)} title="Power Off">
-            <PowerOff className="h-4 w-4 text-accent-warning" />
-          </Button>
-          <Button variant="icon" onClick={() => handleDeploy(r)} title="Deploy">
-            <Play className="h-4 w-4 text-accent-info" />
-          </Button>
-          <Button variant="icon" onClick={() => handleDestroy(r)} title="Destroy">
-            <Trash2 className="h-4 w-4 text-accent-danger" />
-          </Button>
-        </div>
-      ),
+      render: (r) => {
+        const busy = activeOps.has(r.rangeNumber);
+        return (
+          <div className="flex items-center gap-1">
+            <Button variant="icon" onClick={() => handlePowerOn(r)} title="Power On" disabled={busy}>
+              <Power className="h-4 w-4 text-accent-success" />
+            </Button>
+            <Button variant="icon" onClick={() => handlePowerOff(r)} title="Power Off" disabled={busy}>
+              <PowerOff className="h-4 w-4 text-accent-warning" />
+            </Button>
+            <Button variant="icon" onClick={() => handleDeploy(r)} title="Deploy" disabled={busy}>
+              <Play className="h-4 w-4 text-accent-info" />
+            </Button>
+            <Button variant="icon" onClick={() => handleDestroy(r)} title="Destroy" disabled={busy}>
+              <Trash2 className="h-4 w-4 text-accent-danger" />
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -271,7 +410,13 @@ function RangesTab({ server }: { server: string }) {
           (r.name || "").toLowerCase().includes(q)
         }
         pageSize={10}
-        emptyState="No ranges found on the Ludus server"
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-12">
+            <Server className="h-12 w-12 text-text-muted mb-4" />
+            <p className="text-text-secondary mb-1">No ranges found</p>
+            <p className="text-sm text-text-muted">Ranges are created when users deploy templates on the Ludus server</p>
+          </div>
+        }
       />
 
       <Modal
@@ -300,12 +445,16 @@ function RangesTab({ server }: { server: string }) {
 
 function SnapshotsTab({ server }: { server: string }) {
   const { toast } = useToast();
-  const [users, setUsers] = useState<LudusUser[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string>("");
+  const [deployedRanges, setDeployedRanges] = useState<LudusRange[]>([]);
+  const [rangeToUser, setRangeToUser] = useState<Map<number, string>>(new Map());
+  const [selectedRange, setSelectedRange] = useState<number | null>(null);
   const [snapshots, setSnapshots] = useState<LudusSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [activeSnapshotOp, setActiveSnapshotOp] = useState<string | null>(null);
+  const snapshotBaselineRef = useRef<number>(0);
+  const snapshotPollCountRef = useRef<number>(0);
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
     message: string;
@@ -315,39 +464,98 @@ function SnapshotsTab({ server }: { server: string }) {
 
   useEffect(() => {
     setLoading(true);
-    ludus
-      .users(server)
-      .then((res) => {
-        setUsers(res.users);
-        if (res.users.length > 0) {
-          setSelectedUser(res.users[0].userID);
+    Promise.all([ludus.ranges(server), ludus.users(server)])
+      .then(([rangesRes, usersRes]) => {
+        const realRanges = rangesRes.ranges.filter(
+          (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
+        );
+        setDeployedRanges(realRanges);
+        // Build range number -> owner userID mapping
+        const mapping = new Map<number, string>();
+        for (const u of usersRes.users) {
+          if (u.userNumber != null) {
+            mapping.set(u.userNumber, u.userID);
+          }
+        }
+        setRangeToUser(mapping);
+        if (realRanges.length > 0) {
+          setSelectedRange(realRanges[0].rangeNumber);
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [server]);
 
+  const getSelectedUserId = (): string => {
+    if (selectedRange == null) return "";
+    // Try mapping first, fall back to rangeID (in Ludus, rangeID often equals userID)
+    const fromMapping = rangeToUser.get(selectedRange);
+    if (fromMapping) return fromMapping;
+    const range = deployedRanges.find((r) => r.rangeNumber === selectedRange);
+    return range?.rangeID ?? "";
+  };
+  const selectedUserId = getSelectedUserId();
+
   const fetchSnapshots = useCallback(() => {
-    if (!selectedUser) return;
+    if (!selectedUserId) return;
     setSnapshotLoading(true);
     ludus
-      .snapshots({ user_id: selectedUser, server })
+      .snapshots({ user_id: selectedUserId, server })
       .then((res) => setSnapshots(res.snapshots))
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load snapshots"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load snapshots", {
+          label: "Retry",
+          onClick: () => fetchSnapshots(),
+        }),
       )
       .finally(() => setSnapshotLoading(false));
-  }, [selectedUser, toast, server]);
+  }, [selectedUserId, toast, server]);
 
   useEffect(fetchSnapshots, [fetchSnapshots]);
+
+  // Poll while a snapshot operation is active
+  useEffect(() => {
+    if (!activeSnapshotOp || !selectedUserId) return;
+
+    const interval = setInterval(() => {
+      ludus
+        .snapshots({ user_id: selectedUserId, server })
+        .then((res) => {
+          const newCount = res.snapshots.length;
+
+          if (activeSnapshotOp === "creating" && newCount > snapshotBaselineRef.current) {
+            setSnapshots(res.snapshots);
+            setActiveSnapshotOp(null);
+            toast("success", "Snapshot created successfully");
+          } else if (activeSnapshotOp === "deleting" && newCount < snapshotBaselineRef.current) {
+            setSnapshots(res.snapshots);
+            setActiveSnapshotOp(null);
+            toast("success", "Snapshot deleted successfully");
+          } else if (activeSnapshotOp === "reverting") {
+            snapshotPollCountRef.current += 1;
+            if (snapshotPollCountRef.current >= 2) {
+              setSnapshots(res.snapshots);
+              setActiveSnapshotOp(null);
+              toast("success", "Snapshot reverted successfully");
+            }
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [activeSnapshotOp, selectedUserId, server, toast]);
 
   const handleRevert = (snap: LudusSnapshot) => {
     setConfirmModal({
       title: "Revert Snapshot",
-      message: `Revert to snapshot "${snap.name}" for user ${selectedUser}?`,
+      message: `Revert to snapshot "${snap.name}" on range ${selectedRange}?`,
       action: async () => {
-        await ludus.revertSnapshot({ user_id: selectedUser, name: snap.name }, server);
+        await ludus.revertSnapshot({ user_id: selectedUserId, name: snap.name }, server);
         toast("success", `Revert to "${snap.name}" started`);
+        snapshotBaselineRef.current = snapshots.length;
+        snapshotPollCountRef.current = 0;
+        setActiveSnapshotOp("reverting");
       },
     });
   };
@@ -357,9 +565,11 @@ function SnapshotsTab({ server }: { server: string }) {
       title: "Delete Snapshot",
       message: `Delete snapshot "${snap.name}"? This cannot be undone.`,
       action: async () => {
-        await ludus.deleteSnapshot(snap.name, selectedUser, server);
-        toast("success", `Snapshot "${snap.name}" deleted`);
-        fetchSnapshots();
+        await ludus.deleteSnapshot(snap.name, selectedUserId, server);
+        toast("success", `Snapshot "${snap.name}" deletion started`);
+        snapshotBaselineRef.current = snapshots.length;
+        snapshotPollCountRef.current = 0;
+        setActiveSnapshotOp("deleting");
       },
     });
   };
@@ -375,6 +585,14 @@ function SnapshotsTab({ server }: { server: string }) {
       setConfirmLoading(false);
       setConfirmModal(null);
     }
+  };
+
+  const opBusy = activeSnapshotOp !== null;
+
+  const opLabel: Record<string, string> = {
+    creating: "Creating snapshot...",
+    reverting: "Reverting snapshot...",
+    deleting: "Deleting snapshot...",
   };
 
   const columns: Column<LudusSnapshot>[] = [
@@ -397,10 +615,10 @@ function SnapshotsTab({ server }: { server: string }) {
       label: "Actions",
       render: (s) => (
         <div className="flex items-center gap-1">
-          <Button variant="icon" onClick={() => handleRevert(s)} title="Revert to snapshot">
+          <Button variant="icon" onClick={() => handleRevert(s)} title="Revert to snapshot" disabled={opBusy}>
             <RotateCcw className="h-4 w-4 text-accent-info" />
           </Button>
-          <Button variant="icon" onClick={() => handleDelete(s)} title="Delete snapshot">
+          <Button variant="icon" onClick={() => handleDelete(s)} title="Delete snapshot" disabled={opBusy}>
             <Trash2 className="h-4 w-4 text-accent-danger" />
           </Button>
         </div>
@@ -414,15 +632,15 @@ function SnapshotsTab({ server }: { server: string }) {
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <label className="text-sm text-text-secondary">User:</label>
+          <label className="text-sm text-text-secondary">Range:</label>
           <select
             className="h-9 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success"
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
+            value={selectedRange ?? ""}
+            onChange={(e) => setSelectedRange(Number(e.target.value))}
           >
-            {users.map((u) => (
-              <option key={u.userID} value={u.userID}>
-                {u.userID} ({u.name || u.userID})
+            {deployedRanges.map((r) => (
+              <option key={r.rangeNumber} value={r.rangeNumber}>
+                {r.rangeID} ({r.name || `#${r.rangeNumber}`})
               </option>
             ))}
           </select>
@@ -431,11 +649,20 @@ function SnapshotsTab({ server }: { server: string }) {
           variant="primary"
           icon={<Camera />}
           onClick={() => setShowCreate(true)}
-          disabled={!selectedUser}
+          disabled={!selectedUserId || opBusy}
         >
           Create Snapshot
         </Button>
       </div>
+
+      {activeSnapshotOp && (
+        <div className="flex items-center gap-2 px-4 py-2.5 mb-4 rounded-md bg-accent-warning/10 border border-accent-warning/30">
+          <Loader2 className="h-4 w-4 animate-spin text-accent-warning" />
+          <span className="text-sm text-accent-warning">
+            {opLabel[activeSnapshotOp] ?? "Processing..."}
+          </span>
+        </div>
+      )}
 
       {snapshotLoading ? (
         <TableSkeleton rows={3} cols={3} />
@@ -445,18 +672,29 @@ function SnapshotsTab({ server }: { server: string }) {
           data={snapshots}
           keyExtractor={(s) => s.name}
           pageSize={10}
-          emptyState="No snapshots found for this user"
+          emptyState={
+            <div className="flex flex-col items-center justify-center py-12">
+              <Camera className="h-12 w-12 text-text-muted mb-4" />
+              <p className="text-text-secondary mb-1">No snapshots</p>
+              <p className="text-sm text-text-muted mb-6">Create a snapshot to save the current state</p>
+              <Button variant="primary" icon={<Camera />} onClick={() => setShowCreate(true)}>
+                Create Snapshot
+              </Button>
+            </div>
+          }
         />
       )}
 
       <CreateSnapshotModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
-        userId={selectedUser}
+        userId={selectedUserId}
         server={server}
         onCreated={() => {
           setShowCreate(false);
-          fetchSnapshots();
+          snapshotBaselineRef.current = snapshots.length;
+          snapshotPollCountRef.current = 0;
+          setActiveSnapshotOp("creating");
         }}
       />
 
@@ -580,29 +818,149 @@ function CreateSnapshotModal({
 // Templates Tab
 // ---------------------------------------------------------------------------
 
+function TemplateStatusPill({ status, built }: { status?: string; built?: boolean }) {
+  if (status === "building") {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-[rgba(255,169,77,0.15)] text-accent-warning">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        Building
+      </span>
+    );
+  }
+  if (status === "built" || built === true) {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-[rgba(0,212,170,0.15)] text-accent-success">
+        <span className="text-[8px] drop-shadow-[0_0_4px_rgba(0,212,170,0.6)]">{"\u25CF"}</span>
+        Built
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-[#262A36] text-text-secondary">
+      Not Built
+    </span>
+  );
+}
+
 function TemplatesTab({ server }: { server: string }) {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<LudusTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [building, setBuilding] = useState(false);
+  const [buildLogs, setBuildLogs] = useState<string | null>(null);
+  const [selectedForBuild, setSelectedForBuild] = useState<Set<string>>(new Set());
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
     message: string;
     action: () => Promise<void>;
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const logEndRef = useRef<HTMLPreElement>(null);
 
   const fetchTemplates = useCallback(() => {
     setLoading(true);
     ludus
       .templates(server)
-      .then((res) => setTemplates(res.templates))
+      .then((res) => {
+        setTemplates(res.templates);
+        // Auto-detect active builds
+        if (res.templates.some((t) => t.status === "building")) {
+          setBuilding(true);
+        }
+      })
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load templates"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load templates", {
+          label: "Retry",
+          onClick: () => fetchTemplates(),
+        }),
       )
       .finally(() => setLoading(false));
   }, [toast, server]);
 
   useEffect(fetchTemplates, [fetchTemplates]);
+
+  // Poll build status while building
+  useEffect(() => {
+    if (!building) return;
+
+    const interval = setInterval(() => {
+      ludus
+        .templateBuildStatus(server)
+        .then((res) => {
+          if (res.status.length === 0) {
+            setBuilding(false);
+            setSelectedForBuild(new Set());
+            toast("success", "Template build completed");
+            fetchTemplates();
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [building, server, toast, fetchTemplates]);
+
+  // Poll build logs when the log modal is open
+  useEffect(() => {
+    if (buildLogs === null) return;
+
+    const interval = setInterval(() => {
+      ludus
+        .templateBuildLogs(server)
+        .then((res) => {
+          setBuildLogs(res.content);
+        })
+        .catch(() => {});
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [buildLogs !== null, server]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-scroll log viewer
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
+    }
+  }, [buildLogs]);
+
+  const toggleBuildSelect = (name: string) => {
+    setSelectedForBuild((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const handleBuild = async () => {
+    if (selectedForBuild.size === 0) return;
+    try {
+      await ludus.buildTemplates({ templates: Array.from(selectedForBuild) }, server);
+      toast("success", "Template build started");
+      setBuilding(true);
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to start build");
+    }
+  };
+
+  const handleAbort = async () => {
+    try {
+      await ludus.abortTemplateBuild(server);
+      toast("success", "Build abort requested");
+      setBuilding(false);
+      setSelectedForBuild(new Set());
+      fetchTemplates();
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to abort build");
+    }
+  };
+
+  const handleViewLogs = () => {
+    ludus
+      .templateBuildLogs(server)
+      .then((res) => setBuildLogs(res.content))
+      .catch(() => setBuildLogs("Failed to fetch logs"));
+  };
 
   const handleDelete = (tpl: LudusTemplate) => {
     setConfirmModal({
@@ -629,7 +987,29 @@ function TemplatesTab({ server }: { server: string }) {
     }
   };
 
+  const osLabel = (os?: string) => {
+    if (!os) return "\u2014";
+    const lower = os.toLowerCase();
+    if (lower.includes("win")) return "Windows";
+    if (lower.includes("linux") || lower.includes("ubuntu") || lower.includes("debian") || lower.includes("centos") || lower.includes("rhel") || lower.includes("fedora") || lower.includes("kali") || lower.includes("arch")) return "Linux";
+    if (lower.includes("mac") || lower.includes("darwin")) return "macOS";
+    return os;
+  };
+
   const columns: Column<LudusTemplate>[] = [
+    {
+      key: "select",
+      label: "",
+      render: (t) => (
+        <input
+          type="checkbox"
+          checked={selectedForBuild.has(t.name)}
+          onChange={() => toggleBuildSelect(t.name)}
+          disabled={building}
+          className="accent-accent-success"
+        />
+      ),
+    },
     {
       key: "name",
       label: "Name",
@@ -640,23 +1020,75 @@ function TemplatesTab({ server }: { server: string }) {
     {
       key: "os",
       label: "OS",
-      render: (t) => <span className="text-text-secondary">{t.os || "\u2014"}</span>,
+      sortable: true,
+      sortValue: (t) => osLabel(t.os).toLowerCase(),
+      render: (t) => <span className="text-text-secondary">{osLabel(t.os)}</span>,
+    },
+    {
+      key: "status",
+      label: "Status",
+      render: (t) => <TemplateStatusPill status={t.status} built={t.built} />,
     },
     {
       key: "actions",
       label: "Actions",
       render: (t) => (
-        <Button variant="icon" onClick={() => handleDelete(t)} title="Delete template">
-          <Trash2 className="h-4 w-4 text-accent-danger" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="icon"
+            onClick={() => {
+              setSelectedForBuild(new Set([t.name]));
+              ludus.buildTemplates({ templates: [t.name] }, server)
+                .then(() => {
+                  toast("success", `Building "${t.name}"...`);
+                  setBuilding(true);
+                })
+                .catch((err) => toast("error", err instanceof ApiError ? err.detail : "Build failed"));
+            }}
+            title="Build template"
+            disabled={building || t.status === "building"}
+          >
+            <Hammer className="h-4 w-4 text-accent-info" />
+          </Button>
+          <Button variant="icon" onClick={() => handleDelete(t)} title="Delete template" disabled={building}>
+            <Trash2 className="h-4 w-4 text-accent-danger" />
+          </Button>
+        </div>
       ),
     },
   ];
 
-  if (loading) return <TableSkeleton rows={4} cols={3} />;
+  if (loading) return <TableSkeleton rows={4} cols={5} />;
 
   return (
     <>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-medium text-text-secondary">
+          {selectedForBuild.size > 0 ? `${selectedForBuild.size} selected` : "All Templates"}
+        </h3>
+        <Button
+          variant="primary"
+          icon={<Hammer />}
+          onClick={handleBuild}
+          disabled={selectedForBuild.size === 0 || building}
+        >
+          Build Selected
+        </Button>
+      </div>
+
+      {building && (
+        <div className="flex items-center gap-3 px-4 py-2.5 mb-4 rounded-md bg-accent-warning/10 border border-accent-warning/30">
+          <Loader2 className="h-4 w-4 animate-spin text-accent-warning" />
+          <span className="text-sm text-accent-warning flex-1">Building templates...</span>
+          <Button variant="secondary" onClick={handleViewLogs} className="!h-7 !px-2 !text-xs">
+            View Logs
+          </Button>
+          <Button variant="danger" onClick={handleAbort} className="!h-7 !px-2 !text-xs" icon={<Square className="h-3 w-3" />}>
+            Abort
+          </Button>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
         data={templates}
@@ -668,9 +1100,36 @@ function TemplatesTab({ server }: { server: string }) {
           (t.os || "").toLowerCase().includes(q)
         }
         pageSize={10}
-        emptyState="No templates found on the Ludus server"
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-12">
+            <Play className="h-12 w-12 text-text-muted mb-4" />
+            <p className="text-text-secondary mb-1">No templates available</p>
+            <p className="text-sm text-text-muted">Templates are managed on the Ludus server</p>
+          </div>
+        }
       />
 
+      {/* Build Logs Modal */}
+      <Modal
+        open={buildLogs !== null}
+        onClose={() => setBuildLogs(null)}
+        title="Template Build Logs"
+        size="lg"
+      >
+        <pre
+          ref={logEndRef}
+          className="text-xs font-mono text-text-secondary bg-bg-elevated p-4 rounded-md overflow-auto max-h-96 whitespace-pre-wrap"
+        >
+          {buildLogs || "Waiting for log output..."}
+        </pre>
+        <div className="flex justify-end mt-4">
+          <Button variant="secondary" onClick={() => setBuildLogs(null)}>
+            Close
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Confirm Modal */}
       <Modal
         open={!!confirmModal}
         onClose={() => !confirmLoading && setConfirmModal(null)}
@@ -716,7 +1175,10 @@ function UsersTab({ server }: { server: string }) {
       .users(server)
       .then((res) => setUsers(res.users))
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load users"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load users", {
+          label: "Retry",
+          onClick: () => fetchUsers(),
+        }),
       )
       .finally(() => setLoading(false));
   }, [toast, server]);
@@ -742,7 +1204,7 @@ function UsersTab({ server }: { server: string }) {
   const handleDelete = (user: LudusUser) => {
     setConfirmModal({
       title: "Delete User",
-      message: `Delete user "${user.userID}" (${user.name || "unnamed"})? This cannot be undone.`,
+      message: `This will delete user "${user.userID}" (${user.name || "unnamed"}) and their range${user.rangeNumber != null ? ` (range #${user.rangeNumber})` : ""}. This cannot be undone.`,
       action: async () => {
         await ludus.deleteUser(user.userID, server);
         toast("success", `User "${user.userID}" deleted`);
@@ -809,9 +1271,9 @@ function UsersTab({ server }: { server: string }) {
       key: "rangeNumber",
       label: "Range #",
       sortable: true,
-      sortValue: (u) => u.rangeNumber ?? -1,
+      sortValue: (u) => u.userNumber ?? -1,
       render: (u) => (
-        <span className="text-text-secondary">{u.rangeNumber != null ? u.rangeNumber : "\u2014"}</span>
+        <span className="text-text-secondary">{u.userNumber != null ? u.userNumber : "\u2014"}</span>
       ),
     },
     {
@@ -856,7 +1318,13 @@ function UsersTab({ server }: { server: string }) {
           (u.name || "").toLowerCase().includes(q)
         }
         pageSize={10}
-        emptyState="No users found on the Ludus server"
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-12">
+            <UserPlus className="h-12 w-12 text-text-muted mb-4" />
+            <p className="text-text-secondary mb-1">No users found</p>
+            <p className="text-sm text-text-muted">Create a user to get started</p>
+          </div>
+        }
       />
 
       <CreateUserModal
@@ -1027,6 +1495,8 @@ function GroupsTab({ server }: { server: string }) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [groupUsers, setGroupUsers] = useState<LudusGroupUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [allUsers, setAllUsers] = useState<LudusUser[]>([]);
   const [confirmModal, setConfirmModal] = useState<{
     title: string;
     message: string;
@@ -1040,7 +1510,10 @@ function GroupsTab({ server }: { server: string }) {
       .list(server)
       .then((res) => setGroups(res.groups))
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load groups"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load groups", {
+          label: "Retry",
+          onClick: () => fetchGroups(),
+        }),
       )
       .finally(() => setLoading(false));
   }, [toast, server]);
@@ -1074,6 +1547,37 @@ function GroupsTab({ server }: { server: string }) {
         fetchGroups();
       },
     });
+  };
+
+  const handleRemoveUser = (user: LudusGroupUser) => {
+    if (!selectedGroup) return;
+    const groupName = selectedGroup;
+    setConfirmModal({
+      title: "Remove User from Group",
+      message: `Remove "${user.userID}" (${user.name || "unnamed"}) from group "${groupName}"?`,
+      action: async () => {
+        await ludusGroups.removeUsers(groupName, { user_ids: [user.userID] }, server);
+        toast("success", `User "${user.userID}" removed from group`);
+        fetchGroupUsers(groupName);
+      },
+    });
+  };
+
+  const handleOpenAddUser = () => {
+    ludus.users(server).then((res) => setAllUsers(res.users)).catch(() => setAllUsers([]));
+    setShowAddUser(true);
+  };
+
+  const handleAddUsers = async (userIds: string[], asManagers: boolean) => {
+    if (!selectedGroup || userIds.length === 0) return;
+    try {
+      await ludusGroups.addUsers(selectedGroup, { user_ids: userIds, managers: asManagers }, server);
+      toast("success", `${userIds.length} user(s) added to "${selectedGroup}"`);
+      setShowAddUser(false);
+      fetchGroupUsers(selectedGroup);
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to add users");
+    }
   };
 
   const handleCreateGroup = async (e: FormEvent) => {
@@ -1148,9 +1652,14 @@ function GroupsTab({ server }: { server: string }) {
         </h3>
         <div className="flex gap-2">
           {selectedGroup && (
-            <Button variant="secondary" onClick={() => setSelectedGroup(null)}>
-              Back to Groups
-            </Button>
+            <>
+              <Button variant="secondary" onClick={() => setSelectedGroup(null)}>
+                Back to Groups
+              </Button>
+              <Button variant="primary" icon={<UserPlus />} onClick={handleOpenAddUser}>
+                Add User
+              </Button>
+            </>
           )}
           {!selectedGroup && (
             <Button variant="primary" icon={<Plus />} onClick={() => setShowCreate(true)}>
@@ -1162,7 +1671,7 @@ function GroupsTab({ server }: { server: string }) {
 
       {selectedGroup ? (
         usersLoading ? (
-          <TableSkeleton rows={3} cols={3} />
+          <TableSkeleton rows={3} cols={4} />
         ) : (
           <DataTable
             columns={[
@@ -1187,11 +1696,29 @@ function GroupsTab({ server }: { server: string }) {
                   <span className="text-text-secondary">{u.manager ? "Yes" : "No"}</span>
                 ),
               },
+              {
+                key: "actions",
+                label: "Actions",
+                render: (u: LudusGroupUser) => (
+                  <Button variant="icon" onClick={() => handleRemoveUser(u)} title="Remove from group">
+                    <X className="h-4 w-4 text-accent-danger" />
+                  </Button>
+                ),
+              },
             ]}
             data={groupUsers}
             keyExtractor={(u) => u.userID}
             pageSize={10}
-            emptyState="No users in this group"
+            emptyState={
+              <div className="flex flex-col items-center justify-center py-12">
+                <Users className="h-12 w-12 text-text-muted mb-4" />
+                <p className="text-text-secondary mb-1">No users in this group</p>
+                <p className="text-sm text-text-muted mb-6">Add Ludus users to this group</p>
+                <Button variant="primary" icon={<UserPlus />} onClick={handleOpenAddUser}>
+                  Add User
+                </Button>
+              </div>
+            }
           />
         )
       ) : (
@@ -1206,7 +1733,16 @@ function GroupsTab({ server }: { server: string }) {
             (g.description || "").toLowerCase().includes(q)
           }
           pageSize={10}
-          emptyState="No groups found"
+          emptyState={
+            <div className="flex flex-col items-center justify-center py-12">
+              <Users className="h-12 w-12 text-text-muted mb-4" />
+              <p className="text-text-secondary mb-1">No groups created</p>
+              <p className="text-sm text-text-muted mb-6">Create a group to organize users</p>
+              <Button variant="primary" icon={<Plus />} onClick={() => setShowCreate(true)}>
+                Create Group
+              </Button>
+            </div>
+          }
         />
       )}
 
@@ -1239,6 +1775,14 @@ function GroupsTab({ server }: { server: string }) {
         </form>
       </Modal>
 
+      <AddUsersToGroupModal
+        open={showAddUser}
+        onClose={() => setShowAddUser(false)}
+        allUsers={allUsers}
+        currentMembers={groupUsers}
+        onAdd={handleAddUsers}
+      />
+
       <Modal
         open={!!confirmModal}
         onClose={() => !confirmLoading && setConfirmModal(null)}
@@ -1256,6 +1800,124 @@ function GroupsTab({ server }: { server: string }) {
         </div>
       </Modal>
     </>
+  );
+}
+
+function AddUsersToGroupModal({
+  open,
+  onClose,
+  allUsers,
+  currentMembers,
+  onAdd,
+}: {
+  open: boolean;
+  onClose: () => void;
+  allUsers: LudusUser[];
+  currentMembers: LudusGroupUser[];
+  onAdd: (userIds: string[], asManagers: boolean) => Promise<void>;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [asManagers, setAsManagers] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSelected(new Set());
+      setAsManagers(false);
+      setSearch("");
+    }
+  }, [open]);
+
+  const memberIds = new Set(currentMembers.map((m) => m.userID));
+  const available = allUsers.filter((u) => !memberIds.has(u.userID));
+  const filtered = search
+    ? available.filter(
+        (u) =>
+          u.userID.toLowerCase().includes(search.toLowerCase()) ||
+          (u.name || "").toLowerCase().includes(search.toLowerCase()),
+      )
+    : available;
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSubmit = async () => {
+    setSaving(true);
+    try {
+      await onAdd(Array.from(selected), asManagers);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Add Users to Group" size="sm">
+      <div className="space-y-4">
+        <Input
+          label="Search Users"
+          placeholder="Search by ID or name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <div className="max-h-60 overflow-y-auto border border-border rounded-md divide-y divide-border">
+          {filtered.length === 0 ? (
+            <p className="text-sm text-text-muted text-center py-4">No available users</p>
+          ) : (
+            filtered.map((u) => (
+              <label
+                key={u.userID}
+                className="flex items-center gap-3 px-3 py-2.5 hover:bg-bg-elevated cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.has(u.userID)}
+                  onChange={() => toggle(u.userID)}
+                  className="accent-accent-success"
+                />
+                <div className="min-w-0">
+                  <span className="font-mono text-sm text-text-primary">{u.userID}</span>
+                  {u.name && (
+                    <span className="text-sm text-text-secondary ml-2">{u.name}</span>
+                  )}
+                </div>
+              </label>
+            ))
+          )}
+        </div>
+
+        <label className="flex items-center gap-2 text-sm text-text-secondary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={asManagers}
+            onChange={(e) => setAsManagers(e.target.checked)}
+            className="accent-accent-success"
+          />
+          Add as group managers
+        </label>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            loading={saving}
+            disabled={selected.size === 0}
+          >
+            Add {selected.size > 0 ? `${selected.size} User${selected.size > 1 ? "s" : ""}` : "Users"}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -1280,7 +1942,10 @@ function AnsibleTab({ server }: { server: string }) {
       .list({ server })
       .then((res) => setRoles(res.roles))
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load roles"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load roles", {
+          label: "Retry",
+          onClick: () => fetchRoles(),
+        }),
       )
       .finally(() => setLoading(false));
   }, [toast, server]);
@@ -1364,7 +2029,13 @@ function AnsibleTab({ server }: { server: string }) {
         searchPlaceholder="Search roles..."
         searchFilter={(r, q) => r.name.toLowerCase().includes(q)}
         pageSize={10}
-        emptyState="No ansible roles installed"
+        emptyState={
+          <div className="flex flex-col items-center justify-center py-12">
+            <Package className="h-12 w-12 text-text-muted mb-4" />
+            <p className="text-text-secondary mb-1">No ansible roles installed</p>
+            <p className="text-sm text-text-muted">Roles can be installed via the Ludus CLI</p>
+          </div>
+        }
       />
 
       <Modal
@@ -1404,9 +2075,12 @@ function TestingTab({ server }: { server: string }) {
     ludus
       .ranges(server)
       .then((res) => {
-        setRanges(res.ranges);
-        if (res.ranges.length > 0) {
-          setSelectedRangeNum(res.ranges[0].rangeNumber);
+        const realRanges = res.ranges.filter(
+          (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
+        );
+        setRanges(realRanges);
+        if (realRanges.length > 0) {
+          setSelectedRangeNum(realRanges[0].rangeNumber);
         }
       })
       .catch(() => {})
@@ -1560,9 +2234,12 @@ function LogsTab({ server }: { server: string }) {
     ludus
       .ranges(server)
       .then((res) => {
-        setRanges(res.ranges);
-        if (res.ranges.length > 0) {
-          setSelectedRangeNum(res.ranges[0].rangeNumber);
+        const realRanges = res.ranges.filter(
+          (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
+        );
+        setRanges(realRanges);
+        if (realRanges.length > 0) {
+          setSelectedRangeNum(realRanges[0].rangeNumber);
         }
       })
       .catch(() => {})
@@ -1576,7 +2253,10 @@ function LogsTab({ server }: { server: string }) {
       .rangeLogsHistory({ range_id: selectedRangeNum, server })
       .then((res) => setEntries(res.entries))
       .catch((err) =>
-        toast("error", err instanceof ApiError ? err.detail : "Failed to load logs"),
+        toast("error", err instanceof ApiError ? err.detail : "Failed to load logs", {
+          label: "Retry",
+          onClick: () => fetchLogs(),
+        }),
       )
       .finally(() => setLogsLoading(false));
   }, [selectedRangeNum, toast, server]);
@@ -1663,7 +2343,13 @@ function LogsTab({ server }: { server: string }) {
           data={entries}
           keyExtractor={(e) => String(e.logID ?? Math.random())}
           pageSize={10}
-          emptyState="No deployment logs found for this range"
+          emptyState={
+            <div className="flex flex-col items-center justify-center py-12">
+              <FileText className="h-12 w-12 text-text-muted mb-4" />
+              <p className="text-text-secondary mb-1">No deployment logs</p>
+              <p className="text-sm text-text-muted">Logs appear after range deployments</p>
+            </div>
+          }
         />
       )}
 

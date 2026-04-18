@@ -10,14 +10,20 @@ import { CheckCircle2, AlertTriangle, X, Info } from "lucide-react";
 
 type ToastType = "success" | "error" | "info";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface Toast {
   id: number;
   type: ToastType;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastContextValue {
-  toast: (type: ToastType, message: string) => void;
+  toast: (type: ToastType, message: string, action?: ToastAction) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -27,9 +33,9 @@ let nextId = 0;
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
-  const addToast = useCallback((type: ToastType, message: string) => {
+  const addToast = useCallback((type: ToastType, message: string, action?: ToastAction) => {
     const id = nextId++;
-    setToasts((prev) => [...prev, { id, type, message }]);
+    setToasts((prev) => [...prev, { id, type, message, action }]);
   }, []);
 
   const removeToast = useCallback((id: number) => {
@@ -68,9 +74,9 @@ const borders: Record<ToastType, string> = {
 
 function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
   useEffect(() => {
-    const timer = setTimeout(onDismiss, 4000);
+    const timer = setTimeout(onDismiss, toast.action ? 8000 : 4000);
     return () => clearTimeout(timer);
-  }, [onDismiss]);
+  }, [onDismiss, toast.action]);
 
   return (
     <div
@@ -78,6 +84,17 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
     >
       {icons[toast.type]}
       <p className="text-sm text-text-primary flex-1">{toast.message}</p>
+      {toast.action && (
+        <button
+          onClick={() => {
+            toast.action!.onClick();
+            onDismiss();
+          }}
+          className="text-xs font-medium text-accent-success hover:underline shrink-0"
+        >
+          {toast.action.label}
+        </button>
+      )}
       <button
         onClick={onDismiss}
         className="h-5 w-5 shrink-0 text-text-muted hover:text-text-primary transition-colors"

@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from app.core.deps import LudusClientRegistry, get_current_user, get_ludus_client_registry
 from app.models.user import User
 from app.schemas.ludus import (
+    DeployRequest,
     LudusAccessibleRange,
     LudusAccessibleRangesResponse,
     LudusActionResponse,
@@ -34,6 +35,8 @@ from app.schemas.ludus import (
     LudusSnapshot,
     LudusSnapshotListResponse,
     LudusTemplate,
+    LudusTemplateBuildStatus,
+    LudusTemplateBuildStatusResponse,
     LudusTemplateListResponse,
     LudusTextResponse,
     LudusUser,
@@ -44,6 +47,7 @@ from app.schemas.ludus import (
     RangeRevokeRequest,
     SnapshotCreateRequest,
     SnapshotRevertRequest,
+    TemplateBuildRequest,
     UserCreateRequest,
     UserCreateResponse,
 )
@@ -219,6 +223,7 @@ def get_user_wireguard(
 @router.post("/ranges/{range_number}/deploy", response_model=LudusActionResponse)
 def deploy_range(
     range_number: int,
+    body: DeployRequest,
     server: str = "default",
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
@@ -226,7 +231,7 @@ def deploy_range(
     """Deploy an already-configured range by its number."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_deploy_existing(range_number=range_number)
+        ludus.range_deploy_existing(user_id=body.user_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -512,6 +517,88 @@ def delete_template(
         ) from exc
 
     return LudusActionResponse(status="ok", detail="Template deleted")
+
+
+@router.post("/templates/build", response_model=LudusActionResponse)
+def build_templates(
+    body: TemplateBuildRequest,
+    server: str = "default",
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+) -> LudusActionResponse:
+    """Trigger a Packer build for the given templates."""
+    ludus = _resolve_client(registry, server)
+    try:
+        ludus.template_build(body.templates, parallel=body.parallel)
+    except LudusError as exc:
+        logger.warning("Ludus template_build failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ludus error: {exc}",
+        ) from exc
+
+    return LudusActionResponse(status="ok", detail="Template build started")
+
+
+@router.post("/templates/abort", response_model=LudusActionResponse)
+def abort_template_build(
+    server: str = "default",
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+) -> LudusActionResponse:
+    """Abort a running Packer template build."""
+    ludus = _resolve_client(registry, server)
+    try:
+        ludus.template_abort()
+    except LudusError as exc:
+        logger.warning("Ludus template_abort failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ludus error: {exc}",
+        ) from exc
+
+    return LudusActionResponse(status="ok", detail="Template build aborted")
+
+
+@router.get("/templates/build-status", response_model=LudusTemplateBuildStatusResponse)
+def get_template_build_status(
+    server: str = "default",
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+) -> LudusTemplateBuildStatusResponse:
+    """Get the active template build queue."""
+    ludus = _resolve_client(registry, server)
+    try:
+        raw = ludus.template_status()
+    except LudusError as exc:
+        logger.warning("Ludus template_status failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ludus error: {exc}",
+        ) from exc
+
+    items = [LudusTemplateBuildStatus.model_validate(s) for s in raw]
+    return LudusTemplateBuildStatusResponse(status=items)
+
+
+@router.get("/templates/build-logs", response_model=LudusTextResponse)
+def get_template_build_logs(
+    server: str = "default",
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+) -> LudusTextResponse:
+    """Get live Packer build log output."""
+    ludus = _resolve_client(registry, server)
+    try:
+        content = ludus.template_logs()
+    except LudusError as exc:
+        logger.warning("Ludus template_logs failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ludus error: {exc}",
+        ) from exc
+
+    return LudusTextResponse(content=content)
 
 
 # -- Range detail / VM operations -------------------------------------------

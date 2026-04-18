@@ -45,6 +45,11 @@ Routes used here:
     PUT    /api/v2/range/poweroff?userID=                 -> range_power_off
            body: {"machines": ["all"]}
     GET    /api/v2/templates                              -> template_list
+    POST   /api/v2/templates                              -> template_build
+           body: {"templates": [...], "parallel": N}
+    POST   /api/v2/templates/abort                        -> template_abort
+    GET    /api/v2/templates/status                       -> template_status
+    GET    /api/v2/templates/logs                         -> template_logs
     DELETE /api/v2/template/{name}                        -> template_delete
 ================================================================
 """
@@ -769,6 +774,79 @@ class LudusClient:
             LudusError on any other non-2xx.
         """
         self._request("DELETE", f"{API_BASE}/template/{name}")
+
+    def template_build(self, templates: list[str], *, parallel: int = 1) -> None:
+        """Build VM templates via Packer.
+
+        Route:  POST /api/v2/templates
+        Body:   {"templates": [...], "parallel": N}
+        Raises:
+            LudusAuthError on 401/403.
+            LudusError on any other non-2xx.
+        """
+        self._request(
+            "POST",
+            f"{API_BASE}/templates",
+            json={"templates": templates, "parallel": parallel},
+        )
+
+    def template_abort(self) -> None:
+        """Abort a running Packer template build.
+
+        Route:  POST /api/v2/templates/abort
+        Raises:
+            LudusAuthError on 401/403.
+            LudusError on any other non-2xx.
+        """
+        self._request("POST", f"{API_BASE}/templates/abort")
+
+    def template_status(self) -> list[dict]:
+        """Get the active template build queue.
+
+        Route:  GET /api/v2/templates/status
+        Returns:
+            A list of dicts with ``template`` and ``user`` keys.
+        Raises:
+            LudusAuthError on 401/403.
+            LudusError on any other non-2xx.
+        """
+        response = self._request("GET", f"{API_BASE}/templates/status")
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise LudusError(
+                "Ludus returned invalid JSON for template_status",
+                status_code=response.status_code,
+            ) from exc
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+        return []
+
+    def template_logs(self) -> str:
+        """Get live Packer build log output.
+
+        Route:  GET /api/v2/templates/logs
+        Returns:
+            Raw log text from the active build.
+        Raises:
+            LudusAuthError on 401/403.
+            LudusError on any other non-2xx.
+        """
+        response = self._request("GET", f"{API_BASE}/templates/logs")
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                body = response.json()
+            except ValueError:
+                return response.text
+            if isinstance(body, dict):
+                result = body.get("result")
+                if isinstance(result, str):
+                    return result
+            return str(body)
+        return response.text
 
     # -- range detail / VM operations ----------------------------------------
 

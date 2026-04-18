@@ -127,6 +127,16 @@ body {
     color: #e8eaf0;
   }
 
+  /* Timeline pulse animation */
+  .timeline-pulse {
+    animation: timeline-pulse 2s ease-in-out infinite;
+  }
+
+  /* Mobile table scroll hint gradient */
+  .scroll-hint-gradient {
+    background: linear-gradient(to left, rgba(20, 22, 28, 1) 0%, rgba(20, 22, 28, 0) 100%);
+  }
+
   /* Kbd styling for command palette */
   .kbd {
     display: inline-flex;
