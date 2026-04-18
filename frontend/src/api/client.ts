@@ -199,10 +199,11 @@ export const ludus = {
       method: "POST",
     }),
 
-  destroyRange: (rangeNumber: number, server?: string) =>
-    request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}${serverQs(server)}`, {
-      method: "DELETE",
-    }),
+  destroyRange: (rangeNumber: number, server?: string, force?: boolean) =>
+    request<LudusActionResponse>(
+      `/api/ludus/ranges/${rangeNumber}${serverQs(server, force ? { force: "true" } : undefined)}`,
+      { method: "DELETE" },
+    ),
 
   powerOn: (rangeNumber: number, data: PowerActionRequest, server?: string) =>
     request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}/power-on${serverQs(server)}`, {

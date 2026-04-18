@@ -246,13 +246,14 @@ def deploy_range(
 def destroy_range(
     range_number: int,
     server: str = "default",
+    force: bool = False,
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
 ) -> LudusActionResponse:
     """Destroy a range by its number."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_destroy(range_number)
+        ludus.range_destroy(range_number, force=force)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

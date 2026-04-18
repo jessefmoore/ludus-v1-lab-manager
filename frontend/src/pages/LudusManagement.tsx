@@ -173,7 +173,7 @@ function RangesTab({ server }: { server: string }) {
       title: "Destroy Range",
       message: `Permanently destroy range ${range.rangeNumber} (${range.name || range.rangeID})? This cannot be undone.`,
       action: async () => {
-        await ludus.destroyRange(range.rangeNumber, server);
+        await ludus.destroyRange(range.rangeNumber, server, true);
         toast("success", `Range ${range.rangeNumber} destroyed`);
         fetchRanges();
       },
