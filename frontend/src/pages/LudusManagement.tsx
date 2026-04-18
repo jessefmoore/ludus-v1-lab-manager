@@ -144,9 +144,8 @@ function RangesTab({ server }: { server: string }) {
   useEffect(fetchRanges, [fetchRanges]);
 
   const handlePowerOn = (range: LudusRange) => {
-    const userId = range.rangeID.toLowerCase();
     ludus
-      .powerOn(range.rangeNumber, { user_id: userId }, server)
+      .powerOn(range.rangeNumber, { user_id: range.rangeID }, server)
       .then(() => toast("success", `Power on initiated for range ${range.rangeNumber}`))
       .catch((err) => toast("error", err instanceof ApiError ? err.detail : "Power on failed"));
   };
@@ -156,8 +155,7 @@ function RangesTab({ server }: { server: string }) {
       title: "Power Off Range",
       message: `Power off all VMs in range ${range.rangeNumber} (${range.name || range.rangeID})?`,
       action: async () => {
-        const userId = range.rangeID.toLowerCase();
-        await ludus.powerOff(range.rangeNumber, { user_id: userId }, server);
+        await ludus.powerOff(range.rangeNumber, { user_id: range.rangeID }, server);
         toast("success", `Power off initiated for range ${range.rangeNumber}`);
       },
     });
@@ -322,7 +320,7 @@ function SnapshotsTab({ server }: { server: string }) {
       .then((res) => {
         setRanges(res.ranges);
         if (res.ranges.length > 0) {
-          setSelectedRange(res.ranges[0].rangeID.toLowerCase());
+          setSelectedRange(res.ranges[0].rangeID);
         }
       })
       .catch(() => {})
@@ -423,7 +421,7 @@ function SnapshotsTab({ server }: { server: string }) {
             onChange={(e) => setSelectedRange(e.target.value)}
           >
             {ranges.map((r) => (
-              <option key={r.rangeNumber} value={r.rangeID.toLowerCase()}>
+              <option key={r.rangeNumber} value={r.rangeID}>
                 {r.rangeID} ({r.name || `#${r.rangeNumber}`})
               </option>
             ))}
