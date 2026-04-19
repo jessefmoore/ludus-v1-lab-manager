@@ -577,16 +577,24 @@ class LudusClient:
             json={},
         )
 
-    def range_destroy(self, range_number: int, *, force: bool = False) -> None:
+    def range_destroy(
+        self,
+        range_number: int,
+        *,
+        user_id: str | None = None,
+        force: bool = False,
+    ) -> None:
         """Destroy a range by its number.
 
-        Route:  DELETE /api/v2/range?rangeNumber=<N>[&force=true]
+        Route:  DELETE /api/v2/range?rangeNumber=<N>[&userID=<id>][&force=true]
         Raises:
             LudusAuthError on 401/403.
             LudusNotFound on 404.
             LudusError on any other non-2xx.
         """
-        params: dict[str, int | bool] = {"rangeNumber": range_number}
+        params: dict[str, int | bool | str] = {"rangeNumber": range_number}
+        if user_id is not None:
+            params["userID"] = user_id
         if force:
             params["force"] = True
         self._request(

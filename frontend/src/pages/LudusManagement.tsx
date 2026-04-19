@@ -331,7 +331,7 @@ function RangesTab({ server }: { server: string }) {
       title: "Destroy Range",
       message: `This will destroy ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}). This action cannot be undone.`,
       action: async () => {
-        await ludus.destroyRange(range.rangeNumber, server, true);
+        await ludus.destroyRange(range.rangeNumber, server, true, getUserId(range));
         toast("success", `Destroy started for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "DESTROYING");
       },
@@ -2242,6 +2242,7 @@ function TestingTab({ server }: { server: string }) {
 function LogsTab({ server }: { server: string }) {
   const { toast } = useToast();
   const [ranges, setRanges] = useState<LudusRange[]>([]);
+  const [rangeToUser, setRangeToUser] = useState<Map<number, string>>(new Map());
   const [selectedRangeNum, setSelectedRangeNum] = useState<number | null>(null);
   const [entries, setEntries] = useState<LudusLogHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2253,13 +2254,19 @@ function LogsTab({ server }: { server: string }) {
 
   useEffect(() => {
     setLoading(true);
-    ludus
-      .ranges(server)
-      .then((res) => {
-        const realRanges = res.ranges.filter(
+    Promise.all([ludus.ranges(server), ludus.users(server)])
+      .then(([rangesRes, usersRes]) => {
+        const realRanges = rangesRes.ranges.filter(
           (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
         );
         setRanges(realRanges);
+        const mapping = new Map<number, string>();
+        for (const u of usersRes.users) {
+          if (u.userNumber != null) {
+            mapping.set(u.userNumber, u.userID);
+          }
+        }
+        setRangeToUser(mapping);
         if (realRanges.length > 0) {
           setSelectedRangeNum(realRanges[0].rangeNumber);
         }
@@ -2271,8 +2278,9 @@ function LogsTab({ server }: { server: string }) {
   const fetchLogs = useCallback(() => {
     if (selectedRangeNum == null) return;
     setLogsLoading(true);
+    const userId = rangeToUser.get(selectedRangeNum);
     ludus
-      .rangeLogsHistory({ range_id: selectedRangeNum, server })
+      .rangeLogsHistory({ range_id: selectedRangeNum, user_id: userId, server })
       .then((res) => setEntries(res.entries))
       .catch((err) =>
         toast("error", err instanceof ApiError ? err.detail : "Failed to load logs", {
@@ -2281,7 +2289,7 @@ function LogsTab({ server }: { server: string }) {
         }),
       )
       .finally(() => setLogsLoading(false));
-  }, [selectedRangeNum, toast, server]);
+  }, [selectedRangeNum, rangeToUser, toast, server]);
 
   useEffect(fetchLogs, [fetchLogs]);
 

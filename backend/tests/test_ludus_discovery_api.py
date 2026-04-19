@@ -279,7 +279,7 @@ def test_destroy_range_success(client: TestClient, mock_ludus: MagicMock) -> Non
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Range destroyed"
-    mock_ludus.range_destroy.assert_called_once_with(1, force=False)
+    mock_ludus.range_destroy.assert_called_once_with(1, user_id=None, force=False)
 
 
 def test_destroy_range_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:

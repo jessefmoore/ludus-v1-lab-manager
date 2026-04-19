@@ -225,11 +225,15 @@ export const ludus = {
       body: JSON.stringify(data),
     }),
 
-  destroyRange: (rangeNumber: number, server?: string, force?: boolean) =>
-    request<LudusActionResponse>(
-      `/api/ludus/ranges/${rangeNumber}${serverQs(server, force ? { force: "true" } : undefined)}`,
+  destroyRange: (rangeNumber: number, server?: string, force?: boolean, userId?: string) => {
+    const extra: Record<string, string> = {};
+    if (force) extra.force = "true";
+    if (userId) extra.user_id = userId;
+    return request<LudusActionResponse>(
+      `/api/ludus/ranges/${rangeNumber}${serverQs(server, Object.keys(extra).length ? extra : undefined)}`,
       { method: "DELETE" },
-    ),
+    );
+  },
 
   powerOn: (rangeNumber: number, data: PowerActionRequest, server?: string) =>
     request<LudusActionResponse>(`/api/ludus/ranges/${rangeNumber}/power-on${serverQs(server)}`, {
