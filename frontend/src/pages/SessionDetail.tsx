@@ -861,49 +861,57 @@ function AddStudentModal({
     setError("");
     setSaving(true);
     let added = 0;
-    try {
-      for (const userId of selectedUsers) {
+    const errors: string[] = [];
+    for (const userId of selectedUsers) {
+      try {
         const user = ludusUsers.find((u) => u.userID === userId);
         await students.create(sessionId, {
           ludus_userid: userId,
           full_name: user?.name || undefined,
         });
         added++;
+      } catch (err) {
+        errors.push(`${userId}: ${err instanceof ApiError ? err.detail : "failed"}`);
       }
-      toast("success", `Added ${added} student(s) from Ludus`);
-      resetForm();
-      onCreated();
-    } catch (err) {
-      setError(
-        `Added ${added}/${selectedUsers.size}: ${err instanceof ApiError ? err.detail : "Failed to add student"}`,
-      );
-    } finally {
-      setSaving(false);
     }
+    if (added > 0) {
+      toast("success", `Added ${added} student(s) from Ludus`);
+      onCreated();
+    }
+    if (errors.length > 0) {
+      setError(`Skipped ${errors.length}: ${errors.join("; ")}`);
+    } else {
+      resetForm();
+    }
+    setSaving(false);
   };
 
   const handleLudusGroupSubmit = async () => {
     setError("");
     setSaving(true);
     let added = 0;
-    try {
-      for (const member of groupMembers) {
+    const errors: string[] = [];
+    for (const member of groupMembers) {
+      try {
         await students.create(sessionId, {
           ludus_userid: member.userID,
           full_name: member.name || undefined,
         });
         added++;
+      } catch (err) {
+        errors.push(`${member.userID}: ${err instanceof ApiError ? err.detail : "failed"}`);
       }
-      toast("success", `Added ${added} student(s) from group "${selectedGroup}"`);
-      resetForm();
-      onCreated();
-    } catch (err) {
-      setError(
-        `Added ${added}/${groupMembers.length}: ${err instanceof ApiError ? err.detail : "Failed to add student"}`,
-      );
-    } finally {
-      setSaving(false);
     }
+    if (added > 0) {
+      toast("success", `Added ${added} student(s) from group "${selectedGroup}"`);
+      onCreated();
+    }
+    if (errors.length > 0) {
+      setError(`Skipped ${errors.length}: ${errors.join("; ")}`);
+    } else {
+      resetForm();
+    }
+    setSaving(false);
   };
 
   const toggleUser = (id: string) => {

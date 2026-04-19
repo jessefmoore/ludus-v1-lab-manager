@@ -104,6 +104,11 @@ def create_student(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+    except students_service.StudentAlreadyEnrolled as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
     except students_service.UseridCollision as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -190,6 +195,8 @@ async def import_students_csv(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(exc),
             ) from exc
+        except students_service.StudentAlreadyEnrolled as exc:
+            errors.append(f"Row {row_num}: {exc}")
         except students_service.UseridCollision:
             errors.append(f"Row {row_num}: userid collision for {row.get('email', '')}")
         except Exception as exc:

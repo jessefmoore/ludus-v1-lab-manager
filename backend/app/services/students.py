@@ -84,6 +84,10 @@ class ResetCooldown(Exception):  # noqa: N818 -- spec-mandated name
     """Raised when a reset is requested within the cooldown window."""
 
 
+class StudentAlreadyEnrolled(Exception):  # noqa: N818 -- spec-mandated name
+    """Raised when a Ludus user is already enrolled as a student."""
+
+
 def _slugify(name: str) -> str:
     """Lowercase + collapse non-alphanumerics, truncated to the slug limit."""
     lowered = name.strip().lower()
@@ -160,6 +164,12 @@ def create_student(
         except IntegrityError as exc:
             db.rollback()
             last_error = exc
+            # Fixed userid (Ludus user mode): retrying is pointless since
+            # the same userid will collide every time.
+            if resolved_userid:
+                raise StudentAlreadyEnrolled(
+                    f"Ludus user '{resolved_userid}' is already enrolled as a student"
+                ) from exc
             logger.info(
                 "student.create retrying on unique collision (attempt=%s)",
                 attempt,
@@ -361,6 +371,7 @@ __all__ = [
     "ResetCooldown",
     "SessionEnded",
     "SessionNotFound",
+    "StudentAlreadyEnrolled",
     "StudentNotFound",
     "StudentNotReady",
     "UseridCollision",

@@ -55,7 +55,7 @@ class StudentRead(BaseModel):
 
     id: int
     full_name: str
-    email: EmailStr
+    email: str
     ludus_userid: str
     range_id: str | None = None
     status: StudentStatus

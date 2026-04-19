@@ -1050,6 +1050,10 @@ class LudusClient:
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
+            # Ludus returns {"version": "...", "result": "..."} for
+            # unrecognised routes — treat as empty history.
+            if "version" in data:
+                return []
             return [data]
         return []
 
