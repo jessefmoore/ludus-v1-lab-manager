@@ -243,25 +243,25 @@ def test_list_users_without_auth_returns_401(anon_client: TestClient) -> None:
 def test_deploy_range_success(client: TestClient, mock_ludus: MagicMock) -> None:
     mock_ludus.range_deploy_existing.return_value = None
 
-    resp = client.post("/api/ludus/ranges/1/deploy")
+    resp = client.post("/api/ludus/ranges/1/deploy", json={"user_id": "RZ"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Deployment started"
-    mock_ludus.range_deploy_existing.assert_called_once_with(range_number=1)
+    mock_ludus.range_deploy_existing.assert_called_once_with(user_id="RZ")
 
 
 def test_deploy_range_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:
     mock_ludus.range_deploy_existing.side_effect = LudusNotFound("range not found", status_code=404)
 
-    resp = client.post("/api/ludus/ranges/999/deploy")
+    resp = client.post("/api/ludus/ranges/999/deploy", json={"user_id": "RZ"})
     assert resp.status_code == 404
 
 
 def test_deploy_range_ludus_error_returns_502(client: TestClient, mock_ludus: MagicMock) -> None:
     mock_ludus.range_deploy_existing.side_effect = LudusError("internal error", status_code=500)
 
-    resp = client.post("/api/ludus/ranges/1/deploy")
+    resp = client.post("/api/ludus/ranges/1/deploy", json={"user_id": "RZ"})
     assert resp.status_code == 502
     assert "Ludus error" in resp.json()["detail"]
 
@@ -279,7 +279,7 @@ def test_destroy_range_success(client: TestClient, mock_ludus: MagicMock) -> Non
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Range destroyed"
-    mock_ludus.range_destroy.assert_called_once_with(1)
+    mock_ludus.range_destroy.assert_called_once_with(1, force=False)
 
 
 def test_destroy_range_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:
