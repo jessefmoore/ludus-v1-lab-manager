@@ -218,9 +218,12 @@ def test_list_snapshots_nested_ludus_format(client: TestClient, mock_ludus: Magi
     mock_ludus.snapshot_list.return_value = [
         {
             "snapshots": [
-                {"name": "current", "description": "You are here!", "vmid": 104, "vmname": "RZ-router"},
-                {"name": "current", "description": "You are here!", "vmid": 105, "vmname": "RZ-DC"},
-                {"name": "clean", "description": "Initial", "vmid": 104, "vmname": "RZ-router"},
+                {"name": "current", "description": "You are here!",
+                 "vmid": 104, "vmname": "RZ-router"},
+                {"name": "current", "description": "You are here!",
+                 "vmid": 105, "vmname": "RZ-DC"},
+                {"name": "clean", "description": "Initial",
+                 "vmid": 104, "vmname": "RZ-router"},
             ],
         },
     ]
