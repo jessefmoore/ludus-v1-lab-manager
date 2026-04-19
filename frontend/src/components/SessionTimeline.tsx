@@ -52,7 +52,7 @@ export default function SessionTimeline({ status }: { status: SessionStatus }) {
                     className="h-full w-full"
                     style={{
                       backgroundImage:
-                        "repeating-linear-gradient(90deg, #5A6175 0px, #5A6175 4px, transparent 4px, transparent 8px)",
+                        "repeating-linear-gradient(90deg, rgb(var(--color-text-muted)) 0px, rgb(var(--color-text-muted)) 4px, transparent 4px, transparent 8px)",
                     }}
                   />
                 ) : (

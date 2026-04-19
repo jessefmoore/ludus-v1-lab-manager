@@ -10,7 +10,7 @@ export default function NotFound() {
         </p>
         <Link
           to="/"
-          className="inline-flex h-10 px-6 items-center rounded-md bg-accent-success text-bg-base text-sm font-semibold hover:bg-[#00BD97] transition-colors"
+          className="inline-flex h-10 px-6 items-center rounded-md bg-accent-success text-bg-base text-sm font-semibold hover:bg-accent-success-hover transition-colors"
         >
           Back to Dashboard
         </Link>

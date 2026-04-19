@@ -137,6 +137,7 @@ class SnapshotCreateRequest(BaseModel):
     description: str = ""
     include_ram: bool = False
     vmids: list[int] | None = None
+    range_id: str | None = None
 
 
 class SnapshotRevertRequest(BaseModel):
@@ -145,6 +146,7 @@ class SnapshotRevertRequest(BaseModel):
     user_id: str
     name: str
     vmids: list[int] | None = None
+    range_id: str | None = None
 
 
 class SnapshotDeleteRequest(BaseModel):

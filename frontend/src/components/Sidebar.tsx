@@ -9,8 +9,11 @@ import {
   Menu,
   X,
   Search,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -21,6 +24,7 @@ const navItems = [
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
+  const { resolved, setTheme } = useTheme();
 
   const avatarLetter = user?.email?.charAt(0).toUpperCase() ?? "?";
 
@@ -61,7 +65,10 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {/* Quick search hint */}
-      <button className="flex items-center gap-2 mx-3 mb-4 px-3 h-10 rounded-md bg-bg-elevated/50 border border-border/50 text-text-muted text-[13px] hover:text-text-secondary hover:border-border transition-colors w-[calc(100%-24px)]">
+      <button
+        onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))}
+        className="flex items-center gap-2 mx-3 mb-4 px-3 h-10 rounded-md bg-bg-elevated/50 border border-border/50 text-text-muted text-[13px] hover:text-text-secondary hover:border-border transition-colors w-[calc(100%-24px)]"
+      >
         <Search className="h-4 w-4" />
         <span className="flex-1 text-left">Search...</span>
         <span className="kbd">&#x2318;K</span>
@@ -83,13 +90,22 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </p>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="h-9 w-9 rounded-md inline-flex items-center justify-center text-text-secondary hover:text-accent-danger hover:bg-bg-elevated transition-colors shrink-0"
-            aria-label="Sign out"
-          >
-            <LogOut className="h-[18px] w-[18px]" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setTheme(resolved === "dark" ? "light" : "dark")}
+              className="h-9 w-9 rounded-md inline-flex items-center justify-center text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors shrink-0"
+              aria-label="Toggle theme"
+            >
+              {resolved === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+            </button>
+            <button
+              onClick={logout}
+              className="h-9 w-9 rounded-md inline-flex items-center justify-center text-text-secondary hover:text-accent-danger hover:bg-bg-elevated transition-colors shrink-0"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-[18px] w-[18px]" />
+            </button>
+          </div>
         </div>
       </div>
     </>

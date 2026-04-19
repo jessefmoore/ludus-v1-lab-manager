@@ -48,6 +48,19 @@ export default function Dashboard() {
 
   useEffect(fetchData, []);
 
+  // Auto-refresh every 30s
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Promise.all([sessions.list(), labs.list()])
+        .then(([s, l]) => {
+          setSessionList(s);
+          setLabList(l);
+        })
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const sessionColumns: Column<SessionRead>[] = [
     {
       key: "name",
@@ -169,9 +182,9 @@ export default function Dashboard() {
         }
       />
 
-      <PageTransition className="p-8 space-y-6">
+      <PageTransition className="p-4 md:p-8 space-y-6">
         <div>
-          <h1 className="text-[32px] leading-tight font-bold text-text-primary">Sessions</h1>
+          <h1 className="text-2xl md:text-[32px] leading-tight font-bold text-text-primary">Sessions</h1>
           <p className="text-[15px] text-text-secondary mt-1">
             Manage your training sessions and student deployments
           </p>
@@ -331,7 +344,7 @@ function CreateSessionModal({
     <Modal open={open} onClose={onClose} title="New Session">
       <form onSubmit={handleSubmit} className="space-y-5">
         {error && (
-          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-[15px] text-accent-danger">
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-[15px] text-accent-danger">
             {error}
           </div>
         )}

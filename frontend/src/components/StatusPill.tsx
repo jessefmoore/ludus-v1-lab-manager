@@ -10,40 +10,40 @@ const config: Record<
   // Session statuses
   active: {
     label: "Active",
-    bg: "bg-[rgba(0,212,170,0.15)]",
+    bg: "bg-accent-success/15",
     text: "text-accent-success",
     icon: "dot",
   },
   draft: {
     label: "Draft",
-    bg: "bg-[#262A36]",
+    bg: "bg-bg-elevated",
     text: "text-text-secondary",
   },
   provisioning: {
     label: "Provisioning",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
   ended: {
     label: "Ended",
-    bg: "bg-[#262A36]",
+    bg: "bg-bg-elevated",
     text: "text-text-secondary",
   },
   // Student statuses
   ready: {
     label: "Ready",
-    bg: "bg-[rgba(0,212,170,0.15)]",
+    bg: "bg-accent-success/15",
     text: "text-accent-success",
   },
   pending: {
     label: "Pending",
-    bg: "bg-[#262A36]",
+    bg: "bg-bg-elevated",
     text: "text-text-secondary",
   },
   error: {
     label: "Error",
-    bg: "bg-[rgba(255,94,94,0.15)]",
+    bg: "bg-accent-danger/15",
     text: "text-accent-danger",
     icon: "alert",
   },
@@ -59,7 +59,7 @@ export default function StatusPill({ status }: { status: Status }) {
         <Loader2 className="h-3 w-3 animate-spin" />
       )}
       {c.icon === "alert" && <AlertTriangle className="h-3 w-3" />}
-      {c.icon === "dot" && <span className="text-[8px] drop-shadow-[0_0_4px_rgba(0,212,170,0.6)]">●</span>}
+      {c.icon === "dot" && <span className="text-[8px] drop-shadow-[0_0_4px_rgb(var(--color-accent)_/_0.6)]">●</span>}
       {c.label}
     </span>
   );

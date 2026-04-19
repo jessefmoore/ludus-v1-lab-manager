@@ -363,10 +363,11 @@ class LudusClient:
         name: str,
         *,
         vmids: list[int] | None = None,
+        range_id: str | None = None,
     ) -> None:
         """Revert the user's range to a named snapshot.
 
-        Route:  POST /api/v2/snapshots/rollback?userID=<userID>
+        Route:  POST /api/v2/snapshots/rollback?userID=<userID>[&rangeID=<rangeID>]
         Body:   {"name": "<snapshot_name>", "vmIDs": [...]}
         Raises:
             LudusAuthError on 401/403.
@@ -376,10 +377,13 @@ class LudusClient:
         body: dict[str, Any] = {"name": name}
         if vmids is not None:
             body["vmIDs"] = vmids
+        params: dict[str, str] = {"userID": userid}
+        if range_id is not None:
+            params["rangeID"] = range_id
         self._request(
             "POST",
             f"{API_BASE}/snapshots/rollback",
-            params={"userID": userid},
+            params=params,
             json=body,
         )
 
@@ -634,10 +638,11 @@ class LudusClient:
         *,
         user_id: str | None = None,
         range_number: int | None = None,
+        range_id: str | None = None,
     ) -> list[dict]:
         """List snapshots for a user or range.
 
-        Route:  GET /api/v2/snapshots/list?userID=<userID>
+        Route:  GET /api/v2/snapshots/list?userID=<userID>[&rangeID=<rangeID>]
             or  GET /api/v2/snapshots/list?rangeNumber=<N>
 
         At most one of ``user_id`` or ``range_number`` should be provided.
@@ -655,6 +660,8 @@ class LudusClient:
             params["userID"] = user_id
         if range_number is not None:
             params["rangeNumber"] = range_number
+        if range_id is not None:
+            params["rangeID"] = range_id
 
         response = self._request(
             "GET",
@@ -685,10 +692,11 @@ class LudusClient:
         description: str = "",
         include_ram: bool = False,
         vmids: list[int] | None = None,
+        range_id: str | None = None,
     ) -> None:
         """Create a snapshot for a user's range.
 
-        Route:  POST /api/v2/snapshots/create?userID=<userID>
+        Route:  POST /api/v2/snapshots/create?userID=<userID>[&rangeID=<rangeID>]
         Body:   {"name", "description", "includeRAM", "vmIDs"}
         Raises:
             LudusAuthError on 401/403.
@@ -702,10 +710,13 @@ class LudusClient:
         }
         if vmids is not None:
             body["vmIDs"] = vmids
+        params: dict[str, str] = {"userID": user_id}
+        if range_id is not None:
+            params["rangeID"] = range_id
         self._request(
             "POST",
             f"{API_BASE}/snapshots/create",
-            params={"userID": user_id},
+            params=params,
             json=body,
         )
 
@@ -715,10 +726,11 @@ class LudusClient:
         name: str,
         *,
         vmids: list[int] | None = None,
+        range_id: str | None = None,
     ) -> None:
         """Delete a snapshot from a user's range.
 
-        Route:  POST /api/v2/snapshots/remove?userID=<userID>
+        Route:  POST /api/v2/snapshots/remove?userID=<userID>[&rangeID=<rangeID>]
         Body:   {"name": "<snapshot>", "vmIDs": [...]}
         Raises:
             LudusAuthError on 401/403.
@@ -728,10 +740,13 @@ class LudusClient:
         body: dict[str, Any] = {"name": name}
         if vmids is not None:
             body["vmIDs"] = vmids
+        params: dict[str, str] = {"userID": user_id}
+        if range_id is not None:
+            params["rangeID"] = range_id
         self._request(
             "POST",
             f"{API_BASE}/snapshots/remove",
-            params={"userID": user_id},
+            params=params,
             json=body,
         )
 

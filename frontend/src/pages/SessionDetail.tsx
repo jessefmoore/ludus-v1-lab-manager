@@ -14,12 +14,15 @@ import {
   ChevronDown,
   Clock,
 } from "lucide-react";
-import { sessions, students, labs, events, ApiError } from "@/api";
+import { sessions, students, labs, events, ludus, ludusGroups, ApiError } from "@/api";
 import type {
   SessionDetailRead,
   LabTemplateRead,
   StudentRead,
   EventRead,
+  LudusUser,
+  LudusGroup,
+  LudusGroupUser,
 } from "@/api";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
@@ -427,15 +430,15 @@ export default function SessionDetail() {
         }
       />
 
-      <PageTransition className="p-8 space-y-6">
+      <PageTransition className="p-4 md:p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <h1 className="text-[32px] font-bold leading-tight text-text-primary">
+          <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-text-primary">
             {session.name}
           </h1>
           <StatusPill status={session.status} />
           {totalStudents > 0 && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl text-xs font-medium bg-[#262A36] text-text-secondary">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl text-xs font-medium bg-bg-elevated text-text-secondary">
               <span className={`inline-block h-2 w-2 rounded-full ${vpnCount > 0 ? "bg-accent-success" : "bg-text-muted"}`} />
               {vpnCount} / {totalStudents} VPN
             </span>
@@ -456,7 +459,7 @@ export default function SessionDetail() {
             </div>
             <div className="h-2.5 bg-bg-elevated rounded-full overflow-hidden">
               <div
-                className="h-full bg-accent-success rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(0,212,170,0.3)]"
+                className="h-full bg-accent-success rounded-full transition-all duration-500 shadow-[0_0_8px_rgb(var(--color-accent)_/_0.3)]"
                 style={{ width: `${(readyCount / totalStudents) * 100}%` }}
               />
             </div>
@@ -715,12 +718,14 @@ export default function SessionDetail() {
 }
 
 function InviteCell({ student }: { student: StudentRead }) {
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
   const copyInvite = async () => {
     if (!student.invite_url) return;
     await navigator.clipboard.writeText(student.invite_url);
     setCopied(true);
+    toast("success", "Invite URL copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -752,6 +757,8 @@ function InviteCell({ student }: { student: StudentRead }) {
   );
 }
 
+type AddStudentMode = "manual" | "ludus-user" | "ludus-group";
+
 function AddStudentModal({
   open,
   onClose,
@@ -763,69 +770,333 @@ function AddStudentModal({
   onCreated: () => void;
   sessionId: number;
 }) {
+  const { toast } = useToast();
+  const [mode, setMode] = useState<AddStudentMode>("manual");
+
+  // Manual mode state
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+
+  // Ludus user mode state
+  const [ludusUsers, setLudusUsers] = useState<LudusUser[]>([]);
+  const [ludusUsersLoading, setLudusUsersLoading] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [userSearch, setUserSearch] = useState("");
+
+  // Ludus group mode state
+  const [groups, setGroups] = useState<LudusGroup[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState("");
+  const [groupMembers, setGroupMembers] = useState<LudusGroupUser[]>([]);
+  const [groupMembersLoading, setGroupMembersLoading] = useState(false);
+
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const reset = () => {
+  const resetForm = () => {
     setFullName("");
     setEmail("");
     setError("");
+    setSelectedUsers(new Set());
+    setUserSearch("");
+    setSelectedGroup("");
+    setGroupMembers([]);
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  // Fetch Ludus users when switching to that mode
+  useEffect(() => {
+    if (!open) {
+      resetForm();
+      setMode("manual");
+      return;
+    }
+    if (mode === "ludus-user" && ludusUsers.length === 0) {
+      setLudusUsersLoading(true);
+      ludus
+        .users()
+        .then((res) => setLudusUsers(res.users))
+        .catch(() => setError("Failed to load Ludus users"))
+        .finally(() => setLudusUsersLoading(false));
+    }
+    if (mode === "ludus-group" && groups.length === 0) {
+      setGroupsLoading(true);
+      ludusGroups
+        .list()
+        .then((res) => setGroups(res.groups))
+        .catch(() => setError("Failed to load Ludus groups"))
+        .finally(() => setGroupsLoading(false));
+    }
+  }, [open, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch group members when a group is selected
+  useEffect(() => {
+    if (!selectedGroup) {
+      setGroupMembers([]);
+      return;
+    }
+    setGroupMembersLoading(true);
+    ludusGroups
+      .users(selectedGroup)
+      .then((res) => setGroupMembers(res.users))
+      .catch(() => setError("Failed to load group members"))
+      .finally(() => setGroupMembersLoading(false));
+  }, [selectedGroup]);
+
+  const handleManualSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setSaving(true);
     try {
       await students.create(sessionId, { full_name: fullName, email });
-      reset();
+      resetForm();
+      onCreated();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Failed to add student");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleLudusUserSubmit = async () => {
+    setError("");
+    setSaving(true);
+    let added = 0;
+    try {
+      for (const userId of selectedUsers) {
+        const user = ludusUsers.find((u) => u.userID === userId);
+        await students.create(sessionId, {
+          ludus_userid: userId,
+          full_name: user?.name || undefined,
+        });
+        added++;
+      }
+      toast("success", `Added ${added} student(s) from Ludus`);
+      resetForm();
       onCreated();
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.detail : "Failed to add student",
+        `Added ${added}/${selectedUsers.size}: ${err instanceof ApiError ? err.detail : "Failed to add student"}`,
       );
     } finally {
       setSaving(false);
     }
   };
 
+  const handleLudusGroupSubmit = async () => {
+    setError("");
+    setSaving(true);
+    let added = 0;
+    try {
+      for (const member of groupMembers) {
+        await students.create(sessionId, {
+          ludus_userid: member.userID,
+          full_name: member.name || undefined,
+        });
+        added++;
+      }
+      toast("success", `Added ${added} student(s) from group "${selectedGroup}"`);
+      resetForm();
+      onCreated();
+    } catch (err) {
+      setError(
+        `Added ${added}/${groupMembers.length}: ${err instanceof ApiError ? err.detail : "Failed to add student"}`,
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleUser = (id: string) => {
+    setSelectedUsers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredUsers = userSearch
+    ? ludusUsers.filter(
+        (u) =>
+          u.userID.toLowerCase().includes(userSearch.toLowerCase()) ||
+          (u.name || "").toLowerCase().includes(userSearch.toLowerCase()),
+      )
+    : ludusUsers;
+
+  const modes: { id: AddStudentMode; label: string }[] = [
+    { id: "manual", label: "Manual" },
+    { id: "ludus-user", label: "Ludus User" },
+    { id: "ludus-group", label: "Ludus Group" },
+  ];
+
   return (
     <Modal open={open} onClose={onClose} title="Add Student" size="sm">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-4">
+        {/* Mode selector pills */}
+        <div className="flex gap-1 p-1 bg-bg-elevated rounded-lg">
+          {modes.map((m) => (
+            <button
+              key={m.id}
+              className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                mode === m.id
+                  ? "bg-bg-surface text-text-primary shadow-sm"
+                  : "text-text-muted hover:text-text-secondary"
+              }`}
+              onClick={() => {
+                setMode(m.id);
+                setError("");
+              }}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         {error && (
-          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-sm text-accent-danger">
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
             {error}
           </div>
         )}
 
-        <Input
-          label="Full Name"
-          placeholder="e.g. Alex Chen"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          required
-        />
+        {/* Manual mode */}
+        {mode === "manual" && (
+          <form onSubmit={handleManualSubmit} className="space-y-4">
+            <Input
+              label="Full Name"
+              placeholder="e.g. Alex Chen"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+            <Input
+              label="Email"
+              type="email"
+              placeholder="e.g. alex@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" type="button" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" loading={saving}>
+                Add Student
+              </Button>
+            </div>
+          </form>
+        )}
 
-        <Input
-          label="Email"
-          type="email"
-          placeholder="e.g. alex@company.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        {/* Ludus User mode */}
+        {mode === "ludus-user" && (
+          <div className="space-y-4">
+            <Input
+              label="Search Users"
+              placeholder="Search by ID or name..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+            />
+            <div className="max-h-60 overflow-y-auto border border-border rounded-md divide-y divide-border">
+              {ludusUsersLoading ? (
+                <p className="text-sm text-text-muted text-center py-4">Loading users...</p>
+              ) : filteredUsers.length === 0 ? (
+                <p className="text-sm text-text-muted text-center py-4">No users found</p>
+              ) : (
+                filteredUsers.map((u) => (
+                  <label
+                    key={u.userID}
+                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-bg-elevated cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.has(u.userID)}
+                      onChange={() => toggleUser(u.userID)}
+                      className="accent-accent-success"
+                    />
+                    <div className="min-w-0">
+                      <span className="font-mono text-sm text-text-primary">{u.userID}</span>
+                      {u.name && (
+                        <span className="text-sm text-text-secondary ml-2">{u.name}</span>
+                      )}
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleLudusUserSubmit}
+                loading={saving}
+                disabled={selectedUsers.size === 0}
+              >
+                Add {selectedUsers.size > 0 ? `${selectedUsers.size} User${selectedUsers.size > 1 ? "s" : ""}` : "Users"}
+              </Button>
+            </div>
+          </div>
+        )}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" loading={saving}>
-            Add Student
-          </Button>
-        </div>
-      </form>
+        {/* Ludus Group mode */}
+        {mode === "ludus-group" && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-text-secondary mb-1.5">Group</label>
+              <select
+                className="w-full h-9 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success"
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value)}
+                disabled={groupsLoading}
+              >
+                <option value="">Select a group...</option>
+                {groups.map((g) => (
+                  <option key={g.name} value={g.name}>
+                    {g.name}{g.description ? ` — ${g.description}` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedGroup && (
+              <div className="max-h-60 overflow-y-auto border border-border rounded-md divide-y divide-border">
+                {groupMembersLoading ? (
+                  <p className="text-sm text-text-muted text-center py-4">Loading members...</p>
+                ) : groupMembers.length === 0 ? (
+                  <p className="text-sm text-text-muted text-center py-4">No members in this group</p>
+                ) : (
+                  groupMembers.map((m) => (
+                    <div
+                      key={m.userID}
+                      className="flex items-center gap-3 px-3 py-2.5"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-mono text-sm text-text-primary">{m.userID}</span>
+                        {m.name && (
+                          <span className="text-sm text-text-secondary ml-2">{m.name}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleLudusGroupSubmit}
+                loading={saving}
+                disabled={groupMembers.length === 0}
+              >
+                Add All ({groupMembers.length})
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

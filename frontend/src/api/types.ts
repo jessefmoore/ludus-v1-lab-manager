@@ -87,8 +87,9 @@ export interface SessionProvisionResponse {
 
 // Students
 export interface StudentCreate {
-  full_name: string;
-  email: string;
+  full_name?: string;
+  email?: string;
+  ludus_userid?: string;
 }
 
 export interface StudentRead {
@@ -159,12 +160,14 @@ export interface SnapshotCreateRequest {
   description?: string;
   include_ram?: boolean;
   vmids?: number[];
+  range_id?: string;
 }
 
 export interface SnapshotRevertRequest {
   user_id: string;
   name: string;
   vmids?: number[];
+  range_id?: string;
 }
 
 // Ludus Templates

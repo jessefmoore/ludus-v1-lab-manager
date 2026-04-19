@@ -12,54 +12,54 @@ interface StateConfig {
 const states: Record<string, StateConfig> = {
   DEPLOYING: {
     label: "Deploying",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
   SUCCESS: {
     label: "Deployed",
-    bg: "bg-[rgba(0,212,170,0.15)]",
+    bg: "bg-accent-success/15",
     text: "text-accent-success",
     icon: "dot",
   },
   ERROR: {
     label: "Error",
-    bg: "bg-[rgba(255,94,94,0.15)]",
+    bg: "bg-accent-danger/15",
     text: "text-accent-danger",
     icon: "alert",
   },
   DESTROYING: {
     label: "Destroying",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
   "NEVER DEPLOYED": {
     label: "Not Deployed",
-    bg: "bg-[#262A36]",
+    bg: "bg-bg-elevated",
     text: "text-text-secondary",
   },
   "POWERING ON": {
     label: "Powering On",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
   "POWERING OFF": {
     label: "Powering Off",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
   SNAPSHOTTING: {
     label: "Snapshotting",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
   REVERTING: {
     label: "Reverting",
-    bg: "bg-[rgba(255,169,77,0.15)]",
+    bg: "bg-accent-warning/15",
     text: "text-accent-warning",
     icon: "spin",
   },
@@ -68,7 +68,7 @@ const states: Record<string, StateConfig> = {
 export default function RangeStatePill({ state }: { state: string }) {
   const c = states[state] ?? {
     label: state,
-    bg: "bg-[#262A36]",
+    bg: "bg-bg-elevated",
     text: "text-text-secondary",
   };
 
@@ -79,7 +79,7 @@ export default function RangeStatePill({ state }: { state: string }) {
       {c.icon === "spin" && <Loader2 className="h-3 w-3 animate-spin" />}
       {c.icon === "alert" && <AlertTriangle className="h-3 w-3" />}
       {c.icon === "dot" && (
-        <span className="text-[8px] drop-shadow-[0_0_4px_rgba(0,212,170,0.6)]">●</span>
+        <span className="text-[8px] drop-shadow-[0_0_4px_rgb(var(--color-accent)_/_0.6)]">●</span>
       )}
       {c.label}
     </span>

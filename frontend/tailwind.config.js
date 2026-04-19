@@ -5,26 +5,26 @@ export default {
     extend: {
       colors: {
         bg: {
-          base: "#0A0B0E",
-          surface: "#14161C",
-          elevated: "#1C1F28",
+          base: "rgb(var(--color-bg-base) / <alpha-value>)",
+          surface: "rgb(var(--color-bg-surface) / <alpha-value>)",
+          elevated: "rgb(var(--color-bg-elevated) / <alpha-value>)",
         },
         border: {
-          DEFAULT: "#262A36",
-          subtle: "#1E2130",
+          DEFAULT: "rgb(var(--color-border) / <alpha-value>)",
+          subtle: "rgb(var(--color-border-subtle) / <alpha-value>)",
         },
         text: {
-          primary: "#E8EAF0",
-          secondary: "#8B92A5",
-          muted: "#5A6175",
+          primary: "rgb(var(--color-text-primary) / <alpha-value>)",
+          secondary: "rgb(var(--color-text-secondary) / <alpha-value>)",
+          muted: "rgb(var(--color-text-muted) / <alpha-value>)",
         },
         accent: {
-          success: "#00D4AA",
-          "success-hover": "#00BD97",
-          "success-active": "#00A683",
-          warning: "#FFA94D",
-          danger: "#FF5E5E",
-          info: "#6C8EFF",
+          success: "rgb(var(--color-accent) / <alpha-value>)",
+          "success-hover": "rgb(var(--color-accent-hover) / <alpha-value>)",
+          "success-active": "rgb(var(--color-accent-active) / <alpha-value>)",
+          warning: "rgb(var(--color-warning) / <alpha-value>)",
+          danger: "rgb(var(--color-danger) / <alpha-value>)",
+          info: "rgb(var(--color-info) / <alpha-value>)",
         },
       },
       fontFamily: {
@@ -33,22 +33,24 @@ export default {
       },
       backgroundImage: {
         "gradient-border":
-          "linear-gradient(135deg, rgba(0,212,170,0.4), rgba(108,142,255,0.2), rgba(38,42,54,0.5))",
+          "linear-gradient(135deg, rgb(var(--color-accent) / 0.4), rgb(var(--color-info) / 0.2), rgb(var(--color-border) / 0.5))",
         "gradient-border-hover":
-          "linear-gradient(135deg, rgba(0,212,170,0.6), rgba(108,142,255,0.35), rgba(38,42,54,0.5))",
+          "linear-gradient(135deg, rgb(var(--color-accent) / 0.6), rgb(var(--color-info) / 0.35), rgb(var(--color-border) / 0.5))",
         "gradient-glow":
-          "radial-gradient(ellipse at 50% 0%, rgba(0,212,170,0.08) 0%, transparent 60%)",
+          "radial-gradient(ellipse at 50% 0%, rgb(var(--color-accent) / 0.08) 0%, transparent 60%)",
         "gradient-surface":
-          "linear-gradient(180deg, rgba(0,212,170,0.03) 0%, transparent 40%)",
+          "linear-gradient(180deg, rgb(var(--color-accent) / 0.03) 0%, transparent 40%)",
         "gradient-surface-deep":
-          "linear-gradient(180deg, rgba(0,212,170,0.05) 0%, rgba(108,142,255,0.02) 50%, transparent 100%)",
+          "linear-gradient(180deg, rgb(var(--color-accent) / 0.05) 0%, rgb(var(--color-info) / 0.02) 50%, transparent 100%)",
       },
       boxShadow: {
-        glow: "0 0 20px rgba(0,212,170,0.1)",
-        "glow-sm": "0 0 10px rgba(0,212,170,0.08)",
-        "glow-lg": "0 0 40px rgba(0,212,170,0.15)",
-        "inner-glow": "inset 0 1px 0 rgba(0,212,170,0.06), 0 0 20px rgba(0,212,170,0.08)",
-        "card-hover": "0 4px 24px rgba(0,0,0,0.3), 0 0 20px rgba(0,212,170,0.06)",
+        glow: "0 0 20px rgb(var(--color-accent) / 0.1)",
+        "glow-sm": "0 0 10px rgb(var(--color-accent) / 0.08)",
+        "glow-lg": "0 0 40px rgb(var(--color-accent) / 0.15)",
+        "inner-glow":
+          "inset 0 1px 0 rgb(var(--color-accent) / 0.06), 0 0 20px rgb(var(--color-accent) / 0.08)",
+        "card-hover":
+          "0 4px 24px rgba(0,0,0,0.3), 0 0 20px rgb(var(--color-accent) / 0.06)",
       },
       keyframes: {
         "slide-in": {
@@ -76,8 +78,14 @@ export default {
           to: { backgroundPosition: "-200% 0" },
         },
         "timeline-pulse": {
-          "0%, 100%": { boxShadow: "0 0 0 0 rgba(0, 212, 170, 0.4)" },
-          "50%": { boxShadow: "0 0 0 6px rgba(0, 212, 170, 0)" },
+          "0%, 100%": {
+            boxShadow: "0 0 0 0 rgb(var(--color-accent) / 0.4)",
+          },
+          "50%": { boxShadow: "0 0 0 6px rgb(var(--color-accent) / 0)" },
+        },
+        "glow-pulse": {
+          "0%, 100%": { opacity: "0.6" },
+          "50%": { opacity: "1" },
         },
       },
       animation: {
@@ -88,6 +96,7 @@ export default {
         "page-enter": "page-enter 200ms ease-out",
         shimmer: "shimmer 3s ease-in-out infinite",
         "timeline-pulse": "timeline-pulse 2s ease-in-out infinite",
+        "glow-pulse": "glow-pulse 4s ease-in-out infinite",
       },
     },
   },

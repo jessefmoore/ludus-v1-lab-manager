@@ -16,20 +16,19 @@ interface PaletteItem {
   icon: typeof LayoutDashboard;
   label: string;
   description: string;
+  group: string;
   action: () => void;
 }
 
 const NAV_ITEMS: Omit<PaletteItem, "action">[] = [
-  { id: "nav-dashboard", icon: LayoutDashboard, label: "Dashboard", description: "/" },
-  { id: "nav-sessions", icon: CalendarRange, label: "Sessions", description: "View all sessions" },
-  { id: "nav-labs", icon: Layers, label: "Lab Templates", description: "Manage lab configs" },
-  { id: "nav-ludus", icon: Server, label: "Ludus", description: "Ranges, snapshots, templates" },
-  { id: "nav-settings", icon: Settings, label: "Settings", description: "Platform configuration" },
+  { id: "nav-dashboard", icon: LayoutDashboard, label: "Dashboard", description: "Overview & stats", group: "Pages" },
+  { id: "nav-labs", icon: Layers, label: "Lab Templates", description: "Manage lab configs", group: "Pages" },
+  { id: "nav-ludus", icon: Server, label: "Ludus", description: "Ranges, snapshots, templates", group: "Pages" },
+  { id: "nav-settings", icon: Settings, label: "Settings", description: "Platform configuration", group: "Pages" },
 ];
 
 const NAV_ROUTES: Record<string, string> = {
   "nav-dashboard": "/",
-  "nav-sessions": "/",
   "nav-labs": "/labs",
   "nav-ludus": "/ludus",
   "nav-settings": "/settings",
@@ -54,6 +53,7 @@ export default function CommandPalette() {
     setFetchedLabs([]);
   }, []);
 
+  // ⌘K / Ctrl+K keyboard shortcut
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -70,6 +70,13 @@ export default function CommandPalette() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [close]);
+
+  // Custom event from sidebar search button
+  useEffect(() => {
+    const handleOpen = () => setOpen(true);
+    window.addEventListener("open-command-palette", handleOpen);
+    return () => window.removeEventListener("open-command-palette", handleOpen);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -121,6 +128,7 @@ export default function CommandPalette() {
             icon: CalendarRange,
             label: session.name,
             description: session.status,
+            group: "Sessions",
             action: () => navigate(`/sessions/${session.id}`),
           });
         }
@@ -133,6 +141,7 @@ export default function CommandPalette() {
             icon: Layers,
             label: lab.name,
             description: lab.default_mode,
+            group: "Lab Templates",
             action: () => navigate("/labs"),
           });
         }
@@ -183,11 +192,25 @@ export default function CommandPalette() {
 
   useEffect(() => {
     if (!listRef.current) return;
-    const selected = listRef.current.children[selectedIndex] as HTMLElement | undefined;
+    const selected = listRef.current.querySelector("[data-selected=true]") as HTMLElement | undefined;
     selected?.scrollIntoView({ block: "nearest" });
   }, [selectedIndex]);
 
   if (!open) return null;
+
+  // Group items for rendering with headers
+  let flatIndex = 0;
+  const groups: { label: string; items: { item: PaletteItem; index: number }[] }[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (!seen.has(item.group)) {
+      seen.add(item.group);
+      groups.push({ label: item.group, items: [] });
+    }
+    const group = groups.find((g) => g.label === item.group)!;
+    group.items.push({ item, index: flatIndex });
+    flatIndex++;
+  }
 
   return (
     <div
@@ -209,6 +232,7 @@ export default function CommandPalette() {
             placeholder="Search sessions, labs, settings..."
             className="flex-1 h-12 bg-transparent text-base text-text-primary placeholder:text-text-muted outline-none border-none"
           />
+          <kbd className="kbd text-[11px]">esc</kbd>
         </div>
 
         <div className="border-t border-border" />
@@ -219,27 +243,38 @@ export default function CommandPalette() {
               No results found
             </div>
           ) : (
-            items.map((item, index) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-left transition-colors ${
-                    index === selectedIndex
-                      ? "bg-bg-elevated"
-                      : "hover:bg-bg-elevated"
-                  }`}
-                  onClick={() => handleSelect(index)}
-                  onMouseEnter={() => setSelectedIndex(index)}
-                >
-                  <Icon className="h-4 w-4 text-text-muted shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[15px] text-text-primary">{item.label}</span>
-                  </div>
-                  <span className="text-[13px] text-text-muted shrink-0">{item.description}</span>
-                </button>
-              );
-            })
+            groups.map((group) => (
+              <div key={group.label}>
+                <div className="px-3 pt-2 pb-1">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+                    {group.label}
+                  </span>
+                </div>
+                {group.items.map(({ item, index }) => {
+                  const Icon = item.icon;
+                  const isSelected = index === selectedIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      data-selected={isSelected}
+                      className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-left transition-colors ${
+                        isSelected
+                          ? "bg-bg-elevated"
+                          : "hover:bg-bg-elevated"
+                      }`}
+                      onClick={() => handleSelect(index)}
+                      onMouseEnter={() => setSelectedIndex(index)}
+                    >
+                      <Icon className={`h-4 w-4 shrink-0 ${isSelected ? "text-accent-success" : "text-text-muted"}`} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-[15px] text-text-primary">{item.label}</span>
+                      </div>
+                      <span className="text-[13px] text-text-muted capitalize shrink-0">{item.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))
           )}
         </div>
 
@@ -254,8 +289,8 @@ export default function CommandPalette() {
             <span>select</span>
           </span>
           <span className="flex items-center gap-1.5">
-            <kbd className="kbd">esc</kbd>
-            <span>close</span>
+            <kbd className="kbd">&#x2318;K</kbd>
+            <span>toggle</span>
           </span>
         </div>
       </div>

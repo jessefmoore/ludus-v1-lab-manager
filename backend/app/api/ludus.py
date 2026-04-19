@@ -338,6 +338,7 @@ def power_off_range(
 def list_snapshots(
     user_id: str | None = None,
     range_number: int | None = None,
+    range_id: str | None = None,
     server: str = "default",
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
@@ -345,7 +346,7 @@ def list_snapshots(
     """List snapshots, optionally filtered by user or range."""
     ludus = _resolve_client(registry, server)
     try:
-        raw = ludus.snapshot_list(user_id=user_id, range_number=range_number)
+        raw = ludus.snapshot_list(user_id=user_id, range_number=range_number, range_id=range_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -400,6 +401,7 @@ def create_snapshot(
             description=body.description,
             include_ram=body.include_ram,
             vmids=body.vmids,
+            range_id=body.range_id,
         )
     except LudusNotFound as exc:
         raise HTTPException(
@@ -426,7 +428,7 @@ def revert_snapshot(
     """Revert to a named snapshot."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.snapshot_revert(body.user_id, body.name, vmids=body.vmids)
+        ludus.snapshot_revert(body.user_id, body.name, vmids=body.vmids, range_id=body.range_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -446,6 +448,7 @@ def revert_snapshot(
 def delete_snapshot(
     name: str,
     user_id: str,
+    range_id: str | None = None,
     server: str = "default",
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
@@ -453,7 +456,7 @@ def delete_snapshot(
     """Delete a snapshot by name."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.snapshot_delete(user_id, name)
+        ludus.snapshot_delete(user_id, name, range_id=range_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

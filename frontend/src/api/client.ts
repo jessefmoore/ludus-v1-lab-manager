@@ -243,11 +243,12 @@ export const ludus = {
       body: JSON.stringify(data),
     }),
 
-  snapshots: (params?: { user_id?: string; range_number?: number; server?: string }) => {
+  snapshots: (params?: { user_id?: string; range_number?: number; range_id?: string; server?: string }) => {
     const qs = new URLSearchParams();
     if (params?.server && params.server !== "default") qs.set("server", params.server);
     if (params?.user_id) qs.set("user_id", params.user_id);
     if (params?.range_number != null) qs.set("range_number", String(params.range_number));
+    if (params?.range_id) qs.set("range_id", params.range_id);
     const q = qs.toString();
     return request<LudusSnapshotListResponse>(`/api/ludus/snapshots${q ? `?${q}` : ""}`);
   },
@@ -264,8 +265,9 @@ export const ludus = {
       body: JSON.stringify(data),
     }),
 
-  deleteSnapshot: (name: string, userId: string, server?: string) => {
+  deleteSnapshot: (name: string, userId: string, rangeId?: string, server?: string) => {
     const extra: Record<string, string> = { user_id: userId };
+    if (rangeId) extra.range_id = rangeId;
     if (server && server !== "default") extra.server = server;
     const qs = new URLSearchParams(extra).toString();
     return request<LudusActionResponse>(`/api/ludus/snapshots/${encodeURIComponent(name)}?${qs}`, {

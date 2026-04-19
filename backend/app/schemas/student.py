@@ -12,18 +12,35 @@ Design note on ``invite_url``:
   Pydantic models to configuration.
 """
 
-from datetime import datetime
+from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from datetime import datetime
+from typing import Self
+
+from pydantic import BaseModel, ConfigDict, EmailStr, model_validator
 
 from app.schemas.common import StudentStatus
 
 
 class StudentCreate(BaseModel):
-    """Payload to enroll a new student into a session."""
+    """Payload to enroll a new student into a session.
 
-    full_name: str
-    email: EmailStr
+    Two modes:
+    * **Manual** — ``full_name`` + ``email`` required, ``ludus_userid`` absent.
+    * **Ludus user** — ``ludus_userid`` set, ``full_name``/``email`` optional.
+    """
+
+    full_name: str | None = None
+    email: EmailStr | None = None
+    ludus_userid: str | None = None
+
+    @model_validator(mode="after")
+    def check_either_manual_or_ludus(self) -> Self:
+        if self.ludus_userid:
+            return self  # Ludus user mode — name/email are optional
+        if not self.full_name or not self.email:
+            raise ValueError("full_name and email are required when ludus_userid is not provided")
+        return self
 
 
 class StudentRead(BaseModel):

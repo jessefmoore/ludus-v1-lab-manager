@@ -13,11 +13,11 @@ const base = "inline-flex items-center justify-center gap-2 rounded-md text-[15p
 
 const variants: Record<Variant, string> = {
   primary:
-    "h-11 px-5 bg-accent-success text-bg-base font-semibold hover:bg-[#00BD97] active:bg-[#00A683]",
+    "h-11 px-5 bg-accent-success text-bg-base font-semibold hover:bg-accent-success-hover active:bg-accent-success-active",
   secondary:
-    "h-11 px-5 bg-bg-elevated border border-border text-text-primary hover:bg-[#252834]",
+    "h-11 px-5 bg-bg-elevated border border-border text-text-primary hover:bg-border",
   danger:
-    "h-11 px-5 bg-transparent border border-accent-danger text-accent-danger hover:bg-[rgba(255,94,94,0.1)]",
+    "h-11 px-5 bg-transparent border border-accent-danger text-accent-danger hover:bg-accent-danger/10",
   icon: "h-9 w-9 bg-transparent hover:bg-bg-elevated text-text-secondary hover:text-text-primary",
 };
 

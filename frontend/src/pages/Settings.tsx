@@ -31,9 +31,9 @@ export default function Settings() {
     <>
       <TopBar breadcrumbs={[{ label: "Settings" }]} />
 
-      <PageTransition className="p-8 space-y-6">
+      <PageTransition className="p-4 md:p-8 space-y-6">
         <div>
-          <h1 className="text-[32px] font-bold leading-tight text-text-primary">Settings</h1>
+          <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-text-primary">Settings</h1>
           <p className="text-[15px] text-text-secondary mt-1">
             Platform configuration and account settings
           </p>
@@ -349,7 +349,7 @@ function AdminAccountCard({
           </p>
 
           {error && (
-            <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-sm text-accent-danger">
+            <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
               {error}
             </div>
           )}

@@ -118,9 +118,9 @@ export default function LabTemplates() {
         }
       />
 
-      <PageTransition className="p-8 space-y-6">
+      <PageTransition className="p-4 md:p-8 space-y-6">
         <div>
-          <h1 className="text-[32px] font-bold leading-tight text-text-primary">
+          <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-text-primary">
             Lab Templates
           </h1>
           <p className="text-[15px] text-text-secondary mt-1">
@@ -314,8 +314,8 @@ function LabCard({
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-xl text-[13px] font-semibold ${
                 lab.default_mode === "shared"
-                  ? "bg-[rgba(0,212,170,0.15)] text-accent-success"
-                  : "bg-[rgba(108,142,255,0.15)] text-accent-info"
+                  ? "bg-accent-success/15 text-accent-success"
+                  : "bg-accent-info/15 text-accent-info"
               }`}
             >
               {lab.default_mode === "shared" ? "Shared" : "Dedicated"}
@@ -486,7 +486,7 @@ function DiscoverRangesModal({
           </div>
         )}
         {error && (
-          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-[15px] text-accent-danger">
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-[15px] text-accent-danger">
             {error}
           </div>
         )}
@@ -883,7 +883,7 @@ function LabForm({
   return (
     <form onSubmit={onSubmit} className="space-y-5">
       {error && (
-        <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-[15px] text-accent-danger">
+        <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-[15px] text-accent-danger">
           {error}
         </div>
       )}
@@ -1012,7 +1012,7 @@ function DeleteLabModal({
           Are you sure you want to delete <strong className="text-text-primary">{lab.name}</strong>?
         </p>
         {lab.session_count > 0 && (
-          <div className="p-3 rounded-md bg-[rgba(255,169,77,0.1)] border border-accent-warning/30 text-[15px] text-accent-warning">
+          <div className="p-3 rounded-md bg-accent-warning/10 border border-accent-warning/30 text-[15px] text-accent-warning">
             This template is used by {lab.session_count} session{lab.session_count === 1 ? "" : "s"}.
           </div>
         )}

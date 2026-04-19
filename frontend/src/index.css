@@ -2,6 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme CSS Custom Properties ───────────────────────────────── */
+
+:root {
+  /* Light theme */
+  --color-bg-base: 248 250 252;
+  --color-bg-surface: 255 255 255;
+  --color-bg-elevated: 241 245 249;
+  --color-border: 226 232 240;
+  --color-border-subtle: 241 245 249;
+  --color-text-primary: 15 23 42;
+  --color-text-secondary: 100 116 139;
+  --color-text-muted: 148 163 184;
+  --color-accent: 59 130 246;
+  --color-accent-hover: 37 99 235;
+  --color-accent-active: 29 78 216;
+  --color-warning: 245 158 11;
+  --color-danger: 239 68 68;
+  --color-info: 139 92 246;
+}
+
+.dark {
+  /* Dark theme (original design system) */
+  --color-bg-base: 10 11 14;
+  --color-bg-surface: 20 22 28;
+  --color-bg-elevated: 28 31 40;
+  --color-border: 38 42 54;
+  --color-border-subtle: 30 33 48;
+  --color-text-primary: 232 234 240;
+  --color-text-secondary: 139 146 165;
+  --color-text-muted: 90 97 117;
+  --color-accent: 0 212 170;
+  --color-accent-hover: 0 189 151;
+  --color-accent-active: 0 166 131;
+  --color-warning: 255 169 77;
+  --color-danger: 255 94 94;
+  --color-info: 108 142 255;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -10,7 +48,8 @@
 
 body {
   font-family: "Inter", system-ui, sans-serif;
-  color: #e8eaf0;
+  color: rgb(var(--color-text-primary));
+  background: rgb(var(--color-bg-base));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -20,21 +59,21 @@ body {
   width: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0b0e;
+  background: rgb(var(--color-bg-base));
 }
 ::-webkit-scrollbar-thumb {
-  background: #262a36;
+  background: rgb(var(--color-border));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #5a6175;
+  background: rgb(var(--color-text-muted));
 }
 
 /* Gradient border utility — wrap element in a .gradient-border parent */
 @layer components {
   .gradient-border {
     position: relative;
-    background: #14161c;
+    background: rgb(var(--color-bg-surface));
     border-radius: 12px;
     border: 1px solid transparent;
     background-clip: padding-box;
@@ -47,9 +86,9 @@ body {
     padding: 1px;
     background: linear-gradient(
       135deg,
-      rgba(0, 212, 170, 0.35),
-      rgba(108, 142, 255, 0.18),
-      rgba(38, 42, 54, 0.6)
+      rgb(var(--color-accent) / 0.35),
+      rgb(var(--color-info) / 0.18),
+      rgb(var(--color-border) / 0.6)
     );
     -webkit-mask:
       linear-gradient(#fff 0 0) content-box,
@@ -65,9 +104,9 @@ body {
   .gradient-border:hover::before {
     background: linear-gradient(
       135deg,
-      rgba(0, 212, 170, 0.55),
-      rgba(108, 142, 255, 0.3),
-      rgba(38, 42, 54, 0.6)
+      rgb(var(--color-accent) / 0.55),
+      rgb(var(--color-info) / 0.3),
+      rgb(var(--color-border) / 0.6)
     );
   }
 
@@ -76,7 +115,7 @@ body {
     transition: box-shadow 150ms ease, transform 150ms ease;
   }
   .stat-glow:hover {
-    box-shadow: 0 0 20px rgba(0, 212, 170, 0.08);
+    box-shadow: 0 0 20px rgb(var(--color-accent) / 0.08);
     transform: translateY(-1px);
   }
 
@@ -85,8 +124,8 @@ body {
     height: 3px;
     background: linear-gradient(
       90deg,
-      #00d4aa 0%,
-      rgba(108, 142, 255, 0.6) 50%,
+      rgb(var(--color-accent)) 0%,
+      rgb(var(--color-info) / 0.6) 50%,
       transparent 100%
     );
   }
@@ -95,9 +134,9 @@ body {
   .skeleton {
     background: linear-gradient(
       90deg,
-      #1c1f28 25%,
-      #262a36 50%,
-      #1c1f28 75%
+      rgb(var(--color-bg-elevated)) 25%,
+      rgb(var(--color-border)) 50%,
+      rgb(var(--color-bg-elevated)) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 3s ease-in-out infinite;
@@ -114,7 +153,7 @@ body {
     transition: background-color 100ms ease;
   }
   .table-row-interactive:hover {
-    background-color: rgba(28, 31, 40, 0.5);
+    background-color: rgb(var(--color-bg-elevated) / 0.5);
   }
 
   /* Sortable table header */
@@ -124,7 +163,7 @@ body {
     transition: color 100ms ease;
   }
   .th-sortable:hover {
-    color: #e8eaf0;
+    color: rgb(var(--color-text-primary));
   }
 
   /* Timeline pulse animation */
@@ -134,7 +173,7 @@ body {
 
   /* Mobile table scroll hint gradient */
   .scroll-hint-gradient {
-    background: linear-gradient(to left, rgba(20, 22, 28, 1) 0%, rgba(20, 22, 28, 0) 100%);
+    background: linear-gradient(to left, rgb(var(--color-bg-surface)) 0%, rgb(var(--color-bg-surface) / 0) 100%);
   }
 
   /* Kbd styling for command palette */
@@ -146,9 +185,9 @@ body {
     height: 1.375rem;
     padding: 0 0.375rem;
     border-radius: 4px;
-    border: 1px solid #262a36;
-    background: #1c1f28;
-    color: #8b92a5;
+    border: 1px solid rgb(var(--color-border));
+    background: rgb(var(--color-bg-elevated));
+    color: rgb(var(--color-text-secondary));
     font-family: "Inter", system-ui, sans-serif;
     font-size: 11px;
     font-weight: 500;

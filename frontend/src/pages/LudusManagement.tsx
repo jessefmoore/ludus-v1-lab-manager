@@ -42,6 +42,7 @@ import { TableSkeleton } from "@/components/Skeleton";
 import PageTransition from "@/components/PageTransition";
 import { useToast } from "@/components/Toast";
 import RangeStatePill from "@/components/RangeStatePill";
+import LogViewer from "@/components/LogViewer";
 
 const TAB_GROUPS: TabGroup[] = [
   {
@@ -87,10 +88,10 @@ export default function LudusManagement() {
     <>
       <TopBar breadcrumbs={[{ label: "Ludus" }]} />
 
-      <PageTransition className="p-8 space-y-6">
+      <PageTransition className="p-4 md:p-8 space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[32px] font-bold leading-tight text-text-primary">
+            <h1 className="text-2xl md:text-[32px] font-bold leading-tight text-text-primary">
               Ludus Management
             </h1>
             <p className="text-[15px] text-text-secondary mt-1">
@@ -202,6 +203,29 @@ function RangesTab({ server }: { server: string }) {
   }, [toast, server]);
 
   useEffect(fetchRanges, [fetchRanges]);
+
+  // Auto-refresh every 30s when idle (no active ops)
+  useEffect(() => {
+    if (activeOps.size > 0) return;
+    const interval = setInterval(() => {
+      Promise.all([ludus.ranges(server), ludus.users(server)])
+        .then(([rangesRes, usersRes]) => {
+          const filtered = rangesRes.ranges.filter(
+            (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
+          );
+          setRanges(filtered);
+          const mapping = new Map<number, string>();
+          for (const u of usersRes.users) {
+            if (u.userNumber != null) {
+              mapping.set(u.userNumber, u.userID);
+            }
+          }
+          setRangeToUser(mapping);
+        })
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [activeOps.size, server]);
 
   // Poll while there are active operations
   useEffect(() => {
@@ -488,19 +512,23 @@ function SnapshotsTab({ server }: { server: string }) {
 
   const getSelectedUserId = (): string => {
     if (selectedRange == null) return "";
-    // Try mapping first, fall back to rangeID (in Ludus, rangeID often equals userID)
     const fromMapping = rangeToUser.get(selectedRange);
     if (fromMapping) return fromMapping;
+    return "";
+  };
+  const getSelectedRangeId = (): string => {
+    if (selectedRange == null) return "";
     const range = deployedRanges.find((r) => r.rangeNumber === selectedRange);
     return range?.rangeID ?? "";
   };
   const selectedUserId = getSelectedUserId();
+  const selectedRangeId = getSelectedRangeId();
 
   const fetchSnapshots = useCallback(() => {
     if (!selectedUserId) return;
     setSnapshotLoading(true);
     ludus
-      .snapshots({ user_id: selectedUserId, server })
+      .snapshots({ user_id: selectedUserId, range_id: selectedRangeId || undefined, server })
       .then((res) => setSnapshots(res.snapshots))
       .catch((err) =>
         toast("error", err instanceof ApiError ? err.detail : "Failed to load snapshots", {
@@ -509,7 +537,7 @@ function SnapshotsTab({ server }: { server: string }) {
         }),
       )
       .finally(() => setSnapshotLoading(false));
-  }, [selectedUserId, toast, server]);
+  }, [selectedUserId, selectedRangeId, toast, server]);
 
   useEffect(fetchSnapshots, [fetchSnapshots]);
 
@@ -519,7 +547,7 @@ function SnapshotsTab({ server }: { server: string }) {
 
     const interval = setInterval(() => {
       ludus
-        .snapshots({ user_id: selectedUserId, server })
+        .snapshots({ user_id: selectedUserId, range_id: selectedRangeId || undefined, server })
         .then((res) => {
           const newCount = res.snapshots.length;
 
@@ -544,14 +572,14 @@ function SnapshotsTab({ server }: { server: string }) {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [activeSnapshotOp, selectedUserId, server, toast]);
+  }, [activeSnapshotOp, selectedUserId, selectedRangeId, server, toast]);
 
   const handleRevert = (snap: LudusSnapshot) => {
     setConfirmModal({
       title: "Revert Snapshot",
       message: `Revert to snapshot "${snap.name}" on range ${selectedRange}?`,
       action: async () => {
-        await ludus.revertSnapshot({ user_id: selectedUserId, name: snap.name }, server);
+        await ludus.revertSnapshot({ user_id: selectedUserId, name: snap.name, range_id: selectedRangeId || undefined }, server);
         toast("success", `Revert to "${snap.name}" started`);
         snapshotBaselineRef.current = snapshots.length;
         snapshotPollCountRef.current = 0;
@@ -565,7 +593,7 @@ function SnapshotsTab({ server }: { server: string }) {
       title: "Delete Snapshot",
       message: `Delete snapshot "${snap.name}"? This cannot be undone.`,
       action: async () => {
-        await ludus.deleteSnapshot(snap.name, selectedUserId, server);
+        await ludus.deleteSnapshot(snap.name, selectedUserId, selectedRangeId || undefined, server);
         toast("success", `Snapshot "${snap.name}" deletion started`);
         snapshotBaselineRef.current = snapshots.length;
         snapshotPollCountRef.current = 0;
@@ -689,6 +717,7 @@ function SnapshotsTab({ server }: { server: string }) {
         open={showCreate}
         onClose={() => setShowCreate(false)}
         userId={selectedUserId}
+        rangeId={selectedRangeId}
         server={server}
         onCreated={() => {
           setShowCreate(false);
@@ -722,12 +751,14 @@ function CreateSnapshotModal({
   open,
   onClose,
   userId,
+  rangeId,
   server,
   onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   userId: string;
+  rangeId: string;
   server: string;
   onCreated: () => void;
 }) {
@@ -757,6 +788,7 @@ function CreateSnapshotModal({
         name,
         description,
         include_ram: includeRam,
+        range_id: rangeId || undefined,
       }, server);
       toast("success", `Snapshot "${name}" creation started`);
       onCreated();
@@ -771,7 +803,7 @@ function CreateSnapshotModal({
     <Modal open={open} onClose={onClose} title="Create Snapshot" size="sm">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-sm text-accent-danger">
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
             {error}
           </div>
         )}
@@ -821,7 +853,7 @@ function CreateSnapshotModal({
 function TemplateStatusPill({ status, built }: { status?: string; built?: boolean }) {
   if (status === "building") {
     return (
-      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-[rgba(255,169,77,0.15)] text-accent-warning">
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-accent-warning/15 text-accent-warning">
         <Loader2 className="h-3 w-3 animate-spin" />
         Building
       </span>
@@ -829,14 +861,14 @@ function TemplateStatusPill({ status, built }: { status?: string; built?: boolea
   }
   if (status === "built" || built === true) {
     return (
-      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-[rgba(0,212,170,0.15)] text-accent-success">
-        <span className="text-[8px] drop-shadow-[0_0_4px_rgba(0,212,170,0.6)]">{"\u25CF"}</span>
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-accent-success/15 text-accent-success">
+        <span className="text-[8px] drop-shadow-[0_0_4px_rgb(var(--color-accent)_/_0.6)]">{"\u25CF"}</span>
         Built
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-[#262A36] text-text-secondary">
+    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-[13px] font-semibold bg-bg-elevated text-text-secondary">
       Not Built
     </span>
   );
@@ -855,8 +887,6 @@ function TemplatesTab({ server }: { server: string }) {
     action: () => Promise<void>;
   } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
-  const logEndRef = useRef<HTMLPreElement>(null);
-
   const fetchTemplates = useCallback(() => {
     setLoading(true);
     ludus
@@ -915,13 +945,6 @@ function TemplatesTab({ server }: { server: string }) {
 
     return () => clearInterval(interval);
   }, [buildLogs !== null, server]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-scroll log viewer
-  useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollTop = logEndRef.current.scrollHeight;
-    }
-  }, [buildLogs]);
 
   const toggleBuildSelect = (name: string) => {
     setSelectedForBuild((prev) => {
@@ -1116,12 +1139,11 @@ function TemplatesTab({ server }: { server: string }) {
         title="Template Build Logs"
         size="lg"
       >
-        <pre
-          ref={logEndRef}
-          className="text-xs font-mono text-text-secondary bg-bg-elevated p-4 rounded-md overflow-auto max-h-96 whitespace-pre-wrap"
-        >
-          {buildLogs || "Waiting for log output..."}
-        </pre>
+        <LogViewer
+          content={buildLogs || "Waiting for log output..."}
+          filename="template-build.log"
+          autoScroll
+        />
         <div className="flex justify-end mt-4">
           <Button variant="secondary" onClick={() => setBuildLogs(null)}>
             Close
@@ -1440,7 +1462,7 @@ function CreateUserModal({
     <Modal open={open} onClose={onClose} title="Create User" size="sm">
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && (
-          <div className="p-3 rounded-md bg-[rgba(255,94,94,0.1)] border border-accent-danger/30 text-sm text-accent-danger">
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
             {error}
           </div>
         )}
@@ -2359,9 +2381,10 @@ function LogsTab({ server }: { server: string }) {
         title={`Log Entry #${selectedLog?.logID ?? ""}`}
         size="lg"
       >
-        <pre className="text-xs font-mono text-text-secondary bg-bg-elevated p-4 rounded-md overflow-auto max-h-96 whitespace-pre-wrap">
-          {selectedLog?.output}
-        </pre>
+        <LogViewer
+          content={selectedLog?.output ?? ""}
+          filename={`log-${selectedLog?.logID ?? "unknown"}.txt`}
+        />
         <div className="flex justify-end mt-4">
           <Button variant="secondary" onClick={() => setSelectedLog(null)}>
             Close

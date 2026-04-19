@@ -127,13 +127,27 @@ def create_student(
     if session_row.status == SessionStatus.ended:
         raise SessionEnded("Cannot add students to ended session")
 
+    # Resolve fields depending on manual vs Ludus-user mode.
+    if payload.ludus_userid:
+        resolved_userid = payload.ludus_userid
+        resolved_name = payload.full_name or payload.ludus_userid
+        resolved_email = (
+            str(payload.email) if payload.email else f"{payload.ludus_userid}@ludus.local"
+        )
+    else:
+        assert payload.full_name is not None  # guaranteed by schema validator
+        assert payload.email is not None
+        resolved_userid = None  # will be generated per-attempt
+        resolved_name = payload.full_name
+        resolved_email = str(payload.email)
+
     last_error: IntegrityError | None = None
     for attempt in range(1, _INSERT_RETRY_LIMIT + 1):
         student = Student(
             session_id=session_id,
-            full_name=payload.full_name,
-            email=str(payload.email),
-            ludus_userid=_make_userid(payload.full_name),
+            full_name=resolved_name,
+            email=resolved_email,
+            ludus_userid=resolved_userid if resolved_userid else _make_userid(resolved_name),
             invite_token=secrets.token_hex(16),
             status=StudentStatus.pending,
             range_id=None,

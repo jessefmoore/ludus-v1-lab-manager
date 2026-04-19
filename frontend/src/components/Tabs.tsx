@@ -30,13 +30,13 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors ${
+      className={`relative flex items-center gap-1.5 px-3 md:px-4 py-3 text-xs md:text-sm font-medium whitespace-nowrap transition-colors ${
         active
           ? "text-accent-success"
           : "text-text-secondary hover:text-text-primary"
       }`}
     >
-      {tab.icon}
+      <span className="hidden md:inline-flex">{tab.icon}</span>
       {tab.label}
       {active && (
         <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent-success rounded-t" />
@@ -55,7 +55,7 @@ export default function Tabs({ tabs, groups, activeTab, onChange }: TabsProps) {
               <div className="w-px h-8 bg-border/60 mx-1 self-center mb-1" />
             )}
             <div className="flex flex-col">
-              <span className="px-4 pt-2 text-[10px] uppercase tracking-wider text-text-muted font-medium">
+              <span className="hidden md:block px-4 pt-2 text-[10px] uppercase tracking-wider text-text-muted font-medium">
                 {group.label}
               </span>
               <div className="flex">
