@@ -28,7 +28,6 @@ import type {
   LudusGroup,
   LudusGroupUser,
   LudusInstalledRole,
-  LudusLogHistoryEntry,
   LudusUser,
 } from "@/api";
 import TopBar from "@/components/TopBar";
@@ -2244,13 +2243,9 @@ function LogsTab({ server }: { server: string }) {
   const [ranges, setRanges] = useState<LudusRange[]>([]);
   const [rangeToUser, setRangeToUser] = useState<Map<number, string>>(new Map());
   const [selectedRangeNum, setSelectedRangeNum] = useState<number | null>(null);
-  const [entries, setEntries] = useState<LudusLogHistoryEntry[]>([]);
+  const [logContent, setLogContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [logsLoading, setLogsLoading] = useState(false);
-  const [selectedLog, setSelectedLog] = useState<{
-    logID: number;
-    output: string;
-  } | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -2280,8 +2275,8 @@ function LogsTab({ server }: { server: string }) {
     setLogsLoading(true);
     const userId = rangeToUser.get(selectedRangeNum);
     ludus
-      .rangeLogsHistory({ range_id: selectedRangeNum, user_id: userId, server })
-      .then((res) => setEntries(res.entries))
+      .rangeLogs({ range_id: selectedRangeNum, user_id: userId, server })
+      .then((res) => setLogContent(res.result || ""))
       .catch((err) =>
         toast("error", err instanceof ApiError ? err.detail : "Failed to load logs", {
           label: "Retry",
@@ -2293,60 +2288,9 @@ function LogsTab({ server }: { server: string }) {
 
   useEffect(fetchLogs, [fetchLogs]);
 
-  const handleViewLog = async (entry: LudusLogHistoryEntry) => {
-    if (entry.logID == null) return;
-    try {
-      const detail = await ludus.rangeLogEntry(entry.logID, server);
-      setSelectedLog({
-        logID: entry.logID,
-        output: detail.output || "No output available",
-      });
-    } catch (err) {
-      toast("error", err instanceof ApiError ? err.detail : "Failed to load log entry");
-    }
-  };
-
-  const columns: Column<LudusLogHistoryEntry>[] = [
-    {
-      key: "logID",
-      label: "ID",
-      sortable: true,
-      sortValue: (e) => e.logID ?? 0,
-      render: (e) => <span className="font-mono text-text-primary">{e.logID ?? "\u2014"}</span>,
-    },
-    {
-      key: "action",
-      label: "Action",
-      render: (e) => <span className="text-text-primary">{e.action || "\u2014"}</span>,
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (e) => <span className="text-text-secondary">{e.status || "\u2014"}</span>,
-    },
-    {
-      key: "timestamp",
-      label: "Time",
-      sortable: true,
-      sortValue: (e) => e.timestamp || "",
-      render: (e) => (
-        <span className="font-mono text-text-muted text-xs">
-          {e.timestamp ? new Date(e.timestamp).toLocaleString() : "\u2014"}
-        </span>
-      ),
-    },
-    {
-      key: "actions",
-      label: "",
-      render: (e) => (
-        <Button variant="icon" onClick={() => handleViewLog(e)} title="View log output">
-          <FileText className="h-4 w-4 text-accent-info" />
-        </Button>
-      ),
-    },
-  ];
-
   if (loading) return <TableSkeleton rows={3} cols={3} />;
+
+  const selectedRange = ranges.find((r) => r.rangeNumber === selectedRangeNum);
 
   return (
     <>
@@ -2363,42 +2307,26 @@ function LogsTab({ server }: { server: string }) {
             </option>
           ))}
         </select>
+        <Button variant="secondary" onClick={fetchLogs} disabled={logsLoading}>
+          {logsLoading ? "Loading..." : "Refresh"}
+        </Button>
       </div>
 
       {logsLoading ? (
-        <TableSkeleton rows={4} cols={5} />
-      ) : (
-        <DataTable
-          columns={columns}
-          data={entries}
-          keyExtractor={(e) => String(e.logID ?? Math.random())}
-          pageSize={10}
-          emptyState={
-            <div className="flex flex-col items-center justify-center py-12">
-              <FileText className="h-12 w-12 text-text-muted mb-4" />
-              <p className="text-text-secondary mb-1">No deployment logs</p>
-              <p className="text-sm text-text-muted">Logs appear after range deployments</p>
-            </div>
-          }
-        />
-      )}
-
-      <Modal
-        open={!!selectedLog}
-        onClose={() => setSelectedLog(null)}
-        title={`Log Entry #${selectedLog?.logID ?? ""}`}
-        size="lg"
-      >
+        <TableSkeleton rows={4} cols={3} />
+      ) : logContent ? (
         <LogViewer
-          content={selectedLog?.output ?? ""}
-          filename={`log-${selectedLog?.logID ?? "unknown"}.txt`}
+          content={logContent}
+          filename={`range-${selectedRange?.rangeID ?? selectedRangeNum}-logs.txt`}
+          maxHeight="max-h-[600px]"
         />
-        <div className="flex justify-end mt-4">
-          <Button variant="secondary" onClick={() => setSelectedLog(null)}>
-            Close
-          </Button>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12">
+          <FileText className="h-12 w-12 text-text-muted mb-4" />
+          <p className="text-text-secondary mb-1">No deployment logs</p>
+          <p className="text-sm text-text-muted">Logs appear after range deployments</p>
         </div>
-      </Modal>
+      )}
     </>
   );
 }
