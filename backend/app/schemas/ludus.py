@@ -98,6 +98,7 @@ class PowerActionRequest(BaseModel):
     """Request body for power-on / power-off actions."""
 
     user_id: str
+    range_id: str | None = None
     machines: list[str] = ["all"]
 
 
@@ -260,6 +261,13 @@ class RangeCreateRequest(BaseModel):
     range_id: int
 
 
+class RangeAssignRequest(BaseModel):
+    """Request body for assigning a user to a range."""
+
+    user_id: str
+    range_id: str
+
+
 class RangeRevokeRequest(BaseModel):
     """Request body for revoking range access."""
 
@@ -280,7 +288,7 @@ class LudusRangeLogsResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     result: str | None = None
-    cursor: str | None = None
+    cursor: int | str | None = None
 
 
 class LudusLogHistoryEntry(BaseModel):

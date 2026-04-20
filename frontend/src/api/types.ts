@@ -201,6 +201,7 @@ export interface LudusTemplateBuildStatusResponse {
 // Ludus Management Actions
 export interface PowerActionRequest {
   user_id: string;
+  range_id?: string;
   machines?: string[];
 }
 
@@ -258,7 +259,7 @@ export interface LudusRangeTagsResponse {
 
 export interface LudusRangeLogsResponse {
   result?: string;
-  cursor?: string;
+  cursor?: number | string;
 }
 
 export interface LudusLogHistoryEntry {

@@ -123,7 +123,9 @@ def test_power_on_success(client: TestClient, mock_ludus: MagicMock) -> None:
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Power on initiated"
-    mock_ludus.range_power_on.assert_called_once_with("alice", machines=["all"])
+    mock_ludus.range_power_on.assert_called_once_with(
+        "alice", machines=["all"], range_id=None,
+    )
 
 
 def test_power_on_specific_machines(client: TestClient, mock_ludus: MagicMock) -> None:
@@ -134,7 +136,9 @@ def test_power_on_specific_machines(client: TestClient, mock_ludus: MagicMock) -
         json={"user_id": "alice", "machines": ["web", "db"]},
     )
     assert resp.status_code == 200
-    mock_ludus.range_power_on.assert_called_once_with("alice", machines=["web", "db"])
+    mock_ludus.range_power_on.assert_called_once_with(
+        "alice", machines=["web", "db"], range_id=None,
+    )
 
 
 def test_power_on_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:

@@ -293,18 +293,40 @@ class LudusClient:
     # -- range access / deploy ------------------------------------------
 
     def range_assign(self, userid: str, range_id: str) -> None:
-        """Grant `userid` access to an existing range.
+        """Grant *userid* access to an existing range.
 
         Route:  POST /api/v2/ranges/assign/{userID}/{rangeID}
+
+        **Ludus API quirk:** the server may return HTTP 404 with an error
+        about the admin user's default range, yet still perform the
+        assignment successfully.  The response body in that case contains
+        two concatenated JSON objects — the first is the spurious error,
+        the second is ``{"result": "Range … assigned … successfully"}``.
+        We therefore check the body for the success sentinel before
+        raising ``LudusNotFound``.
+
         Raises:
             LudusAuthError on 401/403.
-            LudusNotFound on 404 (user or range missing).
+            LudusNotFound on genuine 404 (user or range truly missing).
             LudusError on any other non-2xx.
         """
-        self._request(
-            "POST",
-            f"{API_BASE}/ranges/assign/{userid}/{range_id}",
-        )
+        path = f"{API_BASE}/ranges/assign/{userid}/{range_id}"
+        try:
+            response = self._client.request("POST", path)
+        except httpx.TimeoutException as exc:
+            raise LudusTimeout(f"Ludus request timed out: {exc}") from exc
+        except httpx.RequestError as exc:
+            raise LudusError(f"Ludus transport error: {exc}") from exc
+
+        logger.debug("Ludus POST %s -> %d", self._safe_url_for_log(path), response.status_code)
+
+        # Ludus may return 404 about the admin's default range while
+        # still completing the assignment.  Check the body first.
+        if response.status_code == 404:
+            body = response.text.lower()
+            if "assigned" in body and "successfully" in body:
+                return  # assignment succeeded despite 404 status
+        _raise_for_status(response)
 
     def user_wireguard(self, userid: str) -> str:
         """Return the WireGuard .conf file text for a user.
@@ -582,11 +604,12 @@ class LudusClient:
         range_number: int,
         *,
         user_id: str | None = None,
+        range_id: str | None = None,
         force: bool = False,
     ) -> None:
         """Destroy a range by its number.
 
-        Route:  DELETE /api/v2/range?rangeNumber=<N>[&userID=<id>][&force=true]
+        Route:  DELETE /api/v2/range?rangeNumber=<N>[&userID=<id>][&rangeID=<id>][&force=true]
         Raises:
             LudusAuthError on 401/403.
             LudusNotFound on 404.
@@ -595,6 +618,8 @@ class LudusClient:
         params: dict[str, int | bool | str] = {"rangeNumber": range_number}
         if user_id is not None:
             params["userID"] = user_id
+        if range_id is not None:
+            params["rangeID"] = range_id
         if force:
             params["force"] = True
         self._request(
@@ -605,37 +630,55 @@ class LudusClient:
 
     # -- power management ----------------------------------------------------
 
-    def range_power_on(self, user_id: str, *, machines: list[str] | None = None) -> None:
+    def range_power_on(
+        self,
+        user_id: str,
+        *,
+        machines: list[str] | None = None,
+        range_id: str | None = None,
+    ) -> None:
         """Power on VMs in a user's range.
 
-        Route:  PUT /api/v2/range/poweron?userID=<userID>
+        Route:  PUT /api/v2/range/poweron?userID=<userID>[&rangeID=<rangeID>]
         Body:   {"machines": ["all"]}
         Raises:
             LudusAuthError on 401/403.
             LudusNotFound on 404.
             LudusError on any other non-2xx.
         """
+        params: dict[str, str] = {"userID": user_id}
+        if range_id is not None:
+            params["rangeID"] = range_id
         self._request(
             "PUT",
             f"{API_BASE}/range/poweron",
-            params={"userID": user_id},
+            params=params,
             json={"machines": machines or ["all"]},
         )
 
-    def range_power_off(self, user_id: str, *, machines: list[str] | None = None) -> None:
+    def range_power_off(
+        self,
+        user_id: str,
+        *,
+        machines: list[str] | None = None,
+        range_id: str | None = None,
+    ) -> None:
         """Power off VMs in a user's range.
 
-        Route:  PUT /api/v2/range/poweroff?userID=<userID>
+        Route:  PUT /api/v2/range/poweroff?userID=<userID>[&rangeID=<rangeID>]
         Body:   {"machines": ["all"]}
         Raises:
             LudusAuthError on 401/403.
             LudusNotFound on 404.
             LudusError on any other non-2xx.
         """
+        params: dict[str, str] = {"userID": user_id}
+        if range_id is not None:
+            params["rangeID"] = range_id
         self._request(
             "PUT",
             f"{API_BASE}/range/poweroff",
-            params={"userID": user_id},
+            params=params,
             json={"machines": machines or ["all"]},
         )
 
@@ -1005,19 +1048,26 @@ class LudusClient:
         *,
         range_id: int | None = None,
         user_id: str | None = None,
+        range_str_id: str | None = None,
         tail: int | None = None,
         cursor: str | None = None,
     ) -> dict:
         """Get deployment logs for a range.
 
-        Route:  GET /api/v2/range/logs
+        Route:  GET /api/v2/range/logs?userID=<userID>[&rangeID=<rangeID>]
         Returns: dict with "result" and optional "cursor"
+
+        ``range_str_id`` is the Ludus string range identifier (e.g. "GL2")
+        sent as ``rangeID``.  Required when the user's range ID differs from
+        their user ID.
         """
         params: dict[str, Any] = {}
         if range_id is not None:
             params["rangeNumber"] = range_id
         if user_id is not None:
             params["userID"] = user_id
+        if range_str_id is not None:
+            params["rangeID"] = range_str_id
         if tail is not None:
             params["tail"] = tail
         if cursor is not None:

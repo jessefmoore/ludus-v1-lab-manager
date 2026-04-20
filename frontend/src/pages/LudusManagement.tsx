@@ -18,6 +18,7 @@ import {
   Loader2,
   Square,
   Hammer,
+  Link,
 } from "lucide-react";
 import { ludus, ludusTesting, ludusGroups, ludusAnsible, settings as settingsApi, ApiError } from "@/api";
 import type {
@@ -295,7 +296,7 @@ function RangesTab({ server }: { server: string }) {
 
   const handlePowerOn = (range: LudusRange) => {
     ludus
-      .powerOn(range.rangeNumber, { user_id: getUserId(range) }, server)
+      .powerOn(range.rangeNumber, { user_id: getUserId(range), range_id: range.rangeID }, server)
       .then(() => {
         toast("success", `Power on initiated for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "POWERING ON");
@@ -308,21 +309,11 @@ function RangesTab({ server }: { server: string }) {
       title: "Power Off Range",
       message: `This will power off ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}).`,
       action: async () => {
-        await ludus.powerOff(range.rangeNumber, { user_id: getUserId(range) }, server);
+        await ludus.powerOff(range.rangeNumber, { user_id: getUserId(range), range_id: range.rangeID }, server);
         toast("success", `Power off initiated for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "POWERING OFF");
       },
     });
-  };
-
-  const handleDeploy = (range: LudusRange) => {
-    ludus
-      .deployRange(range.rangeNumber, { user_id: getUserId(range) }, server)
-      .then(() => {
-        toast("success", `Deploy started for range ${range.rangeNumber}`);
-        addOp(range.rangeNumber, "DEPLOYING");
-      })
-      .catch((err) => toast("error", err instanceof ApiError ? err.detail : "Deploy failed"));
   };
 
   const handleDestroy = (range: LudusRange) => {
@@ -330,7 +321,7 @@ function RangesTab({ server }: { server: string }) {
       title: "Destroy Range",
       message: `This will destroy ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}). This action cannot be undone.`,
       action: async () => {
-        await ludus.destroyRange(range.rangeNumber, server, true, getUserId(range));
+        await ludus.destroyRange(range.rangeNumber, server, true, getUserId(range), range.rangeID);
         toast("success", `Destroy started for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "DESTROYING");
       },
@@ -405,9 +396,6 @@ function RangesTab({ server }: { server: string }) {
             </Button>
             <Button variant="icon" onClick={() => handlePowerOff(r)} title="Power Off" disabled={busy}>
               <PowerOff className="h-4 w-4 text-accent-warning" />
-            </Button>
-            <Button variant="icon" onClick={() => handleDeploy(r)} title="Deploy" disabled={busy}>
-              <Play className="h-4 w-4 text-accent-info" />
             </Button>
             <Button variant="icon" onClick={() => handleDestroy(r)} title="Destroy" disabled={busy}>
               <Trash2 className="h-4 w-4 text-accent-danger" />
@@ -1180,6 +1168,7 @@ function UsersTab({ server }: { server: string }) {
   const [users, setUsers] = useState<LudusUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [assignUser, setAssignUser] = useState<LudusUser | null>(null);
   const [createdApiKey, setCreatedApiKey] = useState<{ userId: string; apiKey: string } | null>(
     null,
   );
@@ -1304,6 +1293,13 @@ function UsersTab({ server }: { server: string }) {
         <div className="flex items-center gap-1">
           <Button
             variant="icon"
+            onClick={() => setAssignUser(u)}
+            title="Assign to range"
+          >
+            <Link className="h-4 w-4 text-accent-success" />
+          </Button>
+          <Button
+            variant="icon"
             onClick={() => handleDownloadWireguard(u)}
             title="Download WireGuard config"
           >
@@ -1392,6 +1388,17 @@ function UsersTab({ server }: { server: string }) {
         </div>
       </Modal>
 
+      <AssignRangeModal
+        open={!!assignUser}
+        onClose={() => setAssignUser(null)}
+        user={assignUser}
+        server={server}
+        onAssigned={() => {
+          setAssignUser(null);
+          fetchUsers();
+        }}
+      />
+
       <Modal
         open={!!confirmModal}
         onClose={() => !confirmLoading && setConfirmModal(null)}
@@ -1409,6 +1416,118 @@ function UsersTab({ server }: { server: string }) {
         </div>
       </Modal>
     </>
+  );
+}
+
+function AssignRangeModal({
+  open,
+  onClose,
+  user,
+  server,
+  onAssigned,
+}: {
+  open: boolean;
+  onClose: () => void;
+  user: LudusUser | null;
+  server: string;
+  onAssigned: () => void;
+}) {
+  const { toast } = useToast();
+  const [ranges, setRanges] = useState<LudusRange[]>([]);
+  const [selectedRangeId, setSelectedRangeId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [loadingRanges, setLoadingRanges] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setSelectedRangeId("");
+      setError("");
+      return;
+    }
+    setLoadingRanges(true);
+    ludus
+      .ranges(server)
+      .then((res) => {
+        setRanges(res.ranges);
+        if (res.ranges.length > 0) {
+          setSelectedRangeId(res.ranges[0].rangeID);
+        }
+      })
+      .catch(() => setRanges([]))
+      .finally(() => setLoadingRanges(false));
+  }, [open, server]);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!user || !selectedRangeId) return;
+    setError("");
+    setSaving(true);
+    try {
+      await ludus.assignRange({ user_id: user.userID, range_id: selectedRangeId }, server);
+      toast("success", `User "${user.userID}" assigned to range ${selectedRangeId}`);
+      onAssigned();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Failed to assign user to range");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Assign User to Range" size="sm">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
+            {error}
+          </div>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">User</label>
+          <p className="font-mono text-text-primary">{user?.userID}{user?.name ? ` (${user.name})` : ""}</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-secondary mb-1">Range</label>
+          {loadingRanges ? (
+            <div className="flex items-center gap-2 text-sm text-text-muted">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading ranges...
+            </div>
+          ) : ranges.length === 0 ? (
+            <p className="text-sm text-text-muted">No ranges available</p>
+          ) : (
+            <select
+              className="w-full h-9 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success"
+              value={selectedRangeId}
+              onChange={(e) => setSelectedRangeId(e.target.value)}
+              required
+            >
+              {ranges.map((r) => (
+                <option key={r.rangeID} value={r.rangeID}>
+                  {r.rangeID} — {r.name || `Range #${r.rangeNumber}`} (#{r.rangeNumber})
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={saving}
+            disabled={!selectedRangeId || loadingRanges}
+          >
+            Assign
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -2274,8 +2393,9 @@ function LogsTab({ server }: { server: string }) {
     if (selectedRangeNum == null) return;
     setLogsLoading(true);
     const userId = rangeToUser.get(selectedRangeNum);
+    const rangeObj = ranges.find((r) => r.rangeNumber === selectedRangeNum);
     ludus
-      .rangeLogs({ range_id: selectedRangeNum, user_id: userId, server })
+      .rangeLogs({ range_id: selectedRangeNum, user_id: userId, range_str_id: rangeObj?.rangeID, server })
       .then((res) => setLogContent(res.result || ""))
       .catch((err) =>
         toast("error", err instanceof ApiError ? err.detail : "Failed to load logs", {
@@ -2284,7 +2404,7 @@ function LogsTab({ server }: { server: string }) {
         }),
       )
       .finally(() => setLogsLoading(false));
-  }, [selectedRangeNum, rangeToUser, toast, server]);
+  }, [selectedRangeNum, rangeToUser, ranges, toast, server]);
 
   useEffect(fetchLogs, [fetchLogs]);
 

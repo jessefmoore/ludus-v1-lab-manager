@@ -43,6 +43,7 @@ from app.schemas.ludus import (
     LudusUserListResponse,
     PowerActionRequest,
     RangeAbortRequest,
+    RangeAssignRequest,
     RangeCreateRequest,
     RangeRevokeRequest,
     SnapshotCreateRequest,
@@ -253,13 +254,14 @@ def destroy_range(
     server: str = "default",
     force: bool = False,
     user_id: str | None = None,
+    range_str_id: str | None = None,
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
 ) -> LudusActionResponse:
     """Destroy a range by its number."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_destroy(range_number, user_id=user_id, force=force)
+        ludus.range_destroy(range_number, user_id=user_id, range_id=range_str_id, force=force)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -289,7 +291,7 @@ def power_on_range(
     """Power on VMs in a range."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_power_on(body.user_id, machines=body.machines)
+        ludus.range_power_on(body.user_id, machines=body.machines, range_id=body.range_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -316,7 +318,7 @@ def power_off_range(
     """Power off VMs in a range."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_power_off(body.user_id, machines=body.machines)
+        ludus.range_power_off(body.user_id, machines=body.machines, range_id=body.range_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -759,6 +761,7 @@ def get_range_config_example(
 def get_range_logs(
     range_id: int | None = None,
     user_id: str | None = None,
+    range_str_id: str | None = None,
     tail: int | None = None,
     cursor: str | None = None,
     server: str = "default",
@@ -769,7 +772,8 @@ def get_range_logs(
     ludus = _resolve_client(registry, server)
     try:
         data = ludus.range_logs(
-            range_id=range_id, user_id=user_id, tail=tail, cursor=cursor
+            range_id=range_id, user_id=user_id, range_str_id=range_str_id,
+            tail=tail, cursor=cursor,
         )
     except LudusNotFound as exc:
         raise HTTPException(
@@ -964,6 +968,38 @@ def create_range(
         ) from exc
 
     return LudusActionResponse(status="ok", detail="Range created")
+
+
+@router.post("/ranges/assign", response_model=LudusActionResponse)
+def assign_range(
+    body: RangeAssignRequest,
+    server: str = "default",
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+) -> LudusActionResponse:
+    """Assign a user to a range."""
+    ludus = _resolve_client(registry, server)
+    try:
+        ludus.range_assign(body.user_id, body.range_id)
+    except LudusNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User or range not found",
+        ) from exc
+    except LudusError as exc:
+        detail = str(exc)
+        if "already has access" in detail.lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from exc
+        logger.warning("Ludus range_assign(%s, %s) failed: %s", body.user_id, body.range_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Ludus error: {exc}",
+        ) from exc
+
+    return LudusActionResponse(status="ok", detail="User assigned to range")
 
 
 @router.delete("/ranges/revoke", response_model=LudusActionResponse)

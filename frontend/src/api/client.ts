@@ -225,10 +225,11 @@ export const ludus = {
       body: JSON.stringify(data),
     }),
 
-  destroyRange: (rangeNumber: number, server?: string, force?: boolean, userId?: string) => {
+  destroyRange: (rangeNumber: number, server?: string, force?: boolean, userId?: string, rangeStrId?: string) => {
     const extra: Record<string, string> = {};
     if (force) extra.force = "true";
     if (userId) extra.user_id = userId;
+    if (rangeStrId) extra.range_str_id = rangeStrId;
     return request<LudusActionResponse>(
       `/api/ludus/ranges/${rangeNumber}${serverQs(server, Object.keys(extra).length ? extra : undefined)}`,
       { method: "DELETE" },
@@ -341,12 +342,14 @@ export const ludus = {
     request<LudusTextResponse>(`/api/ludus/range/config/example${serverQs(server)}`),
 
   rangeLogs: (params?: {
-    range_id?: number; user_id?: string; tail?: number; cursor?: string; server?: string;
+    range_id?: number; user_id?: string; range_str_id?: string;
+    tail?: number; cursor?: string; server?: string;
   }) => {
     const qs = new URLSearchParams();
     if (params?.server && params.server !== "default") qs.set("server", params.server);
     if (params?.range_id != null) qs.set("range_id", String(params.range_id));
     if (params?.user_id) qs.set("user_id", params.user_id);
+    if (params?.range_str_id) qs.set("range_str_id", params.range_str_id);
     if (params?.tail != null) qs.set("tail", String(params.tail));
     if (params?.cursor) qs.set("cursor", params.cursor);
     const q = qs.toString();
@@ -401,6 +404,12 @@ export const ludus = {
 
   createRange: (data: { name: string; range_id: number }, server?: string) =>
     request<LudusActionResponse>(`/api/ludus/ranges/create${serverQs(server)}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  assignRange: (data: { user_id: string; range_id: string }, server?: string) =>
+    request<LudusActionResponse>(`/api/ludus/ranges/assign${serverQs(server)}`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
