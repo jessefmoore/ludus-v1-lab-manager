@@ -4,7 +4,7 @@
 
 - [x] FastAPI project scaffold (`pyproject.toml`, `main.py`, settings)
 - [x] SQLite + SQLAlchemy models (users, lab_templates, sessions, students, events)
-- [x] Auth (single instructor, JWT in httpOnly cookie)
+- [x] Auth (single instructor)
 - [x] `services/ludus.py` — HTTP client wrapping Ludus API
   - [x] `user_add(userid, name, email, password) -> User`
   - [x] `user_rm(userid) -> None`
@@ -25,11 +25,11 @@
 
 **Exit criteria:** Replace `add_player.sh` end-to-end via curl/HTTP. **MET**
 
-## Phase 2 — Stitch design + frontend :white_check_mark:
+## Phase 2 — Frontend :white_check_mark:
 
-- [x] Stitch design for 4 screens (Login, Dashboard, Session Detail, LabTemplates)
-  - _Hand-coded from DESIGN_SYSTEM.md (Stitch unavailable). Invite page is server-rendered HTML by the backend, correctly excluded from frontend routes._
-- [x] Export React + Tailwind into `frontend/` (27 source files)
+- [x] Design for 4 screens (Login, Dashboard, Session Detail, LabTemplates)
+  - _Hand-coded from DESIGN_SYSTEM.md. Invite page is server-rendered HTML by the backend, correctly excluded from frontend routes._
+- [x] React + Tailwind in `frontend/` (27 source files)
 - [x] Wire pages to backend API (typed API client with all endpoints)
 - [x] Auth flow (login -> dashboard -> logout) via AuthContext + ProtectedRoute + Sidebar logout
 - [x] Create session -> add students -> provision flow (Dashboard create modal -> SessionDetail add student modal -> Provision All)
@@ -58,8 +58,7 @@
 ## Phase 4 — v2 (post-MVP)
 
 - [ ] SMTP email delivery of invites
-- [ ] Student portal (view lab info, submit challenge completions)
 - [ ] Multi-instructor / RBAC
 - [ ] Postgres migration
 - [ ] Background job queue (Celery + Redis)
-- [ ] Public signup / landing page for insec.ml
+- [ ] Public signup / landing page
