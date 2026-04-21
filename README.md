@@ -2,6 +2,8 @@
 
 Training lab deployment management platform for [insec.ml](https://insec.ml).
 
+![Session detail — managing students, provisioning status, and invite links](screenshot.png)
+
 A self-hosted web platform that wraps [Ludus](https://ludus.cloud) to let instructors
 provision, monitor, and tear down student lab environments in bulk for security
 trainings and workshops.
