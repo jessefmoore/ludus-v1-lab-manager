@@ -32,14 +32,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <>
       {/* Logo */}
       <div className="p-7 pb-6 border-b border-border/50">
-        <div className="flex items-center gap-1.5">
-          <span className="text-3xl font-bold text-text-primary">ludus</span>
-          <span className="text-3xl font-bold text-accent-success">-</span>
-          <span className="text-3xl font-bold text-text-primary">helm</span>
+        <div className="flex items-center gap-3">
+          <svg width="36" height="36" viewBox="0 0 64 64" role="img" aria-label="ludus-helm" className="shrink-0">
+            <g transform="translate(32 32)">
+              <circle cx="0" cy="0" r="26" fill="none" stroke="#00D4AA" strokeWidth="3.5"/>
+              <circle cx="0" cy="0" r="7" fill="none" stroke="#00D4AA" strokeWidth="3.5"/>
+              <g stroke="#00D4AA" strokeWidth="3.5" strokeLinecap="round">
+                <line x1="0" y1="-7" x2="0" y2="-26"/>
+                <line x1="7" y1="0" x2="26" y2="0"/>
+                <line x1="0" y1="7" x2="0" y2="26"/>
+                <line x1="-7" y1="0" x2="-26" y2="0"/>
+              </g>
+              <circle cx="0" cy="-26" r="4.5" fill="#00D4AA"/>
+              <circle cx="26" cy="0" r="4.5" fill="#00D4AA"/>
+              <circle cx="0" cy="26" r="4.5" fill="#00D4AA"/>
+              <circle cx="-26" cy="0" r="4.5" fill="#00D4AA"/>
+              <circle cx="0" cy="0" r="3" fill="#00D4AA"/>
+            </g>
+          </svg>
+          <div>
+            <div className="flex items-center gap-0">
+              <span className="text-2xl font-bold text-text-primary">ludus</span>
+              <span className="text-2xl font-bold text-accent-success">-</span>
+              <span className="text-2xl font-bold text-text-primary">helm</span>
+            </div>
+            <p className="text-xs text-text-muted tracking-normal">
+              Ludus Labs Manager
+            </p>
+          </div>
         </div>
-        <p className="text-sm text-text-muted mt-1 tracking-normal">
-          Ludus Labs Manager
-        </p>
       </div>
 
       {/* Navigation */}

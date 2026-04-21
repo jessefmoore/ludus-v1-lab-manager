@@ -71,14 +71,39 @@ export default function Login() {
 
         {/* Logo */}
         <div className="relative">
-          <div className="flex items-center gap-1.5">
-            <span className="text-4xl font-bold text-text-primary">ludus</span>
-            <span className="text-4xl font-bold text-accent-success">-</span>
-            <span className="text-4xl font-bold text-text-primary">helm</span>
+          <div className="flex items-center gap-4">
+            <svg width="64" height="64" viewBox="0 0 200 200" role="img" aria-label="ludus-helm" className="shrink-0">
+              <g transform="translate(100 100)">
+                <g stroke="#1A3A35" strokeWidth="7" strokeLinecap="round" fill="none">
+                  <line x1="-55" y1="-55" x2="55" y2="55"/>
+                  <line x1="55" y1="-55" x2="-55" y2="55"/>
+                </g>
+                <circle cx="0" cy="0" r="80" fill="none" stroke="#00D4AA" strokeWidth="8"/>
+                <circle cx="0" cy="0" r="20" fill="none" stroke="#00D4AA" strokeWidth="8"/>
+                <g stroke="#00D4AA" strokeWidth="8" strokeLinecap="round">
+                  <line x1="0" y1="-20" x2="0" y2="-80"/>
+                  <line x1="20" y1="0" x2="80" y2="0"/>
+                  <line x1="0" y1="20" x2="0" y2="80"/>
+                  <line x1="-20" y1="0" x2="-80" y2="0"/>
+                </g>
+                <circle cx="0" cy="-80" r="11" fill="#00D4AA"/>
+                <circle cx="80" cy="0" r="11" fill="#00D4AA"/>
+                <circle cx="0" cy="80" r="11" fill="#00D4AA"/>
+                <circle cx="-80" cy="0" r="11" fill="#00D4AA"/>
+                <circle cx="0" cy="0" r="7" fill="#00D4AA"/>
+              </g>
+            </svg>
+            <div>
+              <div className="flex items-center gap-0">
+                <span className="text-4xl font-bold text-text-primary">ludus</span>
+                <span className="text-4xl font-bold text-accent-success">-</span>
+                <span className="text-4xl font-bold text-text-primary">helm</span>
+              </div>
+              <p className="text-sm text-text-muted mt-1 tracking-normal">
+                Ludus Labs Manager
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-text-muted mt-2 tracking-normal">
-            Ludus Labs Manager
-          </p>
         </div>
 
         {/* Center feature cards */}
@@ -161,12 +186,33 @@ export default function Login() {
         <div className="relative w-full max-w-[420px] space-y-8 animate-scale-in">
           {/* Mobile logo (hidden on desktop) */}
           <div className="lg:hidden">
-            <div className="flex items-center gap-1.5">
-              <span className="text-3xl font-bold text-text-primary">ludus</span>
-              <span className="text-3xl font-bold text-accent-success">-</span>
-              <span className="text-3xl font-bold text-text-primary">helm</span>
+            <div className="flex items-center gap-3">
+              <svg width="40" height="40" viewBox="0 0 64 64" role="img" aria-label="ludus-helm" className="shrink-0">
+                <g transform="translate(32 32)">
+                  <circle cx="0" cy="0" r="26" fill="none" stroke="#00D4AA" strokeWidth="3.5"/>
+                  <circle cx="0" cy="0" r="7" fill="none" stroke="#00D4AA" strokeWidth="3.5"/>
+                  <g stroke="#00D4AA" strokeWidth="3.5" strokeLinecap="round">
+                    <line x1="0" y1="-7" x2="0" y2="-26"/>
+                    <line x1="7" y1="0" x2="26" y2="0"/>
+                    <line x1="0" y1="7" x2="0" y2="26"/>
+                    <line x1="-7" y1="0" x2="-26" y2="0"/>
+                  </g>
+                  <circle cx="0" cy="-26" r="4.5" fill="#00D4AA"/>
+                  <circle cx="26" cy="0" r="4.5" fill="#00D4AA"/>
+                  <circle cx="0" cy="26" r="4.5" fill="#00D4AA"/>
+                  <circle cx="-26" cy="0" r="4.5" fill="#00D4AA"/>
+                  <circle cx="0" cy="0" r="3" fill="#00D4AA"/>
+                </g>
+              </svg>
+              <div>
+                <div className="flex items-center gap-0">
+                  <span className="text-3xl font-bold text-text-primary">ludus</span>
+                  <span className="text-3xl font-bold text-accent-success">-</span>
+                  <span className="text-3xl font-bold text-text-primary">helm</span>
+                </div>
+                <p className="text-sm text-text-muted mt-1">Ludus Labs Manager</p>
+              </div>
             </div>
-            <p className="text-sm text-text-muted mt-1">Ludus Labs Manager</p>
           </div>
 
           {/* Heading */}
