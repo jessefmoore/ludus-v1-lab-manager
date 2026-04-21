@@ -7,13 +7,13 @@ slice of the codebase.
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict
 
 
 class LoginRequest(BaseModel):
     """Credentials submitted to ``POST /api/auth/login``."""
 
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -23,7 +23,7 @@ class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    email: EmailStr
+    email: str
     role: str
     created_at: datetime
 
