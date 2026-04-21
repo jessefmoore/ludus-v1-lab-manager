@@ -12,6 +12,11 @@ start a fresh `[Unreleased]` block.
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-04-21
+
+First major release. Full-stack platform with instructor dashboard, Ludus
+management UI, and project rebrand from insec-platform to ludus-helm.
+
 ### Added
 - **Frontend SPA** — complete instructor-facing React + TypeScript + Tailwind
   application with Vite, matching `docs/DESIGN_SYSTEM.md` exactly.
@@ -76,8 +81,21 @@ start a fresh `[Unreleased]` block.
   (DataTable, Tabs, etc.).
 - Sidebar tagline font bumped from `text-xs` to `text-sm`.
 
+- **Rebrand** — project renamed from insec-platform to ludus-helm across
+  all backend, frontend, Docker, CI, and documentation files.
+- **Logo assets** — custom logomark (helm + network nodes) integrated as
+  inline SVG in sidebar and login page; favicon (ICO + SVG + apple-touch-icon);
+  OG/Twitter social preview meta tags.
+
+### Changed
+- Docker container names: `ludus-backend`, `ludus-frontend`, `ludus-postgres`,
+  `ludus-caddy`. Docker network: `ludus-helm`.
+- Package names: `ludus-helm-backend`, `ludus-helm-frontend`.
+
 ### Fixed
-- (nothing yet)
+- Orphan range destroy no longer requires userID for admin operations.
+- Ludus API range endpoints now pass both `userID` and `rangeID` params.
+- Logs tab uses correct `range_logs` endpoint.
 
 ## [0.1.0] - 2026-04-16
 
@@ -162,7 +180,8 @@ workflow with an HTTP-driven provisioning pipeline.
   backend `pyproject.toml` + `app/main.py` (health endpoint only),
   frontend `package.json` + `Dockerfile`, `data/.gitkeep`.
 
-[Unreleased]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/whiteov3rflow/ludus-helm/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.0.2...v0.1.0
 [0.0.2]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/whiteov3rflow/ludus-helm/releases/tag/v0.0.1
