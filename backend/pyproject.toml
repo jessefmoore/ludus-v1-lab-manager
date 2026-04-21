@@ -1,5 +1,5 @@
 [project]
-name = "insec-platform-backend"
+name = "ludus-helm-backend"
 version = "0.1.0"
 description = "insec.ml training lab deployment manager"
 requires-python = ">=3.11"

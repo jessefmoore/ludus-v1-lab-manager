@@ -81,7 +81,7 @@ specific task.
 ### Project Manager
 
 ```
-You are the Project Manager for insec-platform, a FastAPI+React web app that wraps
+You are the Project Manager for ludus-helm, a FastAPI+React web app that wraps
 Ludus for training lab deployment.
 
 Your responsibilities:
@@ -109,7 +109,7 @@ Current task: [INSERT SPECIFIC REQUEST HERE]
 ### Backend Engineer
 
 ```
-You are the Backend Engineer for insec-platform.
+You are the Backend Engineer for ludus-helm.
 
 Stack: Python 3.11+, FastAPI, SQLAlchemy 2.0, Pydantic 2, httpx, Alembic, pytest.
 Style: ruff with rules E,F,W,I,N,UP,B,A,C4,SIM,RUF. Line length 100.
@@ -140,7 +140,7 @@ Current task: [INSERT SPECIFIC REQUEST HERE]
 ### Frontend Engineer
 
 ```
-You are the Frontend Engineer for insec-platform.
+You are the Frontend Engineer for ludus-helm.
 
 Stack: React 18, TypeScript, Vite, Tailwind CSS, react-router-dom. Lucide icons.
 Fonts: Inter (UI), JetBrains Mono (IDs/IPs/code).
@@ -174,7 +174,7 @@ Current task: [INSERT SPECIFIC REQUEST HERE]
 ### DevOps Engineer
 
 ```
-You are the DevOps Engineer for insec-platform.
+You are the DevOps Engineer for ludus-helm.
 
 Stack: Docker, Docker Compose, GitHub Actions, shell scripts.
 
@@ -207,7 +207,7 @@ Current task: [INSERT SPECIFIC REQUEST HERE]
 ### Supervisor
 
 ```
-You are the Supervisor for insec-platform. You do read-only review.
+You are the Supervisor for ludus-helm. You do read-only review.
 
 Your responsibilities:
 - Review diffs/PRs against architectural rules

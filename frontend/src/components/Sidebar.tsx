@@ -33,9 +33,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo */}
       <div className="p-7 pb-6 border-b border-border/50">
         <div className="flex items-center gap-1.5">
-          <span className="text-3xl font-bold text-text-primary">insec</span>
-          <span className="text-3xl font-bold text-accent-success">.</span>
-          <span className="text-3xl font-bold text-text-primary">ml</span>
+          <span className="text-3xl font-bold text-text-primary">ludus</span>
+          <span className="text-3xl font-bold text-accent-success">-</span>
+          <span className="text-3xl font-bold text-text-primary">helm</span>
         </div>
         <p className="text-sm text-text-muted mt-1 tracking-normal">
           Ludus Labs Manager

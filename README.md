@@ -1,4 +1,4 @@
-# insec-platform
+# ludus-helm
 
 Training lab deployment management platform for [insec.ml](https://insec.ml).
 
@@ -53,7 +53,7 @@ trainings and workshops.
 ## Project structure
 
 ```
-insec-platform/
+ludus-helm/
 ├── backend/
 │   ├── app/
 │   │   ├── api/              # FastAPI route handlers

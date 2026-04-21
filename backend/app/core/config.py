@@ -21,7 +21,7 @@ class LudusServerConfig:
 
 
 class Settings(BaseSettings):
-    """Typed, env-driven configuration for the insec-platform backend."""
+    """Typed, env-driven configuration for the ludus-helm backend."""
 
     model_config = SettingsConfigDict(
         env_file=".env",

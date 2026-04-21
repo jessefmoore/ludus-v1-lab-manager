@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: insec-platform-backend
-    container_name: insec-backend
+    image: ludus-helm-backend
+    container_name: ludus-backend
     restart: unless-stopped
     env_file: .env
     environment:
@@ -20,7 +20,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - insec
+      - ludus-helm
     healthcheck:
       # curl is not in the slim image; python is, so use urllib.
       test:
@@ -35,7 +35,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: insec-postgres
+    container_name: ludus-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: insec
@@ -44,7 +44,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - insec
+      - ludus-helm
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U insec"]
       interval: 10s
@@ -55,17 +55,17 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: insec-platform-frontend
-    container_name: insec-frontend
+    image: ludus-helm-frontend
+    container_name: ludus-frontend
     restart: unless-stopped
     depends_on:
       - backend
     networks:
-      - insec
+      - ludus-helm
 
   caddy:
     image: caddy:2-alpine
-    container_name: insec-caddy
+    container_name: ludus-caddy
     restart: unless-stopped
     ports:
       - "80:80"
@@ -79,7 +79,7 @@ services:
     depends_on:
       - frontend
     networks:
-      - insec
+      - ludus-helm
 
 volumes:
   pgdata:
@@ -87,5 +87,5 @@ volumes:
   caddy_config:
 
 networks:
-  insec:
+  ludus-helm:
     driver: bridge

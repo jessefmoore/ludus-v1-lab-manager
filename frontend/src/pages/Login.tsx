@@ -72,9 +72,9 @@ export default function Login() {
         {/* Logo */}
         <div className="relative">
           <div className="flex items-center gap-1.5">
-            <span className="text-4xl font-bold text-text-primary">insec</span>
-            <span className="text-4xl font-bold text-accent-success">.</span>
-            <span className="text-4xl font-bold text-text-primary">ml</span>
+            <span className="text-4xl font-bold text-text-primary">ludus</span>
+            <span className="text-4xl font-bold text-accent-success">-</span>
+            <span className="text-4xl font-bold text-text-primary">helm</span>
           </div>
           <p className="text-sm text-text-muted mt-2 tracking-normal">
             Ludus Labs Manager
@@ -134,7 +134,7 @@ export default function Login() {
 
         {/* Footer */}
         <p className="relative text-xs text-text-muted">
-          &copy; insec.ml &mdash; built for security trainers
+          &copy; ludus-helm &mdash; built for security trainers
         </p>
       </div>
 
@@ -162,9 +162,9 @@ export default function Login() {
           {/* Mobile logo (hidden on desktop) */}
           <div className="lg:hidden">
             <div className="flex items-center gap-1.5">
-              <span className="text-3xl font-bold text-text-primary">insec</span>
-              <span className="text-3xl font-bold text-accent-success">.</span>
-              <span className="text-3xl font-bold text-text-primary">ml</span>
+              <span className="text-3xl font-bold text-text-primary">ludus</span>
+              <span className="text-3xl font-bold text-accent-success">-</span>
+              <span className="text-3xl font-bold text-text-primary">helm</span>
             </div>
             <p className="text-sm text-text-muted mt-1">Ludus Labs Manager</p>
           </div>

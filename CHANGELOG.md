@@ -162,7 +162,7 @@ workflow with an HTTP-driven provisioning pipeline.
   backend `pyproject.toml` + `app/main.py` (health endpoint only),
   frontend `package.json` + `Dockerfile`, `data/.gitkeep`.
 
-[Unreleased]: https://github.com/whiteov3rflow/insec-platform/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/whiteov3rflow/insec-platform/compare/v0.0.2...v0.1.0
-[0.0.2]: https://github.com/whiteov3rflow/insec-platform/compare/v0.0.1...v0.0.2
-[0.0.1]: https://github.com/whiteov3rflow/insec-platform/releases/tag/v0.0.1
+[Unreleased]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.0.2...v0.1.0
+[0.0.2]: https://github.com/whiteov3rflow/ludus-helm/compare/v0.0.1...v0.0.2
+[0.0.1]: https://github.com/whiteov3rflow/ludus-helm/releases/tag/v0.0.1

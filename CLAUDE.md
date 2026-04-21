@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-**insec-platform** is a self-hosted web platform that wraps [Ludus](https://ludus.cloud) to
+**ludus-helm** is a self-hosted web platform that wraps [Ludus](https://ludus.cloud) to
 let instructors bulk-provision student lab environments for security trainings (e.g.
 [insec.ml](https://insec.ml) workshops). It replaces manual CLI workflows like creating
 Ludus users, assigning ranges, and distributing WireGuard configs.
