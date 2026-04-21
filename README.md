@@ -1,6 +1,6 @@
 # ludus-helm
 
-Training lab deployment management platform for [insec.ml](https://insec.ml).
+Training lab deployment management platform powered by [Ludus](https://ludus.cloud).
 
 ![Session detail — managing students, provisioning status, and invite links](screenshot.png)
 
