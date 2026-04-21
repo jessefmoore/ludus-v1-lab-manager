@@ -292,11 +292,16 @@ function RangesTab({ server }: { server: string }) {
     return () => clearInterval(interval);
   }, [activeOps.size, server, toast]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const getUserId = (range: LudusRange): string => rangeToUser.get(range.rangeNumber) ?? range.rangeID;
+  const getUserId = (range: LudusRange): string | undefined => rangeToUser.get(range.rangeNumber);
 
   const handlePowerOn = (range: LudusRange) => {
+    const uid = getUserId(range);
+    if (!uid) {
+      toast("error", `Cannot power on range ${range.rangeNumber}: owner user not found`);
+      return;
+    }
     ludus
-      .powerOn(range.rangeNumber, { user_id: getUserId(range), range_id: range.rangeID }, server)
+      .powerOn(range.rangeNumber, { user_id: uid, range_id: range.rangeID }, server)
       .then(() => {
         toast("success", `Power on initiated for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "POWERING ON");
@@ -305,11 +310,16 @@ function RangesTab({ server }: { server: string }) {
   };
 
   const handlePowerOff = (range: LudusRange) => {
+    const uid = getUserId(range);
+    if (!uid) {
+      toast("error", `Cannot power off range ${range.rangeNumber}: owner user not found`);
+      return;
+    }
     setConfirmModal({
       title: "Power Off Range",
       message: `This will power off ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}).`,
       action: async () => {
-        await ludus.powerOff(range.rangeNumber, { user_id: getUserId(range), range_id: range.rangeID }, server);
+        await ludus.powerOff(range.rangeNumber, { user_id: uid, range_id: range.rangeID }, server);
         toast("success", `Power off initiated for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "POWERING OFF");
       },
@@ -321,7 +331,7 @@ function RangesTab({ server }: { server: string }) {
       title: "Destroy Range",
       message: `This will destroy ${range.numberOfVMs ?? "all"} VMs in range ${range.rangeNumber} (${range.name || range.rangeID}). This action cannot be undone.`,
       action: async () => {
-        await ludus.destroyRange(range.rangeNumber, server, true, getUserId(range), range.rangeID);
+        await ludus.destroyRange(range.rangeNumber, server, true, undefined, range.rangeID);
         toast("success", `Destroy started for range ${range.rangeNumber}`);
         addOp(range.rangeNumber, "DESTROYING");
       },
