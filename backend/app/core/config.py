@@ -6,7 +6,6 @@ import os
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 
-from pydantic import EmailStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,7 +35,7 @@ class Settings(BaseSettings):
     app_port: int = 8000
 
     # Instructor admin bootstrap
-    admin_email: EmailStr
+    admin_email: str
     admin_password: str
 
     # Database
