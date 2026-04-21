@@ -24,13 +24,13 @@ class LudusAuthError(LudusError):
     """Raised when Ludus returns HTTP 401 or 403."""
 
 
-class LudusUserExists(LudusError):  # noqa: N818 — spec-mandated name
+class LudusUserExists(LudusError):  # noqa: N818 - spec-mandated name
     """Raised when Ludus returns HTTP 409 (typically on user creation)."""
 
 
-class LudusNotFound(LudusError):  # noqa: N818 — spec-mandated name
+class LudusNotFound(LudusError):  # noqa: N818 - spec-mandated name
     """Raised when Ludus returns HTTP 404 (user, range, or snapshot missing)."""
 
 
-class LudusTimeout(LudusError):  # noqa: N818 — spec-mandated name
+class LudusTimeout(LudusError):  # noqa: N818 - spec-mandated name
     """Raised when the underlying HTTP request times out."""

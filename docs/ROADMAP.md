@@ -1,11 +1,11 @@
 # Roadmap
 
-## Phase 1 — Core backend + Ludus wrapper (MVP) :white_check_mark:
+## Phase 1 - Core backend + Ludus wrapper (MVP) :white_check_mark:
 
 - [x] FastAPI project scaffold (`pyproject.toml`, `main.py`, settings)
 - [x] SQLite + SQLAlchemy models (users, lab_templates, sessions, students, events)
 - [x] Auth (single instructor)
-- [x] `services/ludus.py` — HTTP client wrapping Ludus API
+- [x] `services/ludus.py` - HTTP client wrapping Ludus API
   - [x] `user_add(userid, name, email, password) -> User`
   - [x] `user_rm(userid) -> None`
   - [x] `range_assign(userid, range_id) -> None`
@@ -25,7 +25,7 @@
 
 **Exit criteria:** Replace `add_player.sh` end-to-end via curl/HTTP. **MET**
 
-## Phase 2 — Frontend :white_check_mark:
+## Phase 2 - Frontend :white_check_mark:
 
 - [x] Design for 4 screens (Login, Dashboard, Session Detail, LabTemplates)
   - _Hand-coded from DESIGN_SYSTEM.md. Invite page is server-rendered HTML by the backend, correctly excluded from frontend routes._
@@ -37,7 +37,7 @@
 
 **Exit criteria:** Click-through from login to inviting a student in the browser. **MET**
 
-## Phase 3 — Polish :white_check_mark:
+## Phase 3 - Polish :white_check_mark:
 
 - [x] CSV bulk import for students
 - [x] Provisioning progress indicator (polling-based progress bar)
@@ -55,7 +55,7 @@
 
 **Exit criteria:** Run first real training on the platform.
 
-## Phase 4 — v2 (post-MVP)
+## Phase 4 - v2 (post-MVP)
 
 - [ ] SMTP email delivery of invites
 - [ ] Multi-instructor / RBAC

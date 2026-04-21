@@ -39,7 +39,7 @@ export default function Login() {
 
   return (
     <div className="flex min-h-screen bg-bg-base">
-      {/* Left panel — branding */}
+      {/* Left panel - branding */}
       <div className="hidden lg:flex lg:w-[55%] relative overflow-hidden flex-col justify-between p-12 bg-gradient-surface-deep">
         {/* Grid background */}
         <div
@@ -115,7 +115,7 @@ export default function Login() {
           </h2>
           <p className="text-[15px] text-text-secondary leading-relaxed">
             Automate student onboarding, manage Ludus ranges, and distribute
-            WireGuard configs — all from one dashboard.
+            WireGuard configs - all from one dashboard.
           </p>
 
           <div className="grid grid-cols-1 gap-3 pt-4">
@@ -159,11 +159,11 @@ export default function Login() {
 
         {/* Footer */}
         <p className="relative text-xs text-text-muted">
-          &copy; ludus-helm &mdash; built for security trainers
+          &copy; ludus-helm - built for security trainers
         </p>
       </div>
 
-      {/* Right panel — login form */}
+      {/* Right panel - login form */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 sm:px-12 relative">
         {/* Theme toggle */}
         <button
@@ -271,7 +271,7 @@ export default function Login() {
           />
 
           <p className="text-xs text-text-muted text-center">
-            Instructor access only &mdash; contact your admin for credentials
+            Instructor access only - contact your admin for credentials
           </p>
         </div>
       </div>

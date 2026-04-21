@@ -6,7 +6,7 @@
 #   The FastAPI lifespan handler in app/main.py calls `_apply_schema()`, which
 #   runs `alembic upgrade head` programmatically whenever APP_ENV=production.
 #   That means this container does NOT need an entrypoint.sh that invokes
-#   alembic before uvicorn — doing so would duplicate work and risk a race.
+#   alembic before uvicorn - doing so would duplicate work and risk a race.
 #   We rely on lifespan + direct CMD uvicorn.
 
 # ---------- Stage 1: builder ----------

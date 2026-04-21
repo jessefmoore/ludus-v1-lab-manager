@@ -255,7 +255,7 @@ def test_range_deploy_success(client: LudusClient, httpx_mock: HTTPXMock) -> Non
 
     requests = httpx_mock.get_requests()
     assert len(requests) == 2
-    # First request is multipart upload — content type should be multipart.
+    # First request is multipart upload - content type should be multipart.
     assert requests[0].method == "PUT"
     assert "multipart/form-data" in requests[0].headers["content-type"]
     # Body should contain the YAML text.
@@ -561,7 +561,7 @@ def test_range_deploy_existing_requires_one_param(client: LudusClient) -> None:
 def test_context_manager_closes_client() -> None:
     with LudusClient(url=BASE_URL, api_key=API_KEY) as c:
         assert isinstance(c, LudusClient)
-    # The inner httpx client should now be closed — issuing a request
+    # The inner httpx client should now be closed - issuing a request
     # should fail.
     with pytest.raises(RuntimeError):
         c._client.get("/anything")
@@ -656,7 +656,7 @@ def test_range_power_off_not_found(client: LudusClient, httpx_mock: HTTPXMock) -
 
 
 # ---------------------------------------------------------------------------
-# snapshot_revert (updated — vmids parameter)
+# snapshot_revert (updated - vmids parameter)
 # ---------------------------------------------------------------------------
 
 

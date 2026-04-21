@@ -1,6 +1,6 @@
 """Service layer for student enrollment, removal, and Ludus cleanup.
 
-Pure DB + filesystem logic — the only I/O beyond the database is:
+Pure DB + filesystem logic - the only I/O beyond the database is:
 
 * Optional best-effort unlink of the stored WireGuard ``.conf`` file.
 * A delegated ``LudusClient.user_rm`` call when removing a provisioned
@@ -98,7 +98,7 @@ def _slugify(name: str) -> str:
 def _make_userid(base: str) -> str:
     """Build a Ludus-compatible userid: ``<slug><hex>`` or ``usr<hex>``.
 
-    Ludus enforces ``^[A-Za-z0-9]{1,20}$`` — no hyphens, underscores,
+    Ludus enforces ``^[A-Za-z0-9]{1,20}$`` - no hyphens, underscores,
     or other punctuation allowed. Total length is always <=
     ``_MAX_USERID_LEN``. The hex suffix gives ~16M variants per slug,
     which combined with the unique-constraint retry loop makes
@@ -120,7 +120,7 @@ def create_student(
 ) -> Student:
     """Persist a new ``Student`` in ``pending`` status for an active session.
 
-    Does NOT call Ludus — provisioning is a separate step (task #21).
+    Does NOT call Ludus - provisioning is a separate step (task #21).
     The returned row has a generated ``ludus_userid`` and ``invite_token``
     that are guaranteed unique at the DB level.
     """
@@ -221,7 +221,7 @@ def delete_student(
     * Any other ``LudusError`` is re-raised as ``LudusRemovalFailed`` so
       the caller can return 502 and leave the DB row intact.
     * The WireGuard config file, if present on disk, is unlinked
-      best-effort — ``FileNotFoundError`` is silent, other ``OSError``s
+      best-effort - ``FileNotFoundError`` is silent, other ``OSError``s
       are logged as warnings.
     """
     student = db.get(Student, student_id)
@@ -320,7 +320,7 @@ def reset_student(
         raise StudentNotFound(f"student id={student_id} does not exist")
 
     if student.status != StudentStatus.ready:
-        raise StudentNotReady("Student not in ready state — cannot reset")
+        raise StudentNotReady("Student not in ready state - cannot reset")
 
     # Check cooldown: find most recent student.reset event for this student.
     last_reset = db.scalars(

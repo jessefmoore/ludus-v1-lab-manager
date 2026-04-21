@@ -46,7 +46,7 @@ PUBLIC_BASE_URL = "https://lab.example.test"
 
 
 class FakeLudus:
-    """Minimal stand-in — CSV import never touches Ludus."""
+    """Minimal stand-in - CSV import never touches Ludus."""
 
     pass
 

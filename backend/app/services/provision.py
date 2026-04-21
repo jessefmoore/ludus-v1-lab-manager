@@ -8,11 +8,11 @@ a ``Session``, this module drives the Ludus lifecycle end-to-end:
 2. ``range_assign`` or ``range_deploy`` depending on ``session.mode``
 3. ``user_wireguard``  -> fetch the ``.conf`` text
 4. Persist the config to ``{config_storage_dir}/{session_id}/{userid}.conf``
-   (parent dir ``0o700``, file mode ``0o600`` — private keys).
+   (parent dir ``0o700``, file mode ``0o600`` - private keys).
 5. Flip the student to ``ready`` and emit a ``student.provisioned`` event.
 
 Per-student failures are captured on the student row (``status=error``)
-and an event is emitted — the rest of the batch keeps running so that a
+and an event is emitted - the rest of the batch keeps running so that a
 single flaky user doesn't stall an entire class.
 
 The orchestration is synchronous (MVP); callers that want async can wrap
@@ -72,7 +72,7 @@ def _emit_event(
     action: str,
     details: dict,
 ) -> None:
-    """Persist an audit-log ``Event`` row (no commit — caller commits)."""
+    """Persist an audit-log ``Event`` row (no commit - caller commits)."""
     db.add(
         Event(
             session_id=session_id,

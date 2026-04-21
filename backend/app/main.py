@@ -9,7 +9,7 @@ to:
    ``ADMIN_PASSWORD``.
 
 The module is import-safe: constructing the ``FastAPI`` instance does not
-touch the database — schema + bootstrap run when the lifespan context
+touch the database - schema + bootstrap run when the lifespan context
 enters (e.g. under ``TestClient(app)`` or uvicorn startup).
 """
 
@@ -119,7 +119,7 @@ app.add_middleware(RequestLoggingMiddleware)
 _csrf_host = urlparse(settings.public_base_url).hostname or "localhost"
 app.add_middleware(CSRFMiddleware, allowed_host=_csrf_host)
 
-# Every router module already sets its own prefix — include without args.
+# Every router module already sets its own prefix - include without args.
 app.include_router(auth.router)
 app.include_router(labs.router)
 app.include_router(ludus.router)

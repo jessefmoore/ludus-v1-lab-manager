@@ -6,8 +6,8 @@ configured ``PUBLIC_BASE_URL`` host. No token-based CSRF needed since we
 control the frontend.
 
 Skips:
-- ``/api/auth/login`` — no existing session to abuse.
-- ``/invite/`` — public endpoints, no auth.
+- ``/api/auth/login`` - no existing session to abuse.
+- ``/invite/`` - public endpoints, no auth.
 - Safe methods (GET, HEAD, OPTIONS).
 """
 

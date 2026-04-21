@@ -200,7 +200,7 @@ def test_first_reset_succeeds(
     draft_session: SessionRow,
     fake_ludus: FakeLudus,
 ) -> None:
-    """No prior reset event means no cooldown — should return 202."""
+    """No prior reset event means no cooldown - should return 202."""
     student = _make_ready_student(db_session, draft_session)
     resp = client.post(f"/api/students/{student.id}/reset", json={})
     assert resp.status_code == 202

@@ -8,7 +8,7 @@ makes it trivial to:
 * mock Ludus in tests
 
 ================================================================
-ASSUMED HTTP ROUTES — verified against badsectorlabs/ludus Go source
+ASSUMED HTTP ROUTES - verified against badsectorlabs/ludus Go source
 (ludus-api/routers.go, ludus-api/api_user_management.go, etc.)
 See issue #TODO to pin these once tested against a live Ludus instance.
 ================================================================
@@ -114,7 +114,7 @@ def _raise_for_status(response: httpx.Response, *, on_conflict_user_exists: bool
     ):
         raise LudusUserExists(detail, status_code=status)
     if status == 409:
-        # Generic conflict — e.g. deployment already running.
+        # Generic conflict - e.g. deployment already running.
         raise LudusError(detail, status_code=status)
 
     raise LudusError(detail, status_code=status)
@@ -123,7 +123,7 @@ def _raise_for_status(response: httpx.Response, *, on_conflict_user_exists: bool
 class LudusClient:
     """Synchronous HTTP wrapper for the Ludus REST API (v2).
 
-    The client is intentionally thin — each method maps to one logical
+    The client is intentionally thin - each method maps to one logical
     Ludus operation and never leaks `httpx` types to callers. Errors are
     always raised as subclasses of `LudusError`.
     """
@@ -183,7 +183,7 @@ class LudusClient:
 
     @staticmethod
     def _safe_url_for_log(path: str) -> str:
-        """Return a path without any query string — avoids leaking userIDs
+        """Return a path without any query string - avoids leaking userIDs
         or other parameters into logs."""
         return path.split("?", 1)[0]
 
@@ -300,7 +300,7 @@ class LudusClient:
         **Ludus API quirk:** the server may return HTTP 404 with an error
         about the admin user's default range, yet still perform the
         assignment successfully.  The response body in that case contains
-        two concatenated JSON objects — the first is the spurious error,
+        two concatenated JSON objects - the first is the spurious error,
         the second is ``{"result": "Range … assigned … successfully"}``.
         We therefore check the body for the success sentinel before
         raising ``LudusNotFound``.
@@ -352,8 +352,8 @@ class LudusClient:
             params={"userID": userid},
         )
 
-        # Response can be JSON wrapping the config, or — depending on the
-        # Ludus version — the raw file. Handle both.
+        # Response can be JSON wrapping the config, or - depending on the
+        # Ludus version - the raw file. Handle both.
         content_type = response.headers.get("content-type", "")
         if "application/json" in content_type:
             try:
@@ -506,7 +506,7 @@ class LudusClient:
             params=params,
         )
 
-        # Response can be JSON wrapping the config, or raw text — handle
+        # Response can be JSON wrapping the config, or raw text - handle
         # both the same way as user_wireguard.
         content_type = response.headers.get("content-type", "")
         if "application/json" in content_type:
@@ -1109,7 +1109,7 @@ class LudusClient:
             return data
         if isinstance(data, dict):
             # Ludus returns {"version": "...", "result": "..."} for
-            # unrecognised routes — treat as empty history.
+            # unrecognised routes - treat as empty history.
             if "version" in data:
                 return []
             return [data]
@@ -1795,7 +1795,7 @@ def get_ludus_client() -> LudusClient:
     """FastAPI dependency: build a `LudusClient` from app settings.
 
     The caller is responsible for closing the client (or using it as a
-    context manager) — FastAPI's dependency system handles this when
+    context manager) - FastAPI's dependency system handles this when
     used with `Depends(get_ludus_client)` via a generator wrapper in the
     routes layer.
     """

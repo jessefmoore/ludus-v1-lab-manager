@@ -47,7 +47,7 @@ export default function DataTable<T>({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [showScrollHint, setShowScrollHint] = useState(false);
 
-  // Debounced search is unnecessary at this scale — filter directly
+  // Debounced search is unnecessary at this scale - filter directly
   const filtered = useMemo(() => {
     if (!search || !searchFilter) return data;
     const q = search.toLowerCase();

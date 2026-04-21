@@ -61,7 +61,7 @@ function parseAnsi(raw: string): AnsiSpan[] {
       } else if (ANSI_COLORS[code]) {
         color = ANSI_COLORS[code];
       } else if (code >= 40 && code <= 47) {
-        // background colors — skip for now
+        // background colors - skip for now
       }
     }
     lastIndex = regex.lastIndex;

@@ -73,12 +73,12 @@ def prepare_config_download(db: DBSession, token: str, ttl_hours: int) -> tuple[
     """
     student = load_student_by_token(db, token, ttl_hours)
     if student.status != StudentStatus.ready:
-        raise InviteNotReady("Lab not ready yet — please check back after provisioning completes")
+        raise InviteNotReady("Lab not ready yet - please check back after provisioning completes")
     if not student.wg_config_path:
-        raise InviteNotReady("Lab not ready yet — please check back after provisioning completes")
+        raise InviteNotReady("Lab not ready yet - please check back after provisioning completes")
     path = Path(student.wg_config_path)
     if not path.is_file():
-        raise InviteNotReady("Lab not ready yet — please check back after provisioning completes")
+        raise InviteNotReady("Lab not ready yet - please check back after provisioning completes")
     return student, path
 
 

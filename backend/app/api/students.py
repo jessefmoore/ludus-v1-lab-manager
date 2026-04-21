@@ -8,7 +8,7 @@ because they live under different base paths:
 
 All routes require an authenticated instructor session (cookie-based).
 Provisioning (calling ``user_add`` / ``range_deploy``) is a separate
-flow in task #21 — this router deliberately never provisions on add.
+flow in task #21 - this router deliberately never provisions on add.
 """
 
 import csv
@@ -60,7 +60,7 @@ router = APIRouter(tags=["students"])
 def _student_to_read(student: Student, settings: Settings) -> StudentRead:
     """Build the ``StudentRead`` response shape with a derived invite URL.
 
-    The raw ``invite_token`` is intentionally not surfaced — only the
+    The raw ``invite_token`` is intentionally not surfaced - only the
     full invite URL callers should share with students.
     """
     base = settings.public_base_url.rstrip("/")

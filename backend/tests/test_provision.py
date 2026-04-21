@@ -7,7 +7,7 @@ pointed at ``tmp_path`` so file-system side effects land in an isolated
 temporary directory.
 
 ``FakeLudus`` records every call AND lets each method's behavior be
-scripted per-userid via dicts of overrides — this gives per-test
+scripted per-userid via dicts of overrides - this gives per-test
 granular control over which student's ``user_wireguard`` times out, etc.
 """
 
@@ -53,7 +53,7 @@ WG_CONFIG_TEMPLATE = "[Interface]\nPrivateKey = {userid}-priv\n"
 
 
 # ---------------------------------------------------------------------------
-# FakeLudus — scriptable per-userid
+# FakeLudus - scriptable per-userid
 # ---------------------------------------------------------------------------
 
 

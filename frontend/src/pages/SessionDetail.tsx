@@ -228,7 +228,7 @@ export default function SessionDetail() {
       label: "UserID",
       render: (s) => (
         <span className="text-[15px] font-mono text-text-secondary">
-          {s.ludus_userid || "—"}
+          {s.ludus_userid || "-"}
         </span>
       ),
     },
@@ -237,7 +237,7 @@ export default function SessionDetail() {
       label: "Range",
       render: (s) => (
         <span className="text-[15px] font-mono text-text-secondary">
-          {s.range_id || "—"}
+          {s.range_id || "-"}
         </span>
       ),
     },
@@ -288,7 +288,7 @@ export default function SessionDetail() {
         return (
           <div className="flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
-            <span className="text-xs text-text-muted">—</span>
+            <span className="text-xs text-text-muted">-</span>
           </div>
         );
       },
@@ -519,7 +519,7 @@ export default function SessionDetail() {
               {session.start_date
                 ? new Date(session.start_date).toLocaleDateString()
                 : "Not set"}{" "}
-              &mdash;{" "}
+              -{" "}
               {session.end_date
                 ? new Date(session.end_date).toLocaleDateString()
                 : "Open-ended"}
@@ -730,7 +730,7 @@ function InviteCell({ student }: { student: StudentRead }) {
   };
 
   if (student.status !== "ready" || !student.invite_url) {
-    return <span className="text-xs text-text-muted">—</span>;
+    return <span className="text-xs text-text-muted">-</span>;
   }
 
   return (
@@ -1061,7 +1061,7 @@ function AddStudentModal({
                 <option value="">Select a group...</option>
                 {groups.map((g) => (
                   <option key={g.name} value={g.name}>
-                    {g.name}{g.description ? ` — ${g.description}` : ""}
+                    {g.name}{g.description ? ` - ${g.description}` : ""}
                   </option>
                 ))}
               </select>

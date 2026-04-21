@@ -1361,7 +1361,7 @@ function UsersTab({ server }: { server: string }) {
         onCreated={handleUserCreated}
       />
 
-      {/* API Key display modal — shown once after creation */}
+      {/* API Key display modal - shown once after creation */}
       <Modal
         open={!!createdApiKey}
         onClose={() => setCreatedApiKey(null)}
@@ -1370,7 +1370,7 @@ function UsersTab({ server }: { server: string }) {
       >
         <p className="text-[15px] text-text-secondary mb-3">
           User <span className="font-mono font-medium text-text-primary">{createdApiKey?.userId}</span> created.
-          Save the API key below — Ludus will not show it again.
+          Save the API key below - Ludus will not show it again.
         </p>
         <div className="flex items-center gap-2">
           <input
@@ -1516,7 +1516,7 @@ function AssignRangeModal({
             >
               {ranges.map((r) => (
                 <option key={r.rangeID} value={r.rangeID}>
-                  {r.rangeID} — {r.name || `Range #${r.rangeNumber}`} (#{r.rangeNumber})
+                  {r.rangeID} - {r.name || `Range #${r.rangeNumber}`} (#{r.rangeNumber})
                 </option>
               ))}
             </select>

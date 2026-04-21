@@ -17,14 +17,14 @@ class LudusRange(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    rangeID: str  # noqa: N815 — matches Ludus JSON key
-    rangeNumber: int  # noqa: N815 — matches Ludus JSON key
+    rangeID: str  # noqa: N815 - matches Ludus JSON key
+    rangeNumber: int  # noqa: N815 - matches Ludus JSON key
     name: str | None = None
-    numberOfVMs: int | None = None  # noqa: N815 — matches Ludus JSON key
-    rangeState: str | None = None  # noqa: N815 — matches Ludus JSON key
-    lastDeployment: str | None = None  # noqa: N815 — matches Ludus JSON key
+    numberOfVMs: int | None = None  # noqa: N815 - matches Ludus JSON key
+    rangeState: str | None = None  # noqa: N815 - matches Ludus JSON key
+    lastDeployment: str | None = None  # noqa: N815 - matches Ludus JSON key
     description: str | None = None
-    testingEnabled: bool | None = None  # noqa: N815 — matches Ludus JSON key
+    testingEnabled: bool | None = None  # noqa: N815 - matches Ludus JSON key
 
 
 class LudusRangeListResponse(BaseModel):
@@ -49,12 +49,12 @@ class LudusUser(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    userID: str  # noqa: N815 — matches Ludus JSON key
+    userID: str  # noqa: N815 - matches Ludus JSON key
     name: str | None = None
-    dateCreated: str | None = None  # noqa: N815 — matches Ludus JSON key
-    proxmoxUsername: str | None = None  # noqa: N815 — matches Ludus JSON key
-    rangeNumber: int | None = None  # noqa: N815 — matches Ludus JSON key
-    userNumber: int | None = None  # noqa: N815 — matches Ludus JSON key
+    dateCreated: str | None = None  # noqa: N815 - matches Ludus JSON key
+    proxmoxUsername: str | None = None  # noqa: N815 - matches Ludus JSON key
+    rangeNumber: int | None = None  # noqa: N815 - matches Ludus JSON key
+    userNumber: int | None = None  # noqa: N815 - matches Ludus JSON key
 
 
 class LudusUserListResponse(BaseModel):
@@ -74,14 +74,14 @@ class UserCreateRequest(BaseModel):
 class UserCreateResponse(BaseModel):
     """Response from Ludus after creating a user.
 
-    ``apiKey`` is only returned once at creation time — Ludus will not
+    ``apiKey`` is only returned once at creation time - Ludus will not
     return it again.
     """
 
     model_config = ConfigDict(extra="allow")
 
-    userID: str  # noqa: N815 — matches Ludus JSON key
-    apiKey: str | None = None  # noqa: N815 — matches Ludus JSON key
+    userID: str  # noqa: N815 - matches Ludus JSON key
+    apiKey: str | None = None  # noqa: N815 - matches Ludus JSON key
 
 
 class LudusActionResponse(BaseModel):

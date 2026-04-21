@@ -22,11 +22,11 @@ from app.schemas.lab import LabTemplateCreate, LabTemplateUpdate
 logger = logging.getLogger(__name__)
 
 
-class LabNotFound(Exception):  # noqa: N818 — spec-mandated name
+class LabNotFound(Exception):  # noqa: N818 - spec-mandated name
     """Raised when a lab template id does not exist."""
 
 
-class LabDeleteConflict(Exception):  # noqa: N818 — spec-mandated name
+class LabDeleteConflict(Exception):  # noqa: N818 - spec-mandated name
     """Raised when deleting a lab that has active (non-ended, non-draft) sessions."""
 
 

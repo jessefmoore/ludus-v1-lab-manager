@@ -64,7 +64,7 @@ def _smoke_env(_smoke_tmp_dir: Path) -> Iterator[dict[str, str]]:
     """Install env vars *before* any ``app.*`` import in this module.
 
     ``autouse=True`` at module scope guarantees pytest runs this before
-    any test function body — and because we do NOT import ``app.main``
+    any test function body - and because we do NOT import ``app.main``
     at module top-level, the first import happens inside the test, AFTER
     this fixture has run. That keeps the engine in ``app.core.db``
     bound to our tmp sqlite file.
@@ -200,7 +200,7 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
             token = invite_url.rsplit("/invite/", 1)[-1]
             assert token, "failed to extract invite token from invite_url"
 
-            # 7. Provision the session — talks to our FakeLudus + writes a
+            # 7. Provision the session - talks to our FakeLudus + writes a
             # .conf file into CONFIG_STORAGE_DIR.
             r = client.post(f"/api/sessions/{session_id}/provision")
             assert r.status_code == 200, r.text

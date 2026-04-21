@@ -2,7 +2,7 @@
 
 Design note on ``invite_url``:
 
-* ``invite_token`` is intentionally NOT exposed on ``StudentRead`` — the
+* ``invite_token`` is intentionally NOT exposed on ``StudentRead`` - the
   raw token is a bearer credential that should only flow through the
   dedicated invite/redeem endpoints.
 * ``invite_url`` is a plain ``str`` on the response schema. It must be
@@ -26,8 +26,8 @@ class StudentCreate(BaseModel):
     """Payload to enroll a new student into a session.
 
     Two modes:
-    * **Manual** — ``full_name`` + ``email`` required, ``ludus_userid`` absent.
-    * **Ludus user** — ``ludus_userid`` set, ``full_name``/``email`` optional.
+    * **Manual** - ``full_name`` + ``email`` required, ``ludus_userid`` absent.
+    * **Ludus user** - ``ludus_userid`` set, ``full_name``/``email`` optional.
     """
 
     full_name: str | None = None
@@ -37,7 +37,7 @@ class StudentCreate(BaseModel):
     @model_validator(mode="after")
     def check_either_manual_or_ludus(self) -> Self:
         if self.ludus_userid:
-            return self  # Ludus user mode — name/email are optional
+            return self  # Ludus user mode - name/email are optional
         if not self.full_name or not self.email:
             raise ValueError("full_name and email are required when ludus_userid is not provided")
         return self

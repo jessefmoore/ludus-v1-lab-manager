@@ -2,7 +2,7 @@
 
 Training lab deployment management platform powered by [Ludus](https://ludus.cloud).
 
-![Session detail — managing students, provisioning status, and invite links](screenshot.png)
+![Session detail - managing students, provisioning status, and invite links](screenshot.png)
 
 A self-hosted web platform that wraps [Ludus](https://ludus.cloud) to let instructors
 provision, monitor, and tear down student lab environments in bulk for security
@@ -17,7 +17,7 @@ trainings and workshops.
 - Define reusable **lab templates** (Ludus range-config YAML + metadata)
 - Create a **training session**: select lab, pick mode (shared/dedicated), add students
 - **One-click bulk provision**: creates Ludus users, assigns ranges, generates WireGuard configs
-- Share per-student **invite links** — students download their VPN config
+- Share per-student **invite links** - students download their VPN config
 - **Live dashboard**: student status, range health, snapshot state
 - Per-student **lab reset** (triggers Ludus snapshot revert)
 - **One-click teardown**: cleanup all Ludus users, configs, and artifacts
@@ -114,4 +114,4 @@ pytest -xvs tests/test_students_api.py   # single file, verbose
 
 ## License
 
-Private — all rights reserved (for now).
+Private - all rights reserved (for now).

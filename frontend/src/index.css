@@ -69,7 +69,7 @@ body {
   background: rgb(var(--color-text-muted));
 }
 
-/* Gradient border utility — wrap element in a .gradient-border parent */
+/* Gradient border utility - wrap element in a .gradient-border parent */
 @layer components {
   .gradient-border {
     position: relative;
@@ -119,7 +119,7 @@ body {
     transform: translateY(-1px);
   }
 
-  /* Gradient accent bar — teal-to-blue header stripe */
+  /* Gradient accent bar - teal-to-blue header stripe */
   .accent-bar {
     height: 3px;
     background: linear-gradient(

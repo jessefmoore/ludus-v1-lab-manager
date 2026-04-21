@@ -351,7 +351,7 @@ function CreateSessionModal({
 
         <Input
           label="Session Name"
-          placeholder="e.g. AD Attacks Workshop — April 2026"
+          placeholder="e.g. AD Attacks Workshop - April 2026"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
