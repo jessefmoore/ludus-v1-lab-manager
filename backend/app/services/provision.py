@@ -35,7 +35,7 @@ from app.core.config import Settings
 from app.models import LabTemplate, SessionMode, SessionStatus, Student, StudentStatus
 from app.models import Session as SessionRow
 from app.models.event import Event
-from app.services.exceptions import LudusError, LudusUserExists
+from app.services.exceptions import LudusError, LudusNotFound, LudusUserExists
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session as DBSession
@@ -150,6 +150,24 @@ def _write_wg_config(
     return path
 
 
+def _resolve_range_number(ludus: LudusClient, shared_range_id: str) -> int | None:
+    """Resolve a shared_range_id (rangeID string like "BL") to its rangeNumber.
+
+    Ludus v2 assign endpoint needs the rangeNumber, not the rangeID string.
+    Returns ``None`` if no matching range is found.
+    """
+    try:
+        ranges = ludus.range_list()
+    except LudusError:
+        return None
+    for r in ranges:
+        if isinstance(r, dict) and r.get("rangeID") == shared_range_id:
+            rn = r.get("rangeNumber")
+            if isinstance(rn, int):
+                return rn
+    return None
+
+
 def _provision_one(
     db: DBSession,
     ludus: LudusClient,
@@ -157,6 +175,8 @@ def _provision_one(
     lab_template: LabTemplate,
     student: Student,
     storage_dir: Path,
+    *,
+    resolved_range_number: int | None = None,
 ) -> bool:
     """Drive the Ludus lifecycle for a single student.
 
@@ -199,8 +219,33 @@ def _provision_one(
                 reason="session.shared_range_id is None",
             )
             return False
+        # Ludus v2 assign endpoint may not recognise the rangeID string
+        # returned by /range/all; pass the rangeNumber instead.
+        assign_id = (
+            str(resolved_range_number)
+            if resolved_range_number is not None
+            else session_row.shared_range_id
+        )
         try:
-            ludus.range_assign(userid=userid, range_id=session_row.shared_range_id)
+            ludus.range_assign(userid=userid, range_id=assign_id)
+        except LudusNotFound:
+            # Fallback: try the original rangeID string if rangeNumber failed.
+            if assign_id != session_row.shared_range_id:
+                try:
+                    ludus.range_assign(
+                        userid=userid, range_id=session_row.shared_range_id
+                    )
+                except LudusError as exc2:
+                    _mark_error(db, student, step="range_assign", reason=repr(exc2))
+                    return False
+            else:
+                _mark_error(
+                    db,
+                    student,
+                    step="range_assign",
+                    reason=f"Range {assign_id} not found on Ludus",
+                )
+                return False
         except LudusError as exc:
             _mark_error(db, student, step="range_assign", reason=repr(exc))
             return False
@@ -320,6 +365,23 @@ def provision_session(
         logger.info("provision: session id=%s has no students, nothing to do", session_id)
         return result
 
+    # For shared-mode sessions, resolve the rangeID to a rangeNumber once
+    # before the student loop (avoids repeated range_list API calls).
+    resolved_range_number: int | None = None
+    if (
+        session_row.mode == SessionMode.shared
+        and session_row.shared_range_id
+    ):
+        resolved_range_number = _resolve_range_number(
+            ludus, session_row.shared_range_id
+        )
+        if resolved_range_number is not None:
+            logger.info(
+                "provision: resolved shared_range_id=%s -> rangeNumber=%d",
+                session_row.shared_range_id,
+                resolved_range_number,
+            )
+
     # Signal that a provisioning pass is in flight before we start
     # calling Ludus, so concurrent callers see the state transition.
     prior_status = session_row.status
@@ -344,6 +406,7 @@ def provision_session(
             lab_template,
             student,
             storage_dir,
+            resolved_range_number=resolved_range_number,
         )
         if ok:
             result.provisioned += 1

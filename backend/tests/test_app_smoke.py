@@ -38,6 +38,9 @@ class FakeLudus:
         self.user_add_calls.append({"userid": userid, "name": name, "email": email})
         return {"userID": userid, "name": name, "email": email}
 
+    def range_list(self) -> list[dict]:
+        return []
+
     def range_assign(self, userid: str, range_id: str) -> None:
         self.range_assign_calls.append({"userid": userid, "range_id": range_id})
 

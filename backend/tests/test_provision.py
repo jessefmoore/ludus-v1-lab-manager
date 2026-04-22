@@ -67,6 +67,8 @@ class FakeLudus:
     """
 
     def __init__(self) -> None:
+        self._ranges: list[dict] = []
+
         self.user_add_calls: list[dict[str, str]] = []
         self.user_add_overrides: dict[str, Exception] = {}
 
@@ -86,6 +88,9 @@ class FakeLudus:
         if exc is not None:
             raise exc
         return {"userID": userid, "name": name, "email": email}
+
+    def range_list(self) -> list[dict]:
+        return self._ranges
 
     def range_assign(self, userid: str, range_id: str) -> None:
         self.range_assign_calls.append({"userid": userid, "range_id": range_id})
