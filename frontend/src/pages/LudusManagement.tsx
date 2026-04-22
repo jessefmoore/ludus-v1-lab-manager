@@ -2237,11 +2237,13 @@ function TestingTab({ server }: { server: string }) {
       .finally(() => setLoading(false));
   }, [server]);
 
+  const selectedRange = ranges.find((r) => r.rangeNumber === selectedRangeNum);
+
   const handleStart = async () => {
     if (selectedRangeNum == null) return;
     try {
       await ludusTesting.start(
-        { range_id: selectedRangeNum },
+        { range_id: selectedRangeNum, user_id: selectedRange?.rangeID },
         server,
       );
       toast("success", "Testing mode started");
@@ -2254,7 +2256,7 @@ function TestingTab({ server }: { server: string }) {
     if (selectedRangeNum == null) return;
     try {
       await ludusTesting.stop(
-        { range_id: selectedRangeNum },
+        { range_id: selectedRangeNum, user_id: selectedRange?.rangeID },
         server,
       );
       toast("success", "Testing mode stopped");
@@ -2270,7 +2272,7 @@ function TestingTab({ server }: { server: string }) {
     if (!domains && !ips) return;
     try {
       await ludusTesting.allow(
-        { range_id: selectedRangeNum, domains, ips },
+        { range_id: selectedRangeNum, user_id: selectedRange?.rangeID, domains, ips },
         server,
       );
       toast("success", "Allow rule added");
@@ -2288,7 +2290,7 @@ function TestingTab({ server }: { server: string }) {
     if (!domains && !ips) return;
     try {
       await ludusTesting.deny(
-        { range_id: selectedRangeNum, domains, ips },
+        { range_id: selectedRangeNum, user_id: selectedRange?.rangeID, domains, ips },
         server,
       );
       toast("success", "Deny rule added");
