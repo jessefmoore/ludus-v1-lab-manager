@@ -114,4 +114,4 @@ pytest -xvs tests/test_students_api.py   # single file, verbose
 
 ## License
 
-Private - all rights reserved (for now).
+[MIT](LICENSE)
