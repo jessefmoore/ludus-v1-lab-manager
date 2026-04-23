@@ -2,7 +2,7 @@
 
 Training lab deployment management platform powered by [Ludus](https://ludus.cloud).
 
-![Session detail - managing students, provisioning status, and invite links](screenshot.png)
+<img width="1343" height="752" alt="image" src="https://github.com/user-attachments/assets/91784d84-2a3c-4264-8b1d-d9c812be445a" />
 
 A self-hosted web platform that wraps [Ludus](https://ludus.cloud) to let instructors
 provision, monitor, and tear down student lab environments in bulk for security
