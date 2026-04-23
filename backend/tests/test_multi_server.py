@@ -14,10 +14,15 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session as OrmSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.api.ludus import router as ludus_router
 from app.api.settings import router as settings_router
 from app.core.config import LudusServerConfig, Settings, get_settings
+from app.core.db import Base, get_db
 from app.core.deps import (
     LudusClientRegistry,
     get_current_user,
@@ -149,6 +154,24 @@ def test_registry_server_names_sorted() -> None:
 
 
 @pytest.fixture
+def db_session() -> Iterator[OrmSession]:
+    engine = create_engine(
+        "sqlite:///:memory:",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    session = factory()
+    try:
+        yield session
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@pytest.fixture
 def fake_admin() -> User:
     return User(
         email="instructor@example.com",
@@ -192,6 +215,7 @@ class _MockRegistry:
 def _build_app(
     mock_ludus: MagicMock,
     current_user: User,
+    db_session: OrmSession,
 ) -> FastAPI:
     app = FastAPI()
     app.include_router(ludus_router)
@@ -208,6 +232,10 @@ def _build_app(
     )
     registry = _MockRegistry(mock_ludus)
 
+    def _override_get_db() -> Iterator[OrmSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_ludus_client_registry] = lambda: registry
     app.dependency_overrides[get_current_user] = lambda: current_user
@@ -215,8 +243,10 @@ def _build_app(
 
 
 @pytest.fixture
-def client(mock_ludus: MagicMock, fake_admin: User) -> Iterator[TestClient]:
-    app = _build_app(mock_ludus, fake_admin)
+def client(
+    mock_ludus: MagicMock, fake_admin: User, db_session: OrmSession,
+) -> Iterator[TestClient]:
+    app = _build_app(mock_ludus, fake_admin, db_session)
     with TestClient(app) as tc:
         yield tc
 
@@ -254,6 +284,7 @@ def test_ludus_servers_endpoint(client: TestClient) -> None:
     assert len(body["servers"]) == 1
     assert body["servers"][0]["name"] == "default"
     assert "****" in body["servers"][0]["api_key_masked"]
+    assert body["servers"][0]["source"] == "env"
 
 
 def test_ranges_omitting_server_defaults_to_default(

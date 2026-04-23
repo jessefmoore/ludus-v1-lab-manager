@@ -49,6 +49,9 @@ import type {
   UserCreateResponse,
   PlatformSettings,
   LudusServersResponse,
+  LudusServerInfo,
+  LudusServerCreate,
+  LudusServerUpdate,
 } from "./types";
 
 export class ApiError extends Error {
@@ -606,6 +609,27 @@ export const settings = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  createServer: (data: LudusServerCreate) =>
+    request<LudusServerInfo>("/api/settings/ludus-servers", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateServer: (name: string, data: LudusServerUpdate) =>
+    request<LudusServerInfo>(
+      `/api/settings/ludus-servers/${encodeURIComponent(name)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      },
+    ),
+
+  deleteServer: (name: string) =>
+    request<void>(
+      `/api/settings/ludus-servers/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    ),
 };
 
 // Events (audit log)

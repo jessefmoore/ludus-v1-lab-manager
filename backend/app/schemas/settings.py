@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -37,9 +39,27 @@ class LudusServerInfo(BaseModel):
     url: str
     api_key_masked: str
     verify_tls: bool
+    source: Literal["env", "db"] = "env"
 
 
 class LudusServersResponse(BaseModel):
     """List of all configured Ludus servers."""
 
     servers: list[LudusServerInfo]
+
+
+class LudusServerCreate(BaseModel):
+    """Payload for creating a new DB-managed Ludus server."""
+
+    name: str = Field(pattern=r"^[a-z0-9_-]+$", min_length=1, max_length=64)
+    url: str = Field(min_length=1)
+    api_key: str = Field(min_length=1)
+    verify_tls: bool = False
+
+
+class LudusServerUpdate(BaseModel):
+    """Payload for updating a DB-managed Ludus server (all optional)."""
+
+    url: str | None = None
+    api_key: str | None = None
+    verify_tls: bool | None = None

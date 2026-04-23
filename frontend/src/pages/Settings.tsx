@@ -1,12 +1,13 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { Server, Shield, Clock, Link as LinkIcon, Eye, EyeOff } from "lucide-react";
+import { Server, Shield, Clock, Link as LinkIcon, Plus, Pencil, Trash2 } from "lucide-react";
 import { settings, ApiError } from "@/api";
-import type { PlatformSettings, LudusServerInfo } from "@/api";
+import type { PlatformSettings, LudusServerInfo, LudusServerCreate, LudusServerUpdate } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
 import Button from "@/components/Button";
 import Input from "@/components/Input";
+import Modal from "@/components/Modal";
 import PageTransition from "@/components/PageTransition";
 import { Skeleton } from "@/components/Skeleton";
 import { useToast } from "@/components/Toast";
@@ -18,13 +19,17 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [servers, setServers] = useState<LudusServerInfo[]>([]);
 
+  const refreshServers = () => {
+    settings.ludusServers().then((res) => setServers(res.servers)).catch(() => {});
+  };
+
   useEffect(() => {
     settings
       .get()
       .then(setConfig)
       .catch(() => setConfig(null))
       .finally(() => setLoading(false));
-    settings.ludusServers().then((res) => setServers(res.servers)).catch(() => {});
+    refreshServers();
   }, []);
 
   return (
@@ -39,11 +44,7 @@ export default function Settings() {
           </p>
         </div>
 
-        {servers.length > 1 ? (
-          <LudusMultiServerCard servers={servers} />
-        ) : (
-          <LudusServerCard config={config} loading={loading} />
-        )}
+        <LudusMultiServerCard servers={servers} loading={loading} onRefresh={refreshServers} />
         <AdminAccountCard email={user?.email ?? ""} toast={toast} />
         <PlatformCard config={config} loading={loading} />
       </PageTransition>
@@ -51,137 +52,26 @@ export default function Settings() {
   );
 }
 
-/* ── Ludus Server Card ──────────────────────────────────────────── */
-
-function LudusServerCard({
-  config,
-  loading,
-}: {
-  config: PlatformSettings | null;
-  loading: boolean;
-}) {
-  const [showKey, setShowKey] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
-
-  const handleTest = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await settings.testConnection();
-      setTestResult({ ok: true, message: `Connected (${res.latency_ms}ms)` });
-    } catch (err) {
-      setTestResult({
-        ok: false,
-        message: err instanceof ApiError ? err.detail : "Connection failed",
-      });
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <Card className="space-y-6">
-      <div className="flex items-center gap-2.5 text-text-secondary">
-        <Server className="h-5 w-5" />
-        <h2 className="text-xl font-semibold text-text-primary">Ludus Server</h2>
-      </div>
-
-      <div className="space-y-5 max-w-xl">
-        {/* Server URL */}
-        <div className="space-y-2">
-          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
-            Server URL
-          </label>
-          {loading ? (
-            <Skeleton variant="rect" height="44px" />
-          ) : (
-            <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center">
-              <span className="text-[15px] font-mono text-text-primary truncate">
-                {config?.ludus_server_url ?? "Not configured"}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* API Key */}
-        <div className="space-y-2">
-          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
-            API Key
-          </label>
-          {loading ? (
-            <Skeleton variant="rect" height="44px" />
-          ) : (
-            <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center justify-between gap-2">
-              <span className="text-[15px] font-mono text-text-primary truncate">
-                {showKey
-                  ? (config?.ludus_api_key_masked ?? "Not configured")
-                  : config?.ludus_api_key_masked
-                    ? "\u2022".repeat(24)
-                    : "Not configured"}
-              </span>
-              {config?.ludus_api_key_masked && (
-                <button
-                  onClick={() => setShowKey((v) => !v)}
-                  className="shrink-0 text-text-muted hover:text-text-primary transition-colors"
-                  aria-label={showKey ? "Hide API key" : "Show API key"}
-                >
-                  {showKey ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* TLS Verification */}
-        <div className="space-y-2">
-          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
-            TLS Verification
-          </label>
-          {loading ? (
-            <Skeleton variant="rect" height="44px" />
-          ) : (
-            <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center gap-2">
-              <span
-                className={`inline-block h-2.5 w-2.5 rounded-full ${
-                  config?.ludus_verify_tls ? "bg-accent-success" : "bg-accent-warning"
-                }`}
-              />
-              <span className="text-[15px] text-text-primary">
-                {config?.ludus_verify_tls ? "Enabled" : "Disabled"}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Test Connection */}
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={handleTest} loading={testing}>
-            Test Connection
-          </Button>
-          {testResult && (
-            <span
-              className={`text-[15px] ${testResult.ok ? "text-accent-success" : "text-accent-danger"}`}
-            >
-              {testResult.message}
-            </span>
-          )}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 /* ── Ludus Multi-Server Card ────────────────────────────────────── */
 
-function LudusMultiServerCard({ servers }: { servers: LudusServerInfo[] }) {
+function LudusMultiServerCard({
+  servers,
+  loading,
+  onRefresh,
+}: {
+  servers: LudusServerInfo[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  const { toast } = useToast();
   const [testingServer, setTestingServer] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<
     Record<string, { ok: boolean; message: string }>
   >({});
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [editServer, setEditServer] = useState<LudusServerInfo | null>(null);
+  const [deleteServer, setDeleteServer] = useState<LudusServerInfo | null>(null);
 
   const handleTest = async (serverName: string) => {
     setTestingServer(serverName);
@@ -210,72 +100,415 @@ function LudusMultiServerCard({ servers }: { servers: LudusServerInfo[] }) {
   };
 
   return (
-    <Card className="space-y-6">
-      <div className="flex items-center gap-2.5 text-text-secondary">
-        <Server className="h-5 w-5" />
-        <h2 className="text-xl font-semibold text-text-primary">Ludus Servers</h2>
-      </div>
-
-      <div className="space-y-4">
-        {servers.map((s) => (
-          <div
-            key={s.name}
-            className="p-4 rounded-md bg-bg-elevated border border-border space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-[15px] font-semibold text-text-primary capitalize">
-                {s.name}
-              </h3>
-              <div className="flex items-center gap-3">
-                {testResults[s.name] && (
-                  <span
-                    className={`text-sm ${
-                      testResults[s.name].ok
-                        ? "text-accent-success"
-                        : "text-accent-danger"
-                    }`}
-                  >
-                    {testResults[s.name].message}
-                  </span>
-                )}
-                <Button
-                  variant="secondary"
-                  onClick={() => handleTest(s.name)}
-                  loading={testingServer === s.name}
-                  className="text-[13px]"
-                >
-                  Test
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div>
-                <span className="text-text-muted text-[12px] uppercase tracking-wider">URL</span>
-                <p className="font-mono text-text-primary truncate">{s.url}</p>
-              </div>
-              <div>
-                <span className="text-text-muted text-[12px] uppercase tracking-wider">API Key</span>
-                <p className="font-mono text-text-secondary">{s.api_key_masked}</p>
-              </div>
-              <div>
-                <span className="text-text-muted text-[12px] uppercase tracking-wider">TLS</span>
-                <p className="flex items-center gap-1.5">
-                  <span
-                    className={`inline-block h-2 w-2 rounded-full ${
-                      s.verify_tls ? "bg-accent-success" : "bg-accent-warning"
-                    }`}
-                  />
-                  <span className="text-text-primary">
-                    {s.verify_tls ? "Enabled" : "Disabled"}
-                  </span>
-                </p>
-              </div>
-            </div>
+    <>
+      <Card className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5 text-text-secondary">
+            <Server className="h-5 w-5" />
+            <h2 className="text-xl font-semibold text-text-primary">Ludus Servers</h2>
           </div>
-        ))}
+          <Button variant="secondary" onClick={() => setShowAdd(true)} className="text-[13px]">
+            <Plus className="h-4 w-4" />
+            Add Server
+          </Button>
+        </div>
+
+        {loading && servers.length === 0 ? (
+          <div className="space-y-4">
+            <Skeleton variant="rect" height="120px" />
+          </div>
+        ) : servers.length === 0 ? (
+          <p className="text-text-muted text-sm">No servers configured.</p>
+        ) : (
+          <div className="space-y-4">
+            {servers.map((s) => (
+              <div
+                key={s.name}
+                className="p-4 rounded-md bg-bg-elevated border border-border space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[15px] font-semibold text-text-primary capitalize">
+                      {s.name}
+                    </h3>
+                    <span
+                      className={`text-[11px] font-medium uppercase px-1.5 py-0.5 rounded ${
+                        s.source === "env"
+                          ? "bg-text-muted/20 text-text-muted"
+                          : "bg-accent-success/20 text-accent-success"
+                      }`}
+                    >
+                      {s.source}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {testResults[s.name] && (
+                      <span
+                        className={`text-sm ${
+                          testResults[s.name].ok
+                            ? "text-accent-success"
+                            : "text-accent-danger"
+                        }`}
+                      >
+                        {testResults[s.name].message}
+                      </span>
+                    )}
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleTest(s.name)}
+                      loading={testingServer === s.name}
+                      className="text-[13px]"
+                    >
+                      Test
+                    </Button>
+                    {s.source === "db" && (
+                      <>
+                        <Button
+                          variant="icon"
+                          onClick={() => setEditServer(s)}
+                          aria-label={`Edit ${s.name}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="icon"
+                          onClick={() => setDeleteServer(s)}
+                          aria-label={`Delete ${s.name}`}
+                          className="text-accent-danger hover:text-accent-danger"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="text-text-muted text-[12px] uppercase tracking-wider">URL</span>
+                    <p className="font-mono text-text-primary truncate">{s.url}</p>
+                  </div>
+                  <div>
+                    <span className="text-text-muted text-[12px] uppercase tracking-wider">API Key</span>
+                    <p className="font-mono text-text-secondary">{s.api_key_masked}</p>
+                  </div>
+                  <div>
+                    <span className="text-text-muted text-[12px] uppercase tracking-wider">TLS</span>
+                    <p className="flex items-center gap-1.5">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${
+                          s.verify_tls ? "bg-accent-success" : "bg-accent-warning"
+                        }`}
+                      />
+                      <span className="text-text-primary">
+                        {s.verify_tls ? "Enabled" : "Disabled"}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <AddServerModal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        onSuccess={() => {
+          setShowAdd(false);
+          onRefresh();
+          toast("success", "Server added");
+        }}
+      />
+
+      {editServer && (
+        <EditServerModal
+          open
+          server={editServer}
+          onClose={() => setEditServer(null)}
+          onSuccess={() => {
+            setEditServer(null);
+            onRefresh();
+            toast("success", "Server updated");
+          }}
+        />
+      )}
+
+      {deleteServer && (
+        <DeleteServerModal
+          open
+          server={deleteServer}
+          onClose={() => setDeleteServer(null)}
+          onSuccess={() => {
+            setDeleteServer(null);
+            onRefresh();
+            toast("success", "Server deleted");
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+/* ── Add Server Modal ───────────────────────────────────────────── */
+
+function AddServerModal({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [verifyTls, setVerifyTls] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const reset = () => {
+    setName("");
+    setUrl("");
+    setApiKey("");
+    setVerifyTls(false);
+    setError("");
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      const data: LudusServerCreate = { name, url, api_key: apiKey, verify_tls: verifyTls };
+      await settings.createServer(data);
+      reset();
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Failed to create server");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={() => { reset(); onClose(); }} title="Add Ludus Server" size="sm">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
+            {error}
+          </div>
+        )}
+
+        <Input
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. research"
+          pattern="^[a-z0-9_-]+$"
+          required
+        />
+        <Input
+          label="URL"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://ludus.example.com:8080"
+          required
+        />
+        <Input
+          label="API Key"
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          required
+        />
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={verifyTls}
+            onClick={() => setVerifyTls((v) => !v)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+              verifyTls ? "bg-accent-success" : "bg-bg-elevated"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${
+                verifyTls ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-sm text-text-primary">Verify TLS</span>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" type="button" onClick={() => { reset(); onClose(); }}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={saving}>
+            Add Server
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ── Edit Server Modal ──────────────────────────────────────────── */
+
+function EditServerModal({
+  open,
+  server,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  server: LudusServerInfo;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [url, setUrl] = useState(server.url);
+  const [apiKey, setApiKey] = useState("");
+  const [verifyTls, setVerifyTls] = useState(server.verify_tls);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSaving(true);
+    try {
+      const data: LudusServerUpdate = { url, verify_tls: verifyTls };
+      if (apiKey) data.api_key = apiKey;
+      await settings.updateServer(server.name, data);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Failed to update server");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Edit Server: ${server.name}`} size="sm">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {error && (
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
+            Name
+          </label>
+          <div className="h-11 px-3 rounded-md bg-bg-elevated border border-border flex items-center">
+            <span className="text-[15px] font-mono text-text-muted">{server.name}</span>
+          </div>
+        </div>
+
+        <Input
+          label="URL"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          required
+        />
+        <Input
+          label="API Key"
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="Leave blank to keep current"
+        />
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={verifyTls}
+            onClick={() => setVerifyTls((v) => !v)}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
+              verifyTls ? "bg-accent-success" : "bg-bg-elevated"
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${
+                verifyTls ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+          <span className="text-sm text-text-primary">Verify TLS</span>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={saving}>
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ── Delete Server Modal ────────────────────────────────────────── */
+
+function DeleteServerModal({
+  open,
+  server,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  server: LudusServerInfo;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleDelete = async () => {
+    setError("");
+    setDeleting(true);
+    try {
+      await settings.deleteServer(server.name);
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "Failed to delete server");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Delete Server" size="sm">
+      <div className="space-y-5">
+        {error && (
+          <div className="p-3 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-sm text-accent-danger">
+            {error}
+          </div>
+        )}
+
+        <p className="text-text-secondary">
+          Are you sure you want to delete the server{" "}
+          <strong className="text-text-primary">{server.name}</strong>? This action cannot be undone.
+        </p>
+
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDelete} loading={deleting}>
+            Delete
+          </Button>
+        </div>
       </div>
-    </Card>
+    </Modal>
   );
 }
 

@@ -6,6 +6,7 @@ the current-user dependency from a single place.
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from fastapi import Depends, HTTPException, Request, status
@@ -24,7 +25,10 @@ __all__ = [
     "get_db",
     "get_ludus_client",
     "get_ludus_client_registry",
+    "reload_registry",
 ]
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_user(
@@ -92,7 +96,7 @@ class LudusClientRegistry:
     """
 
     def __init__(self, servers: dict[str, LudusServerConfig]) -> None:
-        self._servers = servers
+        self._servers = dict(servers)
         self._clients: dict[str, LudusClient] = {}
 
     def get(self, name: str = "default") -> LudusClient:
@@ -124,6 +128,20 @@ class LudusClientRegistry:
         """The underlying server config dict (read-only access)."""
         return self._servers
 
+    def reload(self, servers: dict[str, LudusServerConfig]) -> None:
+        """Replace the server map and close stale cached clients."""
+        stale = set(self._clients) - set(servers)
+        for name in stale:
+            self._clients.pop(name).close()
+        # Invalidate cached clients whose config changed.
+        for name in list(self._clients):
+            if name in servers:
+                old = self._servers.get(name)
+                new = servers[name]
+                if old != new:
+                    self._clients.pop(name).close()
+        self._servers = dict(servers)
+
     def close_all(self) -> None:
         """Close all cached clients."""
         for client in self._clients.values():
@@ -131,19 +149,66 @@ class LudusClientRegistry:
         self._clients.clear()
 
 
-@lru_cache
-def _build_registry() -> LudusClientRegistry:
-    """Construct a process-wide ``LudusClientRegistry`` from app settings."""
-    s = get_settings()
-    return LudusClientRegistry(s.ludus_servers)
+# ---------------------------------------------------------------------------
+# Registry singleton (module-level, supports reload)
+# ---------------------------------------------------------------------------
+
+_registry: LudusClientRegistry | None = None
+
+
+def _get_or_build_registry() -> LudusClientRegistry:
+    """Return the module-level registry, building from env if needed."""
+    global _registry
+    if _registry is None:
+        s = get_settings()
+        _registry = LudusClientRegistry(s.ludus_servers)
+    return _registry
 
 
 def get_ludus_client_registry() -> LudusClientRegistry:
-    """FastAPI dependency returning a memoised ``LudusClientRegistry``.
+    """FastAPI dependency returning the ``LudusClientRegistry``.
 
     Tests override this via ``app.dependency_overrides[get_ludus_client_registry]``.
     """
-    return _build_registry()
+    return _get_or_build_registry()
+
+
+def _merge_servers(
+    db: Session,
+    settings: Settings,
+) -> dict[str, LudusServerConfig]:
+    """Merge env-based servers with DB-stored servers (DB wins on collision)."""
+    from app.core.encryption import decrypt_value
+    from app.models.ludus_server import LudusServer
+
+    merged = dict(settings.ludus_servers)
+
+    rows = db.query(LudusServer).all()
+    for row in rows:
+        try:
+            api_key = decrypt_value(row.api_key_encrypted, settings.app_secret_key)
+        except Exception:
+            logger.warning("Failed to decrypt API key for server '%s', skipping", row.name)
+            continue
+        merged[row.name] = LudusServerConfig(
+            name=row.name,
+            url=row.url,
+            api_key=api_key,
+            verify_tls=row.verify_tls,
+        )
+
+    return merged
+
+
+def reload_registry(db: Session, settings: Settings) -> None:
+    """Rebuild the registry from env + DB servers."""
+    global _registry
+    servers = _merge_servers(db, settings)
+    if _registry is None:
+        _registry = LudusClientRegistry(servers)
+    else:
+        _registry.reload(servers)
+    logger.info("Ludus registry reloaded: %s", sorted(servers))
 
 
 @lru_cache

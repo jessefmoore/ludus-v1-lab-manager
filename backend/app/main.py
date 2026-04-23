@@ -43,7 +43,7 @@ from app.api import (
 from app.api import settings as settings_api
 from app.core.config import Settings, get_settings
 from app.core.db import Base, SessionLocal, engine
-from app.core.deps import get_db
+from app.core.deps import get_db, reload_registry
 from app.core.limiter import limiter
 from app.middleware.csrf import CSRFMiddleware
 from app.middleware.logging import RequestLoggingMiddleware
@@ -89,6 +89,7 @@ async def lifespan(app: FastAPI):
     _apply_schema(settings)
     with SessionLocal() as db:
         ensure_admin_user(db, settings)
+        reload_registry(db, settings)
     yield
     # No shutdown work for MVP.
 

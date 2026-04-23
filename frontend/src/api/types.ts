@@ -226,10 +226,24 @@ export interface LudusServerInfo {
   url: string;
   api_key_masked: string;
   verify_tls: boolean;
+  source: "env" | "db";
 }
 
 export interface LudusServersResponse {
   servers: LudusServerInfo[];
+}
+
+export interface LudusServerCreate {
+  name: string;
+  url: string;
+  api_key: string;
+  verify_tls: boolean;
+}
+
+export interface LudusServerUpdate {
+  url?: string;
+  api_key?: string;
+  verify_tls?: boolean;
 }
 
 // Ludus Range Detail / VMs
