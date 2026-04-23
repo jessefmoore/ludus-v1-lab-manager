@@ -49,7 +49,7 @@ trainings and workshops.
 - **Backend:** Python 3.11+, FastAPI, SQLAlchemy 2.0, Pydantic 2, httpx
 - **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
 - **DB:** PostgreSQL (via Docker Compose)
-- **Auth:** Single instructor account, JWT in httpOnly cookie
+- **Auth:** Single instructor account, JWT
 - **Deployment:** Docker Compose + Caddy reverse proxy
 
 ## Project structure
