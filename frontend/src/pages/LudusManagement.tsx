@@ -160,17 +160,25 @@ function RangesTab({ server }: { server: string }) {
 
   const fetchRanges = useCallback(() => {
     setLoading(true);
-    Promise.all([ludus.ranges(server), ludus.users(server)])
-      .then(([rangesRes, usersRes]) => {
+    ludus
+      .ranges(server)
+      .then(async (rangesRes) => {
         const filtered = rangesRes.ranges.filter(
           (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
         );
         setRanges(filtered);
+        // Fetch owner userID for each range via range_users endpoint
+        const ownerResults = await Promise.all(
+          filtered.map((r) =>
+            ludus
+              .rangeUsers(r.rangeNumber, server)
+              .then((res) => [r.rangeNumber, res.users[0]?.userID] as const)
+              .catch(() => [r.rangeNumber, undefined] as const),
+          ),
+        );
         const mapping = new Map<number, string>();
-        for (const u of usersRes.users) {
-          if (u.userNumber != null) {
-            mapping.set(u.userNumber, u.userID);
-          }
+        for (const [num, uid] of ownerResults) {
+          if (uid) mapping.set(num, uid);
         }
         setRangeToUser(mapping);
         // Auto-detect in-progress operations from range state
@@ -208,19 +216,13 @@ function RangesTab({ server }: { server: string }) {
   useEffect(() => {
     if (activeOps.size > 0) return;
     const interval = setInterval(() => {
-      Promise.all([ludus.ranges(server), ludus.users(server)])
-        .then(([rangesRes, usersRes]) => {
+      ludus
+        .ranges(server)
+        .then((rangesRes) => {
           const filtered = rangesRes.ranges.filter(
             (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
           );
           setRanges(filtered);
-          const mapping = new Map<number, string>();
-          for (const u of usersRes.users) {
-            if (u.userNumber != null) {
-              mapping.set(u.userNumber, u.userID);
-            }
-          }
-          setRangeToUser(mapping);
         })
         .catch(() => {});
     }, 30000);
@@ -232,19 +234,13 @@ function RangesTab({ server }: { server: string }) {
     if (activeOps.size === 0) return;
 
     const interval = setInterval(() => {
-      Promise.all([ludus.ranges(server), ludus.users(server)])
-        .then(([rangesRes, usersRes]) => {
+      ludus
+        .ranges(server)
+        .then((rangesRes) => {
           const filtered = rangesRes.ranges.filter(
             (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
           );
           setRanges(filtered);
-          const mapping = new Map<number, string>();
-          for (const u of usersRes.users) {
-            if (u.userNumber != null) {
-              mapping.set(u.userNumber, u.userID);
-            }
-          }
-          setRangeToUser(mapping);
 
           // Check each active op for completion
           setActiveOps((prev) => {
@@ -326,6 +322,23 @@ function RangesTab({ server }: { server: string }) {
     });
   };
 
+  const handleDeploy = (range: LudusRange) => {
+    const uid = getUserId(range);
+    if (!uid) {
+      toast("error", `Cannot deploy range ${range.rangeNumber}: owner user not found`);
+      return;
+    }
+    setConfirmModal({
+      title: "Deploy Range",
+      message: `This will deploy range ${range.rangeNumber} (${range.name || range.rangeID}). Existing VMs will be rebuilt.`,
+      action: async () => {
+        await ludus.deployRange(range.rangeNumber, { user_id: uid }, server);
+        toast("success", `Deploy started for range ${range.rangeNumber}`);
+        addOp(range.rangeNumber, "DEPLOYING");
+      },
+    });
+  };
+
   const handleDestroy = (range: LudusRange) => {
     setConfirmModal({
       title: "Destroy Range",
@@ -401,6 +414,9 @@ function RangesTab({ server }: { server: string }) {
         const busy = activeOps.has(r.rangeNumber);
         return (
           <div className="flex items-center gap-1">
+            <Button variant="icon" onClick={() => handleDeploy(r)} title="Deploy" disabled={busy}>
+              <Play className="h-4 w-4 text-accent-success" />
+            </Button>
             <Button variant="icon" onClick={() => handlePowerOn(r)} title="Power On" disabled={busy}>
               <Power className="h-4 w-4 text-accent-success" />
             </Button>
@@ -485,18 +501,25 @@ function SnapshotsTab({ server }: { server: string }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([ludus.ranges(server), ludus.users(server)])
-      .then(([rangesRes, usersRes]) => {
+    ludus
+      .ranges(server)
+      .then(async (rangesRes) => {
         const realRanges = rangesRes.ranges.filter(
           (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
         );
         setDeployedRanges(realRanges);
-        // Build range number -> owner userID mapping
+        // Build range number -> owner userID mapping via range_users endpoint
+        const ownerResults = await Promise.all(
+          realRanges.map((r) =>
+            ludus
+              .rangeUsers(r.rangeNumber, server)
+              .then((res) => [r.rangeNumber, res.users[0]?.userID] as const)
+              .catch(() => [r.rangeNumber, undefined] as const),
+          ),
+        );
         const mapping = new Map<number, string>();
-        for (const u of usersRes.users) {
-          if (u.userNumber != null) {
-            mapping.set(u.userNumber, u.userID);
-          }
+        for (const [num, uid] of ownerResults) {
+          if (uid) mapping.set(num, uid);
         }
         setRangeToUser(mapping);
         if (realRanges.length > 0) {
@@ -2380,17 +2403,25 @@ function LogsTab({ server }: { server: string }) {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([ludus.ranges(server), ludus.users(server)])
-      .then(([rangesRes, usersRes]) => {
+    ludus
+      .ranges(server)
+      .then(async (rangesRes) => {
         const realRanges = rangesRes.ranges.filter(
           (r) => (r.numberOfVMs ?? 0) > 0 || (r.rangeState && r.rangeState !== "NEVER DEPLOYED"),
         );
         setRanges(realRanges);
+        // Build range number -> owner userID mapping via range_users endpoint
+        const ownerResults = await Promise.all(
+          realRanges.map((r) =>
+            ludus
+              .rangeUsers(r.rangeNumber, server)
+              .then((res) => [r.rangeNumber, res.users[0]?.userID] as const)
+              .catch(() => [r.rangeNumber, undefined] as const),
+          ),
+        );
         const mapping = new Map<number, string>();
-        for (const u of usersRes.users) {
-          if (u.userNumber != null) {
-            mapping.set(u.userNumber, u.userID);
-          }
+        for (const [num, uid] of ownerResults) {
+          if (uid) mapping.set(num, uid);
         }
         setRangeToUser(mapping);
         if (realRanges.length > 0) {
