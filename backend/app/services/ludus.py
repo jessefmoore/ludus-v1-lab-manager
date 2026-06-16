@@ -1272,7 +1272,7 @@ class LudusClient:
         except ValueError:
             return {"result": "ok"}
 
-    def range_users(self, range_id: int) -> list[dict]:
+    def range_users(self, range_id: str) -> list[dict]:
         """List users with access to a range.
 
         Route:  GET /api/v2/ranges/{rangeID}/users

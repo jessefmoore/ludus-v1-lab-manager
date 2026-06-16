@@ -52,6 +52,7 @@ import type {
   LudusServerInfo,
   LudusServerCreate,
   LudusServerUpdate,
+  SessionPatch,
 } from "./types";
 
 export class ApiError extends Error {
@@ -156,6 +157,12 @@ export const sessions = {
   create: (data: SessionCreate) =>
     request<SessionRead>("/api/sessions", {
       method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  patch: (id: number, data: SessionPatch) =>
+    request<SessionRead>(`/api/sessions/${id}`, {
+      method: "PATCH",
       body: JSON.stringify(data),
     }),
 
@@ -423,8 +430,8 @@ export const ludus = {
       body: JSON.stringify(data),
     }),
 
-  rangeUsers: (rangeId: number, server?: string) =>
-    request<LudusRangeUsersResponse>(`/api/ludus/ranges/${rangeId}/users${serverQs(server)}`),
+  rangeUsers: (rangeId: string, server?: string) =>
+    request<LudusRangeUsersResponse>(`/api/ludus/ranges/${encodeURIComponent(rangeId)}/users${serverQs(server)}`),
 
   accessibleRanges: (server?: string) =>
     request<LudusAccessibleRangesResponse>(`/api/ludus/ranges/accessible${serverQs(server)}`),

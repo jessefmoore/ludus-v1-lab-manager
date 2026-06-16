@@ -1,4 +1,5 @@
-{$DOMAIN:localhost} {
+# Shared route definitions for backend + frontend.
+(common) {
 	# API + health + invite → backend
 	handle /api/* {
 		reverse_proxy backend:8000
@@ -14,4 +15,11 @@
 	handle {
 		reverse_proxy frontend:3000
 	}
+}
+
+# Plain HTTP - works locally without self-signed cert warnings.
+# For production HTTPS, set DOMAIN in .env and replace this block with:
+#   {$DOMAIN} { import common }
+:80 {
+	import common
 }

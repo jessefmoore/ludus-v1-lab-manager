@@ -171,7 +171,7 @@ function RangesTab({ server }: { server: string }) {
         const ownerResults = await Promise.all(
           filtered.map((r) =>
             ludus
-              .rangeUsers(r.rangeNumber, server)
+              .rangeUsers(r.rangeID, server)
               .then((res) => [r.rangeNumber, res.users[0]?.userID] as const)
               .catch(() => [r.rangeNumber, undefined] as const),
           ),
@@ -382,12 +382,12 @@ function RangesTab({ server }: { server: string }) {
       label: "Name",
       sortable: true,
       sortValue: (r) => (r.name || "").toLowerCase(),
-      render: (r) => <span className="text-text-primary">{r.name || "\u2014"}</span>,
+      render: (r) => <span className="text-text-primary">{r.name || "-"}</span>,
     },
     {
       key: "vms",
       label: "VMs",
-      render: (r) => <span className="text-text-secondary">{r.numberOfVMs ?? "\u2014"}</span>,
+      render: (r) => <span className="text-text-secondary">{r.numberOfVMs ?? "-"}</span>,
     },
     {
       key: "state",
@@ -403,7 +403,7 @@ function RangesTab({ server }: { server: string }) {
       sortValue: (r) => r.lastDeployment || "",
       render: (r) => (
         <span className="font-mono text-text-muted text-xs">
-          {r.lastDeployment ? new Date(r.lastDeployment).toLocaleString() : "\u2014"}
+          {r.lastDeployment ? new Date(r.lastDeployment).toLocaleString() : "-"}
         </span>
       ),
     },
@@ -512,7 +512,7 @@ function SnapshotsTab({ server }: { server: string }) {
         const ownerResults = await Promise.all(
           realRanges.map((r) =>
             ludus
-              .rangeUsers(r.rangeNumber, server)
+              .rangeUsers(r.rangeID, server)
               .then((res) => [r.rangeNumber, res.users[0]?.userID] as const)
               .catch(() => [r.rangeNumber, undefined] as const),
           ),
@@ -655,7 +655,7 @@ function SnapshotsTab({ server }: { server: string }) {
       key: "description",
       label: "Description",
       render: (s) => (
-        <span className="text-text-secondary">{s.description || "\u2014"}</span>
+        <span className="text-text-secondary">{s.description || "-"}</span>
       ),
     },
     {
@@ -1031,7 +1031,7 @@ function TemplatesTab({ server }: { server: string }) {
   };
 
   const osLabel = (os?: string) => {
-    if (!os) return "\u2014";
+    if (!os) return "-";
     const lower = os.toLowerCase();
     if (lower.includes("win")) return "Windows";
     if (lower.includes("linux") || lower.includes("ubuntu") || lower.includes("debian") || lower.includes("centos") || lower.includes("rhel") || lower.includes("fedora") || lower.includes("kali") || lower.includes("arch")) return "Linux";
@@ -1290,7 +1290,7 @@ function UsersTab({ server }: { server: string }) {
       label: "Name",
       sortable: true,
       sortValue: (u) => (u.name || "").toLowerCase(),
-      render: (u) => <span className="text-text-primary">{u.name || "\u2014"}</span>,
+      render: (u) => <span className="text-text-primary">{u.name || "-"}</span>,
     },
     {
       key: "dateCreated",
@@ -1299,7 +1299,7 @@ function UsersTab({ server }: { server: string }) {
       sortValue: (u) => u.dateCreated || "",
       render: (u) => (
         <span className="font-mono text-text-muted text-xs">
-          {u.dateCreated ? new Date(u.dateCreated).toLocaleString() : "\u2014"}
+          {u.dateCreated ? new Date(u.dateCreated).toLocaleString() : "-"}
         </span>
       ),
     },
@@ -1307,7 +1307,7 @@ function UsersTab({ server }: { server: string }) {
       key: "proxmoxUsername",
       label: "Proxmox User",
       render: (u) => (
-        <span className="font-mono text-text-secondary">{u.proxmoxUsername || "\u2014"}</span>
+        <span className="font-mono text-text-secondary">{u.proxmoxUsername || "-"}</span>
       ),
     },
     {
@@ -1316,7 +1316,7 @@ function UsersTab({ server }: { server: string }) {
       sortable: true,
       sortValue: (u) => u.userNumber ?? -1,
       render: (u) => (
-        <span className="text-text-secondary">{u.userNumber != null ? u.userNumber : "\u2014"}</span>
+        <span className="text-text-secondary">{u.userNumber != null ? u.userNumber : "-"}</span>
       ),
     },
     {
@@ -1801,7 +1801,7 @@ function GroupsTab({ server }: { server: string }) {
       key: "description",
       label: "Description",
       render: (g) => (
-        <span className="text-text-secondary">{g.description || "\u2014"}</span>
+        <span className="text-text-secondary">{g.description || "-"}</span>
       ),
     },
     {
@@ -1859,7 +1859,7 @@ function GroupsTab({ server }: { server: string }) {
                 key: "name",
                 label: "Name",
                 render: (u: LudusGroupUser) => (
-                  <span className="text-text-secondary">{u.name || "\u2014"}</span>
+                  <span className="text-text-secondary">{u.name || "-"}</span>
                 ),
               },
               {
@@ -2162,21 +2162,21 @@ function AnsibleTab({ server }: { server: string }) {
       key: "version",
       label: "Version",
       render: (r) => (
-        <span className="text-text-secondary">{r.version || "\u2014"}</span>
+        <span className="text-text-secondary">{r.version || "-"}</span>
       ),
     },
     {
       key: "scope",
       label: "Scope",
       render: (r) => (
-        <span className="text-text-secondary">{r.scope || "\u2014"}</span>
+        <span className="text-text-secondary">{r.scope || "-"}</span>
       ),
     },
     {
       key: "type",
       label: "Type",
       render: (r) => (
-        <span className="text-text-secondary">{r.type || "\u2014"}</span>
+        <span className="text-text-secondary">{r.type || "-"}</span>
       ),
     },
     {
@@ -2414,7 +2414,7 @@ function LogsTab({ server }: { server: string }) {
         const ownerResults = await Promise.all(
           realRanges.map((r) =>
             ludus
-              .rangeUsers(r.rangeNumber, server)
+              .rangeUsers(r.rangeID, server)
               .then((res) => [r.rangeNumber, res.users[0]?.userID] as const)
               .catch(() => [r.rangeNumber, undefined] as const),
           ),

@@ -3,8 +3,8 @@
 Security design notes (Phase 1 MVP):
 
 * Sessions are carried as an HS256-signed JWT in an httpOnly cookie
-  (``insec_session``) with ``SameSite=Lax`` and ``Secure`` toggled on
-  when ``settings.app_env == "production"``.
+  (``insec_session``) with ``SameSite=Lax`` and ``Secure`` when
+  ``PUBLIC_BASE_URL`` uses HTTPS.
 * CSRF protection is intentionally out of scope for Phase 1. ``SameSite=Lax``
   blocks cross-origin POST/PUT/DELETE from third-party sites on modern
   browsers, which is acceptable for an MVP with a single instructor user
@@ -84,6 +84,11 @@ def decode_access_token(token: str, settings: Settings) -> dict:
     return jwt.decode(token, settings.app_secret_key, algorithms=[JWT_ALGORITHM])
 
 
+def _cookie_secure(settings: Settings) -> bool:
+    """Only mark session cookies Secure when the app is served over HTTPS."""
+    return settings.public_base_url.lower().startswith("https://")
+
+
 def set_session_cookie(response: Response, token: str, settings: Settings) -> None:
     """Attach the session JWT as an httpOnly cookie on the response."""
     response.set_cookie(
@@ -92,7 +97,7 @@ def set_session_cookie(response: Response, token: str, settings: Settings) -> No
         max_age=int(TOKEN_TTL.total_seconds()),
         httponly=True,
         samesite="lax",
-        secure=(settings.app_env == "production"),
+        secure=_cookie_secure(settings),
         path="/",
     )
 
@@ -104,5 +109,5 @@ def clear_session_cookie(response: Response, settings: Settings) -> None:
         path="/",
         httponly=True,
         samesite="lax",
-        secure=(settings.app_env == "production"),
+        secure=_cookie_secure(settings),
     )

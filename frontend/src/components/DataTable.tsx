@@ -248,7 +248,7 @@ export default function DataTable<T>({
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 text-sm text-text-secondary">
           <span>
-            {safePage * pageSize + 1}–
+            {safePage * pageSize + 1}-
             {Math.min((safePage + 1) * pageSize, sorted.length)} of{" "}
             {sorted.length}
           </span>

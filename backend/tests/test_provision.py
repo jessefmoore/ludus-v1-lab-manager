@@ -44,6 +44,7 @@ from app.models import (
     Session as SessionRow,
 )
 from app.services.exceptions import LudusError, LudusTimeout, LudusUserExists
+from app.services.provision import extract_role_names
 
 ADMIN_EMAIL = "instructor@example.com"
 ADMIN_PASSWORD = "super-secret-test-pw"
@@ -68,6 +69,7 @@ class FakeLudus:
 
     def __init__(self) -> None:
         self._ranges: list[dict] = []
+        self._users: list[dict] = []
 
         self.user_add_calls: list[dict[str, str]] = []
         self.user_add_overrides: dict[str, Exception] = {}
@@ -82,6 +84,9 @@ class FakeLudus:
         # Either an Exception instance (raised) or a string (returned).
         self.user_wireguard_overrides: dict[str, Exception | str] = {}
 
+        self.ansible_role_scope_calls: list[dict[str, Any]] = []
+        self.ansible_role_scope_error: Exception | None = None
+
     def user_add(self, userid: str, name: str, email: str) -> dict[str, Any]:
         self.user_add_calls.append({"userid": userid, "name": name, "email": email})
         exc = self.user_add_overrides.get(userid)
@@ -91,6 +96,9 @@ class FakeLudus:
 
     def range_list(self) -> list[dict]:
         return self._ranges
+
+    def user_list(self) -> list[dict]:
+        return self._users
 
     def range_assign(self, userid: str, range_id: str) -> None:
         self.range_assign_calls.append({"userid": userid, "range_id": range_id})
@@ -112,6 +120,20 @@ class FakeLudus:
         if isinstance(override, str):
             return override
         return WG_CONFIG_TEMPLATE.format(userid=userid)
+
+    def ansible_role_scope(
+        self,
+        roles: list[str],
+        *,
+        global_: bool = False,
+        copy: bool = False,
+    ) -> dict:
+        self.ansible_role_scope_calls.append(
+            {"roles": roles, "global_": global_, "copy": copy}
+        )
+        if self.ansible_role_scope_error is not None:
+            raise self.ansible_role_scope_error
+        return {"result": "ok"}
 
 
 # ---------------------------------------------------------------------------
@@ -687,3 +709,223 @@ def test_provision_user_add_error_short_circuits_student(
     ).scalar_one()
     assert failure.details_json is not None
     assert failure.details_json["step"] == "user_add"
+
+
+# ---------------------------------------------------------------------------
+# extract_role_names unit tests
+# ---------------------------------------------------------------------------
+
+
+class TestExtractRoleNames:
+    """Unit tests for the YAML role-name parser."""
+
+    def test_plain_string_roles_top_level(self) -> None:
+        cfg = "roles:\n  - ansible-role-foo\n  - ansible-role-bar\n"
+        assert extract_role_names(cfg) == ["ansible-role-bar", "ansible-role-foo"]
+
+    def test_dict_roles_with_name_key(self) -> None:
+        cfg = "roles:\n  - name: ansible-role-alpha\n  - name: ansible-role-beta\n"
+        assert extract_role_names(cfg) == ["ansible-role-alpha", "ansible-role-beta"]
+
+    def test_mixed_string_and_dict(self) -> None:
+        cfg = "roles:\n  - ansible-role-plain\n  - name: ansible-role-dict\n"
+        assert extract_role_names(cfg) == ["ansible-role-dict", "ansible-role-plain"]
+
+    def test_deduplication(self) -> None:
+        cfg = "roles:\n  - ansible-role-dup\n  - ansible-role-dup\n"
+        assert extract_role_names(cfg) == ["ansible-role-dup"]
+
+    def test_empty_roles_list(self) -> None:
+        cfg = "roles: []\n"
+        assert extract_role_names(cfg) == []
+
+    def test_no_roles_key(self) -> None:
+        cfg = "ludus:\n  - vm_name: KALI\n"
+        assert extract_role_names(cfg) == []
+
+    def test_malformed_yaml(self) -> None:
+        cfg = "roles:\n  - :\n    bad: [unclosed"
+        assert extract_role_names(cfg) == []
+
+    def test_non_dict_top_level(self) -> None:
+        cfg = "- just a list\n"
+        assert extract_role_names(cfg) == []
+
+    def test_empty_string_entries_ignored(self) -> None:
+        cfg = "roles:\n  - ''\n  - ansible-role-ok\n"
+        assert extract_role_names(cfg) == ["ansible-role-ok"]
+
+    def test_dict_without_name_key_ignored(self) -> None:
+        cfg = "roles:\n  - src: galaxy\n  - name: ansible-role-valid\n"
+        assert extract_role_names(cfg) == ["ansible-role-valid"]
+
+    def test_per_vm_roles_plain_string(self) -> None:
+        cfg = "ludus:\n  - vm_name: DC\n    roles:\n      - ansible-role-dc\n"
+        assert extract_role_names(cfg) == ["ansible-role-dc"]
+
+    def test_per_vm_roles_dict_with_name(self) -> None:
+        cfg = (
+            "ludus:\n"
+            "  - vm_name: DC\n"
+            "    roles:\n"
+            "      - name: ansible-role-dc\n"
+            "        depends_on:\n"
+            "          - vm_name: OTHER\n"
+        )
+        assert extract_role_names(cfg) == ["ansible-role-dc"]
+
+    def test_per_vm_roles_across_multiple_vms(self) -> None:
+        cfg = (
+            "ludus:\n"
+            "  - vm_name: DC\n"
+            "    roles:\n"
+            "      - ansible-role-foosha\n"
+            "  - vm_name: SRV\n"
+            "    roles:\n"
+            "      - name: ansible-role-baratie\n"
+        )
+        assert extract_role_names(cfg) == ["ansible-role-baratie", "ansible-role-foosha"]
+
+    def test_per_vm_roles_dedup_across_vms(self) -> None:
+        cfg = (
+            "ludus:\n"
+            "  - vm_name: DC\n"
+            "    roles:\n"
+            "      - ansible-role-shared\n"
+            "  - vm_name: SRV\n"
+            "    roles:\n"
+            "      - ansible-role-shared\n"
+        )
+        assert extract_role_names(cfg) == ["ansible-role-shared"]
+
+    def test_combined_top_level_and_per_vm(self) -> None:
+        cfg = (
+            "roles:\n"
+            "  - ansible-role-top\n"
+            "ludus:\n"
+            "  - vm_name: DC\n"
+            "    roles:\n"
+            "      - ansible-role-vm\n"
+        )
+        assert extract_role_names(cfg) == ["ansible-role-top", "ansible-role-vm"]
+
+
+# ---------------------------------------------------------------------------
+# role scoping integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_provision_scopes_roles_globally_before_deploy(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    fake_ludus: FakeLudus,
+) -> None:
+    """When the lab template has roles, ansible_role_scope is called."""
+    # Update the lab template to include roles.
+    lab_template.range_config_yaml = (
+        "roles:\n  - ansible-role-foosha\n  - ansible-role-barbaz\n"
+        "ludus:\n  - vm_name: KALI\n"
+    )
+    db_session.commit()
+
+    session_row = _make_session(
+        db_session,
+        lab_template,
+        mode=SessionMode.shared,
+        shared_range_id="42",
+    )
+    _make_student(
+        db_session,
+        session_row,
+        ludus_userid="alice-aaa",
+        invite_token="a" * 32,
+    )
+
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    assert resp.json()["provisioned"] == 1
+
+    # ansible_role_scope was called once with sorted role names.
+    assert len(fake_ludus.ansible_role_scope_calls) == 1
+    call = fake_ludus.ansible_role_scope_calls[0]
+    assert call["roles"] == ["ansible-role-barbaz", "ansible-role-foosha"]
+    assert call["global_"] is True
+
+
+def test_provision_continues_when_role_scope_fails(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    fake_ludus: FakeLudus,
+) -> None:
+    """A failure in ansible_role_scope must NOT abort provisioning."""
+    lab_template.range_config_yaml = (
+        "roles:\n  - ansible-role-foosha\n"
+        "ludus:\n  - vm_name: KALI\n"
+    )
+    db_session.commit()
+
+    fake_ludus.ansible_role_scope_error = LudusError(
+        "internal server error", status_code=500
+    )
+
+    session_row = _make_session(
+        db_session,
+        lab_template,
+        mode=SessionMode.shared,
+        shared_range_id="42",
+    )
+    _make_student(
+        db_session,
+        session_row,
+        ludus_userid="alice-aaa",
+        invite_token="a" * 32,
+    )
+
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    body = resp.json()
+    # Provisioning still succeeded despite role scope failure.
+    assert body["provisioned"] == 1
+    assert body["failed"] == 0
+
+    # The failure event was recorded.
+    scope_events = (
+        db_session.execute(
+            select(Event).where(Event.action == "session.role_scope_failed")
+        )
+        .scalars()
+        .all()
+    )
+    assert len(scope_events) == 1
+    assert scope_events[0].details_json["roles"] == ["ansible-role-foosha"]
+    assert "LudusError" in scope_events[0].details_json["reason"]
+
+
+def test_provision_skips_role_scope_when_no_roles(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    fake_ludus: FakeLudus,
+) -> None:
+    """When config has no roles key, ansible_role_scope is not called."""
+    session_row = _make_session(
+        db_session,
+        lab_template,
+        mode=SessionMode.shared,
+        shared_range_id="42",
+    )
+    _make_student(
+        db_session,
+        session_row,
+        ludus_userid="alice-aaa",
+        invite_token="a" * 32,
+    )
+
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    assert resp.json()["provisioned"] == 1
+
+    # No role scope calls because the default lab template has no roles.
+    assert fake_ludus.ansible_role_scope_calls == []

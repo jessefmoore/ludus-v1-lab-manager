@@ -1030,7 +1030,7 @@ def revoke_range(
 
 @router.get("/ranges/{range_id}/users", response_model=LudusRangeUsersResponse)
 def get_range_users(
-    range_id: int,
+    range_id: str,
     server: str = "default",
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
@@ -1045,7 +1045,7 @@ def get_range_users(
             detail=f"Range {range_id} not found",
         ) from exc
     except LudusError as exc:
-        logger.warning("Ludus range_users(%d) failed: %s", range_id, exc)
+        logger.warning("Ludus range_users(%s) failed: %s", range_id, exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Ludus error: {exc}",

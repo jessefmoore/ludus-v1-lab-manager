@@ -50,7 +50,7 @@ trainings and workshops.
 - **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
 - **DB:** PostgreSQL (via Docker Compose)
 - **Auth:** Single instructor account, JWT
-- **Deployment:** Docker Compose + Caddy reverse proxy
+- **Deployment:** Docker Compose (frontend nginx reverse proxy)
 
 ## Project structure
 
@@ -86,7 +86,10 @@ ludus-helm/
 cp .env.example .env
 # edit .env: set ADMIN_PASSWORD, APP_SECRET_KEY, LUDUS_DEFAULT_API_KEY
 docker compose up -d
-# UI at http://localhost (Caddy), API at http://localhost/api
+# UI at http://localhost (frontend nginx), API at http://localhost/api
+
+# Optional: seed demo lab templates + LeHack session from your Ludus ranges
+docker compose exec backend python -m app.services.seed_demo
 ```
 
 ### Local development

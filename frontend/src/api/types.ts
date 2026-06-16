@@ -441,6 +441,11 @@ export interface UserCreateResponse {
   [key: string]: unknown;
 }
 
+// Session updates
+export interface SessionPatch {
+  shared_range_id?: string | null;
+}
+
 // Events (audit log)
 export interface EventRead {
   id: number;

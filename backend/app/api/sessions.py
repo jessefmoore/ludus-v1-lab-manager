@@ -19,13 +19,16 @@ from app.core.deps import (
     get_db,
     get_ludus_client_registry,
 )
+from app.models import LabTemplate, Student
 from app.models import Session as SessionRow
-from app.models import Student
+from app.models.event import Event
+from app.models.session import SessionStatus
 from app.models.user import User
-from app.schemas.session import SessionCreate, SessionDetailRead, SessionRead
+from app.schemas.session import SessionCreate, SessionDetailRead, SessionPatch, SessionRead
 from app.schemas.student import StudentRead
 from app.services import provision as provision_service
 from app.services import sessions as sessions_service
+from app.services.exceptions import LudusError
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -136,6 +139,71 @@ def delete_session(
             detail=str(exc),
         ) from exc
     return None
+
+
+@router.patch("/{session_id}", response_model=SessionRead)
+def patch_session(
+    session_id: int,
+    payload: SessionPatch,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> SessionRead:
+    """Update mutable fields on a draft session (currently ``shared_range_id``).
+
+    Only allowed when the session is in ``draft`` status. If a non-null
+    ``shared_range_id`` is provided, the range is validated against Ludus.
+    """
+    session_row = sessions_service.get_session(db, session_id)
+    if session_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+    if session_row.status != SessionStatus.draft:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot update session in status={session_row.status.value}; must be draft",
+        )
+
+    # Validate the range exists on Ludus when a non-null value is provided.
+    if payload.shared_range_id is not None:
+        lab_template = db.get(LabTemplate, session_row.lab_template_id)
+        server_name = getattr(lab_template, "ludus_server", "default") or "default"
+        try:
+            ludus = registry.get(server_name)
+            ranges = ludus.range_list()
+        except (ValueError, LudusError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to validate range: {exc}",
+            ) from exc
+        found = any(
+            isinstance(r, dict) and r.get("rangeID") == payload.shared_range_id
+            for r in ranges
+        )
+        if not found:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Range '{payload.shared_range_id}' not found on "
+                f"Ludus server '{server_name}'",
+            )
+
+    session_row.shared_range_id = payload.shared_range_id
+    db.add(
+        Event(
+            session_id=session_row.id,
+            student_id=None,
+            action="session.range_updated",
+            details_json={
+                "session_id": session_row.id,
+                "shared_range_id": payload.shared_range_id,
+            },
+        )
+    )
+    db.commit()
+    db.refresh(session_row)
+    return SessionRead.model_validate(session_row)
 
 
 @router.post("/{session_id}/end", response_model=SessionRead)

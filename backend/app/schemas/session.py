@@ -41,6 +41,12 @@ class SessionCreate(BaseModel):
         return self
 
 
+class SessionPatch(BaseModel):
+    """Payload to partially update a session (currently only ``shared_range_id``)."""
+
+    shared_range_id: str | None = None
+
+
 class SessionRead(BaseModel):
     """Public representation of a stored training session."""
 
@@ -68,4 +74,4 @@ class SessionDetailRead(SessionRead):
     students: list[StudentRead] = []
 
 
-__all__ = ["SessionCreate", "SessionDetailRead", "SessionRead"]
+__all__ = ["SessionCreate", "SessionDetailRead", "SessionPatch", "SessionRead"]

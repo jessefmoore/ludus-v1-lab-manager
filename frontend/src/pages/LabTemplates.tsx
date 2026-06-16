@@ -136,8 +136,9 @@ export default function LabTemplates() {
             <Layers className="h-12 w-12 text-text-muted mb-4 mt-16" />
             <p className="text-text-secondary mb-1">No lab templates yet</p>
             <p className="text-sm text-text-muted mb-6">
-              Create your first lab template to get started
+              Create manually or import a range config from Ludus
             </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-16">
             <Button
               variant="primary"
               icon={<Plus />}
@@ -145,10 +146,17 @@ export default function LabTemplates() {
                 setCreateInitial(undefined);
                 setShowCreate(true);
               }}
-              className="mb-16"
             >
               New Lab
             </Button>
+            <Button
+              variant="secondary"
+              icon={<Download />}
+              onClick={() => setShowDiscover(true)}
+            >
+              Discover from Ludus
+            </Button>
+            </div>
           </Card>
         ) : (
           <>

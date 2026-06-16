@@ -20,6 +20,7 @@ import type {
   LabTemplateRead,
   StudentRead,
   EventRead,
+  LudusRange,
   LudusUser,
   LudusGroup,
   LudusGroupUser,
@@ -373,11 +374,26 @@ export default function SessionDetail() {
     }
   };
 
+  const handleCopyAllInvites = async () => {
+    const lines = session.students
+      .filter((s) => s.status === "ready" && s.invite_url)
+      .map((s) => `${s.full_name}\t${s.invite_url}`);
+    if (lines.length === 0) {
+      toast("error", "No invite links available yet");
+      return;
+    }
+    await navigator.clipboard.writeText(lines.join("\n"));
+    toast("success", `Copied ${lines.length} invite link(s)`);
+  };
+
   const pendingCount = session.students.filter(
-    (s) => s.status === "pending",
+    (s) => s.status === "pending" || s.status === "error",
   ).length;
   const readyCount = session.students.filter(
     (s) => s.status === "ready",
+  ).length;
+  const inviteReadyCount = session.students.filter(
+    (s) => s.status === "ready" && s.invite_url,
   ).length;
   const vpnCount = session.students.filter(
     (s) => s.status === "ready" && s.invite_redeemed_at,
@@ -506,6 +522,13 @@ export default function SessionDetail() {
                 </span>
               </p>
             )}
+            {session.mode === "shared" && !session.shared_range_id && session.status === "draft" && (
+              <InlineRangePicker
+                sessionId={session.id}
+                ludusServer={lab?.ludus_server}
+                onUpdated={fetchSession}
+              />
+            )}
           </Card>
 
           <Card variant="stat" className="space-y-2">
@@ -535,6 +558,15 @@ export default function SessionDetail() {
               Students ({totalStudents})
             </h2>
             <div className="flex items-center gap-2">
+              {inviteReadyCount > 0 && (
+                <Button
+                  variant="secondary"
+                  icon={<Copy />}
+                  onClick={handleCopyAllInvites}
+                >
+                  Copy All Invites ({inviteReadyCount})
+                </Button>
+              )}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -730,7 +762,11 @@ function InviteCell({ student }: { student: StudentRead }) {
   };
 
   if (student.status !== "ready" || !student.invite_url) {
-    return <span className="text-xs text-text-muted">-</span>;
+    return (
+      <span className="text-xs text-text-muted">
+        {student.status === "pending" ? "Provision first" : "-"}
+      </span>
+    );
   }
 
   return (
@@ -752,6 +788,81 @@ function InviteCell({ student }: { student: StudentRead }) {
         <span className="text-xs text-accent-success">Redeemed</span>
       ) : (
         <span className="text-xs text-text-muted">Pending</span>
+      )}
+    </div>
+  );
+}
+
+function InlineRangePicker({
+  sessionId,
+  ludusServer,
+  onUpdated,
+}: {
+  sessionId: number;
+  ludusServer?: string;
+  onUpdated: () => void;
+}) {
+  const { toast } = useToast();
+  const [ranges, setRanges] = useState<LudusRange[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedRange, setSelectedRange] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    ludus
+      .ranges(ludusServer)
+      .then((res) => setRanges(res.ranges))
+      .catch(() => setRanges([]))
+      .finally(() => setLoading(false));
+  }, [ludusServer]);
+
+  const handleSetRange = async () => {
+    if (!selectedRange) return;
+    setSaving(true);
+    try {
+      await sessions.patch(sessionId, { shared_range_id: selectedRange });
+      toast("success", "Shared range updated");
+      onUpdated();
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to update range");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-text-muted">
+        <span className="h-3 w-3 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin" />
+        Loading ranges...
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 pt-1">
+      <select
+        className="w-full h-8 px-2 rounded-md bg-bg-elevated border border-border text-xs text-text-primary focus:outline-none focus:border-accent-success"
+        value={selectedRange}
+        onChange={(e) => setSelectedRange(e.target.value)}
+      >
+        <option value="">Auto-create during provisioning</option>
+        {ranges.map((r) => (
+          <option key={r.rangeID} value={r.rangeID}>
+            {r.rangeID} · {r.name || "Unnamed"} (Range #{r.rangeNumber})
+          </option>
+        ))}
+      </select>
+      {selectedRange && (
+        <Button
+          variant="primary"
+          onClick={handleSetRange}
+          loading={saving}
+          className="text-xs h-7 px-3"
+        >
+          Set Range
+        </Button>
       )}
     </div>
   );

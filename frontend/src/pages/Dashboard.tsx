@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Plus,
   CalendarRange,
@@ -11,10 +11,11 @@ import {
   TrendingDown,
   Minus,
 } from "lucide-react";
-import { sessions, labs, ApiError } from "@/api";
+import { sessions, labs, ludus, ApiError } from "@/api";
 import type {
   SessionRead,
   LabTemplateRead,
+  LudusRange,
   SessionStatus,
   LabMode,
 } from "@/api";
@@ -76,7 +77,7 @@ export default function Dashboard() {
       label: "Lab Template",
       render: (s) => {
         const lab = labList.find((l) => l.id === s.lab_template_id);
-        return <span className="text-text-secondary">{lab?.name ?? "\u2014"}</span>;
+        return <span className="text-text-secondary">{lab?.name ?? "-"}</span>;
       },
     },
     {
@@ -190,6 +191,20 @@ export default function Dashboard() {
           </p>
         </div>
 
+        {!loading && labList.length === 0 && (
+          <Card className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 border-accent-warning/30 bg-accent-warning/5">
+            <div>
+              <p className="text-[15px] font-medium text-text-primary">No lab templates yet</p>
+              <p className="text-sm text-text-secondary mt-1">
+                Create a lab template before starting a training session.
+              </p>
+            </div>
+            <Button variant="secondary" icon={<Layers />} onClick={() => navigate("/labs")}>
+              Go to Lab Templates
+            </Button>
+          </Card>
+        )}
+
         {/* Stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {stats.map((s) => (
@@ -297,6 +312,10 @@ function CreateSessionModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Range dropdown state
+  const [ranges, setRanges] = useState<LudusRange[]>([]);
+  const [rangesLoading, setRangesLoading] = useState(false);
+
   // Sync mode when lab changes
   useEffect(() => {
     if (labId !== "") {
@@ -305,11 +324,30 @@ function CreateSessionModal({
     }
   }, [labId, labTemplates]);
 
+  // Fetch ranges when lab template changes and mode is shared
+  useEffect(() => {
+    if (mode !== "shared" || labId === "") {
+      setRanges([]);
+      return;
+    }
+    const lab = labTemplates.find((l) => l.id === labId);
+    const server = lab?.ludus_server;
+    setRangesLoading(true);
+    setRanges([]);
+    setRangeId("");
+    ludus
+      .ranges(server)
+      .then((res) => setRanges(res.ranges))
+      .catch(() => setRanges([]))
+      .finally(() => setRangesLoading(false));
+  }, [labId, mode, labTemplates]);
+
   const reset = () => {
     setName("");
     setLabId("");
     setMode("shared");
     setRangeId("");
+    setRanges([]);
     setStartDate("");
     setEndDate("");
     setError("");
@@ -325,7 +363,7 @@ function CreateSessionModal({
         name,
         lab_template_id: labId,
         mode,
-        shared_range_id: mode === "shared" && rangeId ? rangeId : null,
+        shared_range_id: mode === "shared" && rangeId && rangeId !== "__auto__" ? rangeId : null,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         end_date: endDate ? new Date(endDate).toISOString() : null,
       });
@@ -361,6 +399,15 @@ function CreateSessionModal({
           <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
             Lab Template
           </label>
+          {labTemplates.length === 0 ? (
+            <div className="rounded-md border border-border bg-bg-elevated p-4 text-sm text-text-secondary">
+              No lab templates available.{" "}
+              <Link to="/labs" className="text-accent-success hover:underline">
+                Create one in Lab Templates
+              </Link>{" "}
+              first.
+            </div>
+          ) : (
           <select
             className="w-full h-11 px-3 rounded-md bg-bg-elevated border border-border text-[15px] text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
             value={labId}
@@ -376,6 +423,7 @@ function CreateSessionModal({
               </option>
             ))}
           </select>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -393,12 +441,31 @@ function CreateSessionModal({
         </div>
 
         {mode === "shared" && (
-          <Input
-            label="Shared Range ID"
-            placeholder="e.g. RZ"
-            value={rangeId}
-            onChange={(e) => setRangeId(e.target.value)}
-          />
+          <div className="space-y-2">
+            <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
+              Shared Range
+            </label>
+            {rangesLoading ? (
+              <div className="flex items-center gap-2 h-11 px-3 text-[15px] text-text-muted">
+                <span className="h-4 w-4 border-2 border-text-muted/30 border-t-text-muted rounded-full animate-spin" />
+                Loading ranges...
+              </div>
+            ) : (
+              <select
+                className="w-full h-11 px-3 rounded-md bg-bg-elevated border border-border text-[15px] text-text-primary focus:outline-none focus:border-accent-success focus:ring-1 focus:ring-accent-success"
+                value={rangeId}
+                onChange={(e) => setRangeId(e.target.value)}
+              >
+                <option value="">Select a range...</option>
+                <option value="__auto__">Auto-create from template</option>
+                {ranges.map((r) => (
+                  <option key={r.rangeID} value={r.rangeID}>
+                    {r.rangeID} · {r.name || "Unnamed"} (Range #{r.rangeNumber})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
@@ -420,7 +487,7 @@ function CreateSessionModal({
           <Button variant="secondary" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" loading={saving}>
+          <Button type="submit" variant="primary" loading={saving} disabled={labTemplates.length === 0}>
             Create Session
           </Button>
         </div>
