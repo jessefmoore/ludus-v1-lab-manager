@@ -9,9 +9,6 @@ A self-hosted web platform that wraps [Ludus](https://ludus.cloud) to let instru
 provision, monitor, and tear down student lab environments in bulk for security
 trainings and workshops.
 
-## Status
-
-**MVP functional.** Core provisioning, Ludus management, and instructor dashboard are live. See [docs/ROADMAP.md](docs/ROADMAP.md) for roadmap.
 
 ## What it does
 
@@ -53,33 +50,6 @@ trainings and workshops.
 - **Auth:** Single instructor account, JWT
 - **Deployment:** Docker Compose (frontend nginx reverse proxy)
 
-## Project structure
-
-```
-ludus-v1-mgr/
-├── backend/
-│   ├── app/
-│   │   ├── api/              # FastAPI route handlers
-│   │   ├── core/             # Config, DB, auth, dependency injection
-│   │   ├── middleware/       # CSRF, request logging
-│   │   ├── models/           # SQLAlchemy ORM models
-│   │   ├── schemas/          # Pydantic request/response schemas
-│   │   ├── services/         # Business logic + LudusClient
-│   │   └── main.py
-│   ├── alembic/              # DB migrations
-│   └── tests/                # pytest suite (24 test files)
-├── frontend/
-│   ├── src/
-│   │   ├── api/              # Typed HTTP client
-│   │   ├── components/       # Reusable UI (17 components)
-│   │   ├── contexts/         # Auth + theme providers
-│   │   └── pages/            # Dashboard, Sessions, Labs, Ludus, Settings
-│   └── vite.config.ts
-├── docs/                     # Architecture, roadmap, design system
-├── docker-compose.yml
-├── Caddyfile                 # Reverse proxy
-└── .github/workflows/        # CI (backend lint+test, frontend build)
-```
 
 ## Quick start
 
@@ -88,33 +58,9 @@ cp .env.example .env
 # edit .env: set ADMIN_PASSWORD, APP_SECRET_KEY, LUDUS_DEFAULT_API_KEY
 docker compose up -d
 # UI at http://localhost (frontend nginx), API at http://localhost/api
-
-# Optional: seed demo lab templates + LeHack session from your Ludus ranges
-docker compose exec backend python -m app.services.seed_demo
 ```
 
-### Local development
 
-```bash
-# Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -e '.[dev]'
-uvicorn app.main:app --reload --port 8000
-
-# Frontend
-cd frontend
-npm install
-npm run dev
-```
-
-### Tests
-
-```bash
-cd backend
-pytest                    # full suite
-pytest -xvs tests/test_students_api.py   # single file, verbose
-```
 
 ### Credits
 This was foked from https://github.com/whiteov3rflow/ludus-helm and modified to work with Ludus version 1
