@@ -123,7 +123,7 @@ def test_testing_start_success(client: TestClient, mock_ludus: MagicMock) -> Non
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Testing mode started"
-    mock_ludus.testing_start.assert_called_once_with(range_id=1, user_id=None)
+    mock_ludus.testing_start.assert_called_once_with(user_id=None)
 
 
 def test_testing_start_not_found_returns_404(
@@ -175,9 +175,7 @@ def test_testing_stop_success(client: TestClient, mock_ludus: MagicMock) -> None
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Testing mode stopped"
-    mock_ludus.testing_stop.assert_called_once_with(
-        range_id=1, user_id=None, force=True
-    )
+    mock_ludus.testing_stop.assert_called_once_with(user_id=None, force=True)
 
 
 def test_testing_stop_not_found_returns_404(
@@ -233,7 +231,7 @@ def test_testing_allow_success(client: TestClient, mock_ludus: MagicMock) -> Non
     assert body["result"] == "ok"
     assert body["domains"] == ["example.com"]
     mock_ludus.testing_allow.assert_called_once_with(
-        range_id=1, user_id=None, domains=["example.com"], ips=None
+        user_id=None, domains=["example.com"], ips=None
     )
 
 
@@ -289,7 +287,7 @@ def test_testing_deny_success(client: TestClient, mock_ludus: MagicMock) -> None
     body = resp.json()
     assert body["result"] == "ok"
     mock_ludus.testing_deny.assert_called_once_with(
-        range_id=1, user_id=None, domains=None, ips=["1.2.3.4"]
+        user_id=None, domains=None, ips=["1.2.3.4"]
     )
 
 
@@ -342,9 +340,7 @@ def test_testing_update_success(client: TestClient, mock_ludus: MagicMock) -> No
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Testing config updated"
-    mock_ludus.testing_update.assert_called_once_with(
-        "test-config", range_id=1, user_id=None
-    )
+    mock_ludus.testing_update.assert_called_once_with("test-config", user_id=None)
 
 
 def test_testing_update_not_found_returns_404(

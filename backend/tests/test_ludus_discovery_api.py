@@ -41,7 +41,15 @@ def fake_admin() -> User:
 
 @pytest.fixture
 def mock_ludus() -> MagicMock:
-    return MagicMock(spec=LudusClient)
+    m = MagicMock(spec=LudusClient)
+    # Ludus v1 keys ranges by userID; routes that take a numeric range_number
+    # resolve it to the owning userID via range_list(). Provide a default map
+    # so those routes can resolve during tests.
+    m.range_list.return_value = [
+        {"rangeNumber": 1, "userID": "alice"},
+        {"rangeNumber": 999, "userID": "ghost"},
+    ]
+    return m
 
 
 class _MockRegistry:
@@ -182,7 +190,7 @@ def test_get_range_config_success(client: TestClient, mock_ludus: MagicMock) -> 
     body = resp.json()
     assert body["range_number"] == 1
     assert body["config_yaml"] == RANGE_YAML
-    mock_ludus.range_get_config.assert_called_once_with(range_number=1)
+    mock_ludus.range_get_config.assert_called_once_with(user_id="alice")
 
 
 def test_get_range_config_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:
@@ -279,7 +287,7 @@ def test_destroy_range_success(client: TestClient, mock_ludus: MagicMock) -> Non
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Range destroyed"
-    mock_ludus.range_destroy.assert_called_once_with(1, user_id=None, range_id=None, force=False)
+    mock_ludus.range_destroy.assert_called_once_with(user_id="alice", force=False)
 
 
 def test_destroy_range_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:

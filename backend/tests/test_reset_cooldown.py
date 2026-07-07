@@ -50,8 +50,11 @@ class FakeLudus:
     def __init__(self) -> None:
         self.snapshot_revert_calls: list[tuple[str, str]] = []
 
-    def snapshot_revert(self, userid: str, name: str) -> None:
-        self.snapshot_revert_calls.append((userid, name))
+    def snapshot_revert(
+        self, name: str, *, user_id: str | None = None, vmids: list[int] | None = None
+    ) -> None:
+        # Ludus v1 signature: snapshot_revert(name, *, user_id=...).
+        self.snapshot_revert_calls.append((user_id, name))
 
 
 @pytest.fixture

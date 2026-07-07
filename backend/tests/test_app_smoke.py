@@ -41,8 +41,18 @@ class FakeLudus:
     def range_list(self) -> list[dict]:
         return []
 
-    def range_assign(self, userid: str, range_id: str) -> None:
-        self.range_assign_calls.append({"userid": userid, "range_id": range_id})
+    def range_access_grant(
+        self, source_user_id: str, target_user_id: str, *, force: bool = False
+    ) -> dict:
+        # v1 range sharing (replaces range_assign).
+        self.range_assign_calls.append(
+            {"userid": source_user_id, "range_id": target_user_id}
+        )
+        return {"result": "ok"}
+
+    def ansible_scope_roles_global(self, roles: list[str], *, force: bool = False) -> None:
+        # v1 global role scoping (replaces ansible_role_scope); no-op for smoke.
+        return None
 
     def range_deploy(self, userid: str, config_yaml: str) -> None:
         self.range_deploy_calls.append({"userid": userid, "config_yaml": config_yaml})

@@ -123,9 +123,7 @@ def test_power_on_success(client: TestClient, mock_ludus: MagicMock) -> None:
     body = resp.json()
     assert body["status"] == "ok"
     assert body["detail"] == "Power on initiated"
-    mock_ludus.range_power_on.assert_called_once_with(
-        "alice", machines=["all"], range_id=None,
-    )
+    mock_ludus.range_power_on.assert_called_once_with("alice", machines=["all"])
 
 
 def test_power_on_specific_machines(client: TestClient, mock_ludus: MagicMock) -> None:
@@ -136,9 +134,7 @@ def test_power_on_specific_machines(client: TestClient, mock_ludus: MagicMock) -
         json={"user_id": "alice", "machines": ["web", "db"]},
     )
     assert resp.status_code == 200
-    mock_ludus.range_power_on.assert_called_once_with(
-        "alice", machines=["web", "db"], range_id=None,
-    )
+    mock_ludus.range_power_on.assert_called_once_with("alice", machines=["web", "db"])
 
 
 def test_power_on_not_found_returns_404(client: TestClient, mock_ludus: MagicMock) -> None:
@@ -287,12 +283,11 @@ def test_create_snapshot_success(client: TestClient, mock_ludus: MagicMock) -> N
     assert body["status"] == "ok"
     assert body["detail"] == "Snapshot creation started"
     mock_ludus.snapshot_create.assert_called_once_with(
-        "alice",
         "my-snap",
+        user_id="alice",
         description="test",
         include_ram=False,
         vmids=None,
-        range_id=None,
     )
 
 
@@ -332,7 +327,7 @@ def test_revert_snapshot_success(client: TestClient, mock_ludus: MagicMock) -> N
     body = resp.json()
     assert body["status"] == "ok"
     mock_ludus.snapshot_revert.assert_called_once_with(
-        "alice", "ctf-initial", vmids=None, range_id=None,
+        "ctf-initial", user_id="alice", vmids=None,
     )
 
 
@@ -345,7 +340,7 @@ def test_revert_snapshot_with_vmids(client: TestClient, mock_ludus: MagicMock) -
     )
     assert resp.status_code == 200
     mock_ludus.snapshot_revert.assert_called_once_with(
-        "alice", "ctf-initial", vmids=[100, 101], range_id=None,
+        "ctf-initial", user_id="alice", vmids=[100, 101],
     )
 
 
@@ -373,7 +368,7 @@ def test_delete_snapshot_success(client: TestClient, mock_ludus: MagicMock) -> N
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    mock_ludus.snapshot_delete.assert_called_once_with("alice", "old-snap", range_id=None)
+    mock_ludus.snapshot_delete.assert_called_once_with("old-snap", user_id="alice")
 
 
 def test_delete_snapshot_not_found_returns_404(

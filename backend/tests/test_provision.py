@@ -100,11 +100,32 @@ class FakeLudus:
     def user_list(self) -> list[dict]:
         return self._users
 
-    def range_assign(self, userid: str, range_id: str) -> None:
-        self.range_assign_calls.append({"userid": userid, "range_id": range_id})
-        exc = self.range_assign_overrides.get(userid)
+    def range_access_grant(
+        self,
+        source_user_id: str,
+        target_user_id: str,
+        *,
+        force: bool = False,
+    ) -> dict:
+        # v1 range sharing: source_user_id gains access to target_user_id's
+        # range. Recorded in range_assign_calls for continuity with existing
+        # assertions (userid = student, range_id = shared range owner).
+        self.range_assign_calls.append(
+            {"userid": source_user_id, "range_id": target_user_id}
+        )
+        exc = self.range_assign_overrides.get(source_user_id)
         if exc is not None:
             raise exc
+        return {"result": "ok"}
+
+    def ansible_scope_roles_global(self, roles: list[str], *, force: bool = False) -> None:
+        # v1 global role scoping (replaces ansible_role_scope). Recorded in
+        # ansible_role_scope_calls for continuity with existing assertions.
+        self.ansible_role_scope_calls.append(
+            {"roles": roles, "global_": True, "copy": False}
+        )
+        if self.ansible_role_scope_error is not None:
+            raise self.ansible_role_scope_error
 
     def range_deploy(self, userid: str, config_yaml: str) -> None:
         self.range_deploy_calls.append({"userid": userid, "config_yaml": config_yaml})
@@ -587,12 +608,23 @@ def test_provision_is_idempotent_second_call_skips_ready_students(
     assert len(fake_ludus.user_wireguard_calls) == before_wg
 
 
-def test_provision_shared_session_missing_range_id_errors_everyone(
+def test_provision_shared_session_auto_create_failure_errors_everyone(
     client: TestClient,
     db_session: OrmSession,
     lab_template: LabTemplate,
     fake_ludus: FakeLudus,
 ) -> None:
+    # On Ludus v1, a shared session with no shared_range_id auto-creates the
+    # shared range by deploying it for the first (lead) student. If that
+    # deploy fails, auto-create fails, shared_range_id stays None, and every
+    # student errors with "shared_range_id is None".
+    fake_ludus.range_deploy_overrides["alice-aaa"] = LudusError(
+        "deploy failed", status_code=500
+    )
+    fake_ludus.range_deploy_overrides["bob-bbb"] = LudusError(
+        "deploy failed", status_code=500
+    )
+
     session_row = _make_session(
         db_session,
         lab_template,

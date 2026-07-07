@@ -906,15 +906,12 @@ class LudusClient:
         """Make each role in *roles* global (available to all users).
 
         Ludus v1 has no ``/ansible/role/scope`` endpoint; the equivalent is
-        (re)installing the role with ``global=True``. Best-effort: individual
-        role failures are logged and swallowed so a single bad role does not
-        abort provisioning.
+        (re)installing the role with ``global=True``. Raises ``LudusError`` if
+        any role fails so the caller can record/handle it (provisioning treats
+        this as non-fatal and emits a ``session.role_scope_failed`` event).
         """
         for role in roles:
-            try:
-                self.ansible_role(role, action="install", global_=True, force=force)
-            except LudusError as exc:
-                logger.warning("ansible_scope_roles_global: role %s failed: %s", role, exc)
+            self.ansible_role(role, action="install", global_=True, force=force)
 
     # -- operations NOT supported on Ludus v1 ----------------------------
 
