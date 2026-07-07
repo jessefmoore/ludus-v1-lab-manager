@@ -2,7 +2,8 @@
 
 Training lab deployment management platform powered by [Ludus](https://ludus.cloud).
 
-<img width="1343" height="752" alt="image" src="https://github.com/user-attachments/assets/91784d84-2a3c-4264-8b1d-d9c812be445a" />
+<img width="1343" height="752" alt="labmgr-v1" src="https://github.com/user-attachments/assets/ef91da24-0aa9-483e-a44e-3c7412bda76b" />
+
 
 A self-hosted web platform that wraps [Ludus](https://ludus.cloud) to let instructors
 provision, monitor, and tear down student lab environments in bulk for security
