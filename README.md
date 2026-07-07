@@ -116,6 +116,9 @@ pytest                    # full suite
 pytest -xvs tests/test_students_api.py   # single file, verbose
 ```
 
+### Credits
+This was foked from https://github.com/whiteov3rflow/ludus-helm and modified to work with Ludus version 1
+
 ## License
 
 [MIT](LICENSE)
