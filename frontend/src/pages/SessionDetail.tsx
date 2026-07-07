@@ -14,7 +14,7 @@ import {
   ChevronDown,
   Clock,
 } from "lucide-react";
-import { sessions, students, labs, events, ludus, ludusGroups, ApiError } from "@/api";
+import { sessions, students, labs, events, ludus, ApiError } from "@/api";
 import type {
   SessionDetailRead,
   LabTemplateRead,
@@ -22,8 +22,6 @@ import type {
   EventRead,
   LudusRange,
   LudusUser,
-  LudusGroup,
-  LudusGroupUser,
 } from "@/api";
 import TopBar from "@/components/TopBar";
 import Card from "@/components/Card";
@@ -868,7 +866,8 @@ function InlineRangePicker({
   );
 }
 
-type AddStudentMode = "manual" | "ludus-user" | "ludus-group";
+// Ludus groups do not exist on Ludus v1, so group-based add is not offered.
+type AddStudentMode = "manual" | "ludus-user";
 
 function AddStudentModal({
   open,
@@ -894,13 +893,6 @@ function AddStudentModal({
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [userSearch, setUserSearch] = useState("");
 
-  // Ludus group mode state
-  const [groups, setGroups] = useState<LudusGroup[]>([]);
-  const [groupsLoading, setGroupsLoading] = useState(false);
-  const [selectedGroup, setSelectedGroup] = useState("");
-  const [groupMembers, setGroupMembers] = useState<LudusGroupUser[]>([]);
-  const [groupMembersLoading, setGroupMembersLoading] = useState(false);
-
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -910,8 +902,6 @@ function AddStudentModal({
     setError("");
     setSelectedUsers(new Set());
     setUserSearch("");
-    setSelectedGroup("");
-    setGroupMembers([]);
   };
 
   // Fetch Ludus users when switching to that mode
@@ -929,29 +919,7 @@ function AddStudentModal({
         .catch(() => setError("Failed to load Ludus users"))
         .finally(() => setLudusUsersLoading(false));
     }
-    if (mode === "ludus-group" && groups.length === 0) {
-      setGroupsLoading(true);
-      ludusGroups
-        .list()
-        .then((res) => setGroups(res.groups))
-        .catch(() => setError("Failed to load Ludus groups"))
-        .finally(() => setGroupsLoading(false));
-    }
   }, [open, mode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Fetch group members when a group is selected
-  useEffect(() => {
-    if (!selectedGroup) {
-      setGroupMembers([]);
-      return;
-    }
-    setGroupMembersLoading(true);
-    ludusGroups
-      .users(selectedGroup)
-      .then((res) => setGroupMembers(res.users))
-      .catch(() => setError("Failed to load group members"))
-      .finally(() => setGroupMembersLoading(false));
-  }, [selectedGroup]);
 
   const handleManualSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -997,34 +965,6 @@ function AddStudentModal({
     setSaving(false);
   };
 
-  const handleLudusGroupSubmit = async () => {
-    setError("");
-    setSaving(true);
-    let added = 0;
-    const errors: string[] = [];
-    for (const member of groupMembers) {
-      try {
-        await students.create(sessionId, {
-          ludus_userid: member.userID,
-          full_name: member.name || undefined,
-        });
-        added++;
-      } catch (err) {
-        errors.push(`${member.userID}: ${err instanceof ApiError ? err.detail : "failed"}`);
-      }
-    }
-    if (added > 0) {
-      toast("success", `Added ${added} student(s) from group "${selectedGroup}"`);
-      onCreated();
-    }
-    if (errors.length > 0) {
-      setError(`Skipped ${errors.length}: ${errors.join("; ")}`);
-    } else {
-      resetForm();
-    }
-    setSaving(false);
-  };
-
   const toggleUser = (id: string) => {
     setSelectedUsers((prev) => {
       const next = new Set(prev);
@@ -1045,7 +985,6 @@ function AddStudentModal({
   const modes: { id: AddStudentMode; label: string }[] = [
     { id: "manual", label: "Manual" },
     { id: "ludus-user", label: "Ludus User" },
-    { id: "ludus-group", label: "Ludus Group" },
   ];
 
   return (
@@ -1158,63 +1097,6 @@ function AddStudentModal({
           </div>
         )}
 
-        {/* Ludus Group mode */}
-        {mode === "ludus-group" && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1.5">Group</label>
-              <select
-                className="w-full h-9 px-3 rounded-md bg-bg-elevated border border-border text-sm text-text-primary focus:outline-none focus:border-accent-success"
-                value={selectedGroup}
-                onChange={(e) => setSelectedGroup(e.target.value)}
-                disabled={groupsLoading}
-              >
-                <option value="">Select a group...</option>
-                {groups.map((g) => (
-                  <option key={g.name} value={g.name}>
-                    {g.name}{g.description ? ` - ${g.description}` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedGroup && (
-              <div className="max-h-60 overflow-y-auto border border-border rounded-md divide-y divide-border">
-                {groupMembersLoading ? (
-                  <p className="text-sm text-text-muted text-center py-4">Loading members...</p>
-                ) : groupMembers.length === 0 ? (
-                  <p className="text-sm text-text-muted text-center py-4">No members in this group</p>
-                ) : (
-                  groupMembers.map((m) => (
-                    <div
-                      key={m.userID}
-                      className="flex items-center gap-3 px-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <span className="font-mono text-sm text-text-primary">{m.userID}</span>
-                        {m.name && (
-                          <span className="text-sm text-text-secondary ml-2">{m.name}</span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="secondary" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleLudusGroupSubmit}
-                loading={saving}
-                disabled={groupMembers.length === 0}
-              >
-                Add All ({groupMembers.length})
-              </Button>
-            </div>
-          </div>
-        )}
       </div>
     </Modal>
   );
