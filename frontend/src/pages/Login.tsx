@@ -94,10 +94,10 @@ export default function Login() {
               </g>
             </svg>
             <div>
-              <div className="flex items-center gap-0">
+              <div className="flex items-baseline gap-0 whitespace-nowrap leading-none">
                 <span className="text-4xl font-bold text-text-primary">ludus</span>
-                <span className="text-4xl font-bold text-accent-success">-</span>
-                <span className="text-4xl font-bold text-text-primary">v1 Manager</span>
+                <span className="text-4xl font-bold text-accent-success">-v1</span>
+                <span className="text-4xl font-bold text-text-primary">&nbsp;Manager</span>
               </div>
               <p className="text-sm text-text-muted mt-1 tracking-normal">
                 Ludus Labs Manager
@@ -205,10 +205,10 @@ export default function Login() {
                 </g>
               </svg>
               <div>
-                <div className="flex items-center gap-0">
+                <div className="flex items-baseline gap-0 whitespace-nowrap leading-none">
                   <span className="text-3xl font-bold text-text-primary">ludus</span>
-                  <span className="text-3xl font-bold text-accent-success">-</span>
-                  <span className="text-3xl font-bold text-text-primary">v1 Manager</span>
+                  <span className="text-3xl font-bold text-accent-success">-v1</span>
+                  <span className="text-3xl font-bold text-text-primary">&nbsp;Manager</span>
                 </div>
                 <p className="text-sm text-text-muted mt-1">Ludus Labs Manager</p>
               </div>

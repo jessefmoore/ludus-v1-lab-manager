@@ -390,15 +390,19 @@ function RangesTab({ server }: { server: string }) {
     },
     {
       key: "rangeID",
-      label: "ID",
-      render: (r) => <span className="font-mono text-text-secondary">{r.rangeID}</span>,
+      label: "User / ID",
+      // Ludus v1 keys ranges by userID (rangeID is null); fall back to it.
+      render: (r) => (
+        <span className="font-mono text-text-secondary">{r.userID ?? r.rangeID ?? "-"}</span>
+      ),
     },
     {
       key: "name",
       label: "Name",
       sortable: true,
-      sortValue: (r) => (r.name || "").toLowerCase(),
-      render: (r) => <span className="text-text-primary">{r.name || "-"}</span>,
+      sortValue: (r) => (r.name || r.userID || "").toLowerCase(),
+      // v1 ranges have no name of their own; fall back to the owning userID.
+      render: (r) => <span className="text-text-primary">{r.name || r.userID || "-"}</span>,
     },
     {
       key: "vms",
