@@ -122,6 +122,10 @@ export interface CSVImportResponse {
 
 // Ludus Discovery
 export interface LudusRange {
+  // Ludus v1 identifies a range by its owning user (userID); rangeID is null
+  // there (typed string for newer-Ludus compatibility) and callers fall back
+  // to userID.
+  userID?: string;
   rangeID: string;
   rangeNumber: number;
   name?: string;

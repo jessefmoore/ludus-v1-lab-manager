@@ -258,11 +258,14 @@ class LudusClient:
         data: dict[str, Any] | None = None,
         on_conflict_user_exists: bool = False,
         client: httpx.Client | None = None,
+        timeout: Any = httpx.USE_CLIENT_DEFAULT,
     ) -> httpx.Response:
         """Dispatch a request through an httpx.Client (primary by default).
 
         Pass ``client=self._admin_client`` for user-management writes that
-        Ludus v1 only serves on the admin API. Handles timeout translation and
+        Ludus v1 only serves on the admin API. ``timeout`` overrides the
+        client default for a single slow call (e.g. user deletion, which
+        tears down a Proxmox user/pool). Handles timeout translation and
         delegates status checking to `_raise_for_status`. Never logs the api
         key or raw query string.
         """
@@ -275,6 +278,7 @@ class LudusClient:
                 params=params,
                 files=files,
                 data=data,
+                timeout=timeout,
             )
         except httpx.TimeoutException as exc:
             logger.warning(
@@ -369,9 +373,18 @@ class LudusClient:
             )
         return data
 
+    # Deleting a Ludus user tears down its Proxmox user/pool, which can take
+    # well over the default request timeout on a busy host.
+    USER_DELETE_TIMEOUT = 180.0
+
     def user_rm(self, userid: str) -> None:
         """Delete a Ludus user.  Route: DELETE /user/{userID} (admin API on v1)."""
-        self._request("DELETE", f"{API_BASE}/user/{userid}", client=self._admin_client)
+        self._request(
+            "DELETE",
+            f"{API_BASE}/user/{userid}",
+            client=self._admin_client,
+            timeout=self.USER_DELETE_TIMEOUT,
+        )
 
     def user_list(self) -> list[dict]:
         """List all users.  Route: GET /user/all -> list of user dicts."""

@@ -466,7 +466,8 @@ function DiscoverRangesModal({
     setImporting(range.rangeNumber);
     try {
       const res = await ludus.rangeConfig(range.rangeNumber, selectedServer);
-      onImport({ name: range.name || range.rangeID, yaml: res.config_yaml });
+      const label = range.name || range.userID || range.rangeID || `range-${range.rangeNumber}`;
+      onImport({ name: label, yaml: res.config_yaml });
     } catch (err) {
       setError(
         err instanceof ApiError ? err.detail : "Failed to fetch range config",
@@ -518,7 +519,7 @@ function DiscoverRangesModal({
             <table className="w-full text-[15px]">
               <thead>
                 <tr className="border-b border-border text-left text-[13px] uppercase tracking-wider text-text-muted">
-                  <th className="pb-3 pr-4">Range ID</th>
+                  <th className="pb-3 pr-4">User / Range</th>
                   <th className="pb-3 pr-4">Name</th>
                   <th className="pb-3 pr-4">VMs</th>
                   <th className="pb-3 pr-4">State</th>
@@ -532,7 +533,7 @@ function DiscoverRangesModal({
                     className="border-b border-border/50"
                   >
                     <td className="py-3 pr-4 font-mono text-text-primary">
-                      {range.rangeID}
+                      {range.userID ?? range.rangeID ?? `#${range.rangeNumber}`}
                     </td>
                     <td className="py-3 pr-4 text-text-secondary">
                       {range.name ?? "-"}
