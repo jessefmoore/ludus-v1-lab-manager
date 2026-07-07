@@ -70,6 +70,22 @@ const TAB_GROUPS: TabGroup[] = [
   },
 ];
 
+// Ludus v1 (1.11.x) capability flag. When true, features whose Ludus
+// endpoints do not exist on v1 are hidden. Flip to false (or make it a
+// runtime capability check) when targeting a newer Ludus. Kept as a const
+// so gated JSX is still type-checked and identifiers stay referenced.
+const LUDUS_V1 = true;
+
+// Tabs whose underlying Ludus endpoints do not exist on Ludus v1 (1.11.x).
+// They are hidden from the nav; their tab components remain in the file
+// (referenced below) so re-enabling them on a newer Ludus is a one-line change.
+const HIDDEN_V1_TABS = new Set<string>(LUDUS_V1 ? ["groups"] : []);
+
+const VISIBLE_TAB_GROUPS: TabGroup[] = TAB_GROUPS.map((g) => ({
+  ...g,
+  tabs: g.tabs.filter((t) => !HIDDEN_V1_TABS.has(t.id)),
+})).filter((g) => g.tabs.length > 0);
+
 export default function LudusManagement() {
   const [activeTab, setActiveTab] = useState("ranges");
   const [servers, setServers] = useState<LudusServerInfo[]>([]);
@@ -118,7 +134,7 @@ export default function LudusManagement() {
         </div>
 
         <Card className="p-0 overflow-hidden">
-          <Tabs groups={TAB_GROUPS} activeTab={activeTab} onChange={setActiveTab} />
+          <Tabs groups={VISIBLE_TAB_GROUPS} activeTab={activeTab} onChange={setActiveTab} />
           <div className="p-5">
             {activeTab === "ranges" && <RangesTab server={selectedServer} />}
             {activeTab === "snapshots" && <SnapshotsTab server={selectedServer} />}
@@ -1324,13 +1340,18 @@ function UsersTab({ server }: { server: string }) {
       label: "Actions",
       render: (u) => (
         <div className="flex items-center gap-1">
-          <Button
-            variant="icon"
-            onClick={() => setAssignUser(u)}
-            title="Assign to range"
-          >
-            <Link className="h-4 w-4 text-accent-success" />
-          </Button>
+          {/* "Assign to range" uses /ranges/assign, absent on Ludus v1.
+              Range sharing on v1 is driven by session provisioning
+              (cross-range access grants). Hidden until targeting newer Ludus. */}
+          {!LUDUS_V1 && (
+            <Button
+              variant="icon"
+              onClick={() => setAssignUser(u)}
+              title="Assign to range"
+            >
+              <Link className="h-4 w-4 text-accent-success" />
+            </Button>
+          )}
           <Button
             variant="icon"
             onClick={() => handleDownloadWireguard(u)}
