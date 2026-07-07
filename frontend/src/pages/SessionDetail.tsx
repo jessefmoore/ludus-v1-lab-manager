@@ -13,6 +13,7 @@ import {
   Server,
   ChevronDown,
   Clock,
+  Download,
 } from "lucide-react";
 import { sessions, students, labs, events, ludus, ApiError } from "@/api";
 import type {
@@ -209,6 +210,24 @@ export default function SessionDetail() {
     }
   };
 
+  // Instructor-side quick download of a student's WireGuard config (by Ludus
+  // userID), independent of whether the student has redeemed their invite.
+  const handleDownloadWg = async (student: StudentRead) => {
+    try {
+      const blob = await ludus.userWireguard(student.ludus_userid, lab?.ludus_server);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${student.ludus_userid}.conf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to download WireGuard config");
+    }
+  };
+
   const studentColumns: Column<StudentRead>[] = [
     {
       key: "name",
@@ -249,31 +268,25 @@ export default function SessionDetail() {
     },
     {
       key: "vpn",
-      label: "VPN",
+      label: "WG Config",
       sortable: true,
-      sortValue: (s) =>
-        s.status === "ready" && s.invite_redeemed_at
-          ? 3
-          : s.status === "ready"
-            ? 2
-            : s.status === "error"
-              ? 1
-              : 0,
+      sortValue: (s) => (s.status === "ready" ? 2 : s.status === "error" ? 1 : 0),
       render: (s) => {
-        if (s.status === "ready" && s.invite_redeemed_at) {
-          return (
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-accent-success" />
-              <span className="text-xs text-accent-success">Downloaded</span>
-            </div>
-          );
-        }
+        // Config exists once a student is provisioned (ready) - offer a direct
+        // instructor download. Pending = not provisioned yet; error = failed.
         if (s.status === "ready") {
           return (
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block h-2 w-2 rounded-full bg-accent-warning" />
-              <span className="text-xs text-accent-warning">Awaiting</span>
-            </div>
+            <button
+              onClick={() => handleDownloadWg(s)}
+              title="Download WireGuard config"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-accent-info hover:text-accent-success transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Download
+              {s.invite_redeemed_at && (
+                <span className="text-[10px] text-text-muted">(retrieved)</span>
+              )}
+            </button>
           );
         }
         if (s.status === "error") {
@@ -284,12 +297,7 @@ export default function SessionDetail() {
             </div>
           );
         }
-        return (
-          <div className="flex items-center gap-1.5">
-            <span className="inline-block h-2 w-2 rounded-full bg-text-muted" />
-            <span className="text-xs text-text-muted">-</span>
-          </div>
-        );
+        return <span className="text-xs text-text-muted">-</span>;
       },
     },
     {
