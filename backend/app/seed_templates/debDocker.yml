@@ -1,0 +1,21 @@
+# ludus ansible role add geerlingguy.docker --user JM
+# ludus ansible roles add badsectorlabs.ludus_vulhub --user JM
+# ludus range config set -f debdocker.yml --user JM
+# ludus range deploy --user JM
+# ludus range deploy -t user-defined-roles --user JM
+#
+ludus:
+  - vm_name: "{{ range_id }}-debDocker"
+    hostname: "{{ range_id }}-docker"
+    template: debian-12-x64-server-template
+    vlan: 10
+    ip_last_octet: 101
+    ram_gb: 4
+    cpus: 2
+    linux: true
+    roles:
+      - geerlingguy.docker
+      - badsectorlabs.ludus_vulhub
+    role_vars:
+      vulhub_envs:
+        - pwnscriptum

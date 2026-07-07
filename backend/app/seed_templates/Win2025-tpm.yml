@@ -1,0 +1,124 @@
+# yaml-language-server: $schema=https://docs.ludus.cloud/schemas/range-config.json
+# cd /opt
+# git clone https://github.com/Cyblex-Consulting/ludus-ad-content.git
+# ludus ansible role add -d /opt/ludus-ad-content/ --user RTA2
+# ludus range config set -f Win2025-tpm.yml --user RTA2
+# ludus range deploy --user RTA2
+# ludus range deploy -t user-defined-roles --user RTA2 --limit RTA2-win2025-AD
+# ludus range logs -f --user RTA2
+#
+# If you see GPO update fail then time is off, fix with below on the machine that is not the domain controller.
+# w32tm /config /manualpeerlist:"RTA2-DC01-2022.ludus.domain" /syncfromflags:manual /reliable:no /update
+#net stop w32time
+#net start w32time
+#w32tm /resync /force
+#
+# Check time status
+# w32tm /query /status
+ludus:
+  - vm_name: "{{ range_id }}-win2022-AD"
+    hostname: "{{ range_id }}-DC01-2022"
+    template: win2022-server-x64-template
+    vlan: 10
+    ip_last_octet: 22
+    ram_gb: 8
+    cpus: 4
+    windows:
+      sysprep: false
+    domain:
+      fqdn: ludus.domain
+      role: primary-dc
+    roles:
+      - ludus-ad-content
+    role_vars:
+      ad_forest_functional_level: WinThreshold
+      ludus_ad:
+        ous:
+          - name: France
+            path: DC=ludus,DC=domain
+            description: French subsidiary
+          - name: Germany
+            path: DC=ludus,DC=domain
+            description: German subsidiary
+        groups:
+          - name: Sales France
+            scope: global
+            path: "OU=France,DC=ludus,DC=domain"
+            description: France Sales Department
+          - name: Sales Germany
+            scope: global
+            path: "OU=Germany,DC=ludus,DC=domain"
+            description: Germany Sales Department
+          - name: IT
+            scope: global
+            path: "DC=ludus,DC=domain"
+            description: IT Department
+        users:
+          - name: jmoore
+            firstname: Jesse
+            surname: Moore
+            display_name: Jesse Moore
+            password: GFVfPS432QkKN2YdQwJL
+            path: "DC=ludus,DC=domain"
+            description: IT System Administrator
+            groups:
+              - Domain Users
+              - IT
+  - vm_name: "{{ range_id }}-win2025-srvr"
+    hostname: "{{ range_id }}-svr-01-2025"
+    template: win2025-server-x64-tpm-template
+    vlan: 10
+    ip_last_octet: 23
+    ram_gb: 8
+    cpus: 4
+    windows:
+      sysprep: true
+    domain:
+      fqdn: ludus.domain
+      role: member
+  - vm_name: "{{ range_id }}-kali"
+    hostname: "{{ range_id }}-kali"
+    template: kali-x64-desktop-template
+    vlan: 99
+    ip_last_octet: 13
+    ram_gb: 8
+    cpus: 4
+    linux: true
+    testing:
+      snapshot: false
+      block_internet: false
+
+network:
+  inter_vlan_default: REJECT
+  rules:
+    - name: Only allow windows to kali on 443
+      vlan_src: 10
+      vlan_dst: 99
+      protocol: tcp
+      ports: 443
+      action: ACCEPT
+    - name: Only allow windows to kali on 80
+      vlan_src: 10
+      vlan_dst: 99
+      protocol: tcp
+      ports: 80
+      action: ACCEPT
+    - name: Only allow windows to kali on 8080
+      vlan_src: 10
+      vlan_dst: 99
+      protocol: tcp
+      ports: 8080
+      action: ACCEPT
+    - name: Allow kali to all windows
+      vlan_src: 99
+      vlan_dst: 10
+      protocol: all
+      ports: all
+      action: ACCEPT
+# This key defines network rules in your range. It is optional, and by default all traffic is allowed
+network:
+  inter_vlan_default: ACCEPT     # The default rule to apply to traffic between VLANs. Default: ACCEPT
+  external_default: ACCEPT       # The default rule to apply to traffic leaving the range out to the internet. Default: ACCEPT
+  wireguard_vlan_default: ACCEPT # The default rule to apply to traffic leaving the range to clients connected via WireGuard. Default: ACCEPT
+  always_blocked_networks:       # Define any networks that ranges should never be able to reach (i.e. the LAN where the Ludus host is located)
+    - 192.168.0.0/24             # entries must be in CIDR format

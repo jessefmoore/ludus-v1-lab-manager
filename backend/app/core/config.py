@@ -59,6 +59,10 @@ class Settings(BaseSettings):
     # File storage
     config_storage_dir: str = "./data/configs"
 
+    # Seed a starter pack of Ludus v1 range configs into lab_templates on first
+    # boot (once per seed version). Set false to start with no templates.
+    seed_lab_templates: bool = True
+
     @cached_property
     def ludus_servers(self) -> dict[str, LudusServerConfig]:
         """Discover all configured Ludus servers from env vars.

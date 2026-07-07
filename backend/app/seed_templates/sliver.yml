@@ -1,0 +1,84 @@
+# from github Role https://github.com/dotknewt/ludus/tree/main/role/ludus-install-sliver
+# mkdir /opt/dotknewt
+# git clone https://github.com/dotknewt/ludus.git
+# cd /opt/dotknewt/ludus/role
+# ludus ansible role add -d ludus-install-sliver/ --user team4
+# ludus ansible role add -d ludus-install-metasploit --user team4
+# nano sliver.yml
+# ludus range config set -f sliver.yml --user team4
+# ludus range deploy --user team4
+# ludus range logs -f --user team4
+# ludus range deploy -t user-defined-roles --only-roles ludus-install-sliver --user team4
+# to get Sliver server up and going type "sliver-server"
+ludus:
+  - vm_name: "{{ range_id }}-SLIVER"
+    hostname: "{{ range_id }}-SLIVER"
+    template: debian-12-x64-server-template
+    vlan: 10
+    ip_last_octet: 100
+    ram_gb: 8
+    cpus: 4
+    linux: true
+    testing:
+      snapshot: false
+      block_internet: false
+    roles:
+      - ludus-install-sliver
+    role_vars:
+      ludus_install_sliver:
+        server: true
+        metasploit: true
+        port: 1884
+
+  - vm_name: "{{ range_id }}-KALI"
+    hostname: "{{ range_id }}-KALI"
+    template: kali-x64-desktop-template
+    vlan: 10
+    ip_last_octet: 200
+    ram_gb: 8
+    cpus: 4
+    linux: true
+    testing:
+      snapshot: false
+      block_internet: false
+    roles:
+      - ludus-install-sliver
+    role_vars:
+      ludus_install_sliver:
+        client: true
+
+  - vm_name: "{{ range_id }}-metasploit"
+    hostname: "{{ range_id }}-metasploit"
+    template: debian-12-x64-server-template
+    vlan: 200
+    ip_last_octet: 3
+    ram_gb: 16
+    cpus: 8
+    testing:
+      snapshot: true
+      block_internet: true
+    linux: true
+    roles:
+      - ludus-install-sliver
+    role_vars:
+      ludus_install_sliver:
+        client: true
+        metasploit: true
+
+  - vm_name: "{{ range_id }}-sliver-server2"
+    hostname: "{{ range_id }}-sliver-server2"
+    template: debian-12-x64-server-template
+    vlan: 200
+    ip_last_octet: 4
+    ram_gb: 16
+    cpus: 8
+    testing:
+      snapshot: true
+      block_internet: true
+    linux: true
+    roles:
+      - ludus-install-sliver
+    role_vars:
+      ludus_install_sliver:
+        server: true
+        metasploit: true # depends on role: ludus-install-metasploit
