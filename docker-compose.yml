@@ -1,9 +1,11 @@
+name: ludus-v1-mgr
+
 services:
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: ludus-helm-backend
+    image: ludus-v1-mgr-backend
     container_name: ludus-backend
     restart: unless-stopped
     env_file: .env
@@ -55,7 +57,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: ludus-helm-frontend
+    image: ludus-v1-mgr-frontend
     container_name: ludus-frontend
     restart: unless-stopped
     ports:
