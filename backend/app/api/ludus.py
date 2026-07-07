@@ -71,6 +71,34 @@ def _resolve_client(registry: LudusClientRegistry, server: str) -> LudusClient:
         ) from exc
 
 
+def _resolve_userid(
+    ludus: LudusClient,
+    *,
+    user_id: str | None = None,
+    range_number: int | None = None,
+) -> str | None:
+    """Map a range identifier to the owning user's ID (Ludus v1 model).
+
+    Ludus v1 addresses a range by its owner's ``userID``. Routes that still
+    accept a numeric ``range_number`` (for URL compatibility) resolve it to
+    the owning userID via ``/range/all``. An explicit ``user_id`` always wins.
+    Returns ``None`` when neither is provided (acts as the API key's own user).
+    """
+    if user_id:
+        return user_id
+    if range_number is not None:
+        for r in ludus.range_list():
+            if r.get("rangeNumber") == range_number:
+                owner = r.get("userID")
+                if owner:
+                    return owner
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No range found with number {range_number}",
+        )
+    return None
+
+
 @router.get("/ranges", response_model=LudusRangeListResponse)
 def list_ranges(
     server: str = "default",
@@ -102,7 +130,8 @@ def get_range_config(
     """Fetch the range-config YAML for a range by its number."""
     ludus = _resolve_client(registry, server)
     try:
-        config_yaml = ludus.range_get_config(range_number=range_number)
+        owner = _resolve_userid(ludus, range_number=range_number)
+        config_yaml = ludus.range_get_config(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -261,7 +290,8 @@ def destroy_range(
     """Destroy a range by its number."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_destroy(range_number, user_id=user_id, range_id=range_str_id, force=force)
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_number)
+        ludus.range_destroy(user_id=owner, force=force)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -291,7 +321,8 @@ def power_on_range(
     """Power on VMs in a range."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_power_on(body.user_id, machines=body.machines, range_id=body.range_id)
+        owner = _resolve_userid(ludus, user_id=body.user_id, range_number=range_number)
+        ludus.range_power_on(owner, machines=body.machines)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -318,7 +349,8 @@ def power_off_range(
     """Power off VMs in a range."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_power_off(body.user_id, machines=body.machines, range_id=body.range_id)
+        owner = _resolve_userid(ludus, user_id=body.user_id, range_number=range_number)
+        ludus.range_power_off(owner, machines=body.machines)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -349,7 +381,8 @@ def list_snapshots(
     """List snapshots, optionally filtered by user or range."""
     ludus = _resolve_client(registry, server)
     try:
-        raw = ludus.snapshot_list(user_id=user_id, range_number=range_number, range_id=range_id)
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_number)
+        raw = ludus.snapshot_list(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -399,12 +432,11 @@ def create_snapshot(
     ludus = _resolve_client(registry, server)
     try:
         ludus.snapshot_create(
-            body.user_id,
             body.name,
+            user_id=body.user_id,
             description=body.description,
             include_ram=body.include_ram,
             vmids=body.vmids,
-            range_id=body.range_id,
         )
     except LudusNotFound as exc:
         raise HTTPException(
@@ -431,7 +463,7 @@ def revert_snapshot(
     """Revert to a named snapshot."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.snapshot_revert(body.user_id, body.name, vmids=body.vmids, range_id=body.range_id)
+        ludus.snapshot_revert(body.name, user_id=body.user_id, vmids=body.vmids)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -459,7 +491,7 @@ def delete_snapshot(
     """Delete a snapshot by name."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.snapshot_delete(user_id, name, range_id=range_id)
+        ludus.snapshot_delete(name, user_id=user_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -621,7 +653,8 @@ def get_range_vms(
     """Get VMs for a range with power/testing state."""
     ludus = _resolve_client(registry, server)
     try:
-        raw = ludus.range_get_vms(range_id=range_id, user_id=user_id)
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_id)
+        raw = ludus.range_get_vms(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -634,7 +667,8 @@ def get_range_vms(
             detail=f"Ludus error: {exc}",
         ) from exc
 
-    ranges = [LudusRangeDetail.model_validate(r) for r in raw]
+    # v1 returns a single range object; wrap it for the list response.
+    ranges = [LudusRangeDetail.model_validate(raw)]
     return LudusRangeDetailResponse(ranges=ranges)
 
 
@@ -674,7 +708,8 @@ def abort_range(
     """Abort a running range deployment."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.range_abort(range_id=body.range_id, user_id=body.user_id)
+        owner = _resolve_userid(ludus, user_id=body.user_id)
+        ludus.range_abort(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -771,10 +806,8 @@ def get_range_logs(
     """Get deployment logs for a range."""
     ludus = _resolve_client(registry, server)
     try:
-        data = ludus.range_logs(
-            range_id=range_id, user_id=user_id, range_str_id=range_str_id,
-            tail=tail, cursor=cursor,
-        )
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_id)
+        data = ludus.range_logs(user_id=owner, tail=tail)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -855,7 +888,8 @@ def get_range_etchosts(
     """Get /etc/hosts content for a range."""
     ludus = _resolve_client(registry, server)
     try:
-        content = ludus.range_etchosts(range_id=range_id, user_id=user_id)
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_id)
+        content = ludus.range_etchosts(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -902,7 +936,8 @@ def get_range_rdpconfigs(
     """Get RDP configs as a zip file."""
     ludus = _resolve_client(registry, server)
     try:
-        content = ludus.range_rdpconfigs(range_id=range_id, user_id=user_id)
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_id)
+        content = ludus.range_rdpconfigs(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -933,7 +968,8 @@ def get_range_ansibleinventory(
     """Get Ansible inventory YAML for a range."""
     ludus = _resolve_client(registry, server)
     try:
-        content = ludus.range_ansibleinventory(range_id=range_id, user_id=user_id)
+        owner = _resolve_userid(ludus, user_id=user_id, range_number=range_id)
+        content = ludus.range_ansibleinventory(user_id=owner)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

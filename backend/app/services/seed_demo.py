@@ -59,37 +59,26 @@ DEMO_STUDENTS: list[tuple[str, str]] = [
 
 
 def _find_range(client: LudusClient, range_id: str) -> dict | None:
+    # Ludus v1 keys ranges by the owning user's ID (there is no rangeID
+    # string); ``range_id`` here is treated as that owner userID.
     for row in client.range_list():
-        if row.get("rangeID") == range_id:
+        if row.get("userID") == range_id:
             return row
     return None
 
 
 def _fetch_range_yaml(client: LudusClient, *, range_id: str, range_number: int | None) -> str:
+    # On Ludus v1, a range's config is fetched by the owning user's ID.
+    # ``range_id`` is the owner userID; ``range_number`` (if any) is only
+    # used to locate that owner in the user/range list.
+    candidate_user_ids: list[str] = [range_id]
+
     if range_number is not None:
-        try:
-            return client.range_get_config(range_number=range_number)
-        except LudusError:
-            logger.warning(
-                "range_get_config(range_number=%s) failed, trying fallbacks",
-                range_number,
-            )
-
-    candidate_user_ids: list[str] = []
-    try:
-        for user in client.range_users(range_id):
-            user_id = user.get("userID")
-            if user_id:
-                candidate_user_ids.append(user_id)
-    except LudusError:
-        pass
-
-    for user in client.user_list():
-        user_id = user.get("userID")
-        if not user_id or user_id in candidate_user_ids:
-            continue
-        if range_number is not None and user.get("rangeNumber") == range_number:
-            candidate_user_ids.append(user_id)
+        for row in client.range_list():
+            if row.get("rangeNumber") == range_number:
+                owner = row.get("userID")
+                if owner and owner not in candidate_user_ids:
+                    candidate_user_ids.append(owner)
 
     for user_id in candidate_user_ids:
         try:

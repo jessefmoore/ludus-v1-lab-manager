@@ -34,3 +34,14 @@ class LudusNotFound(LudusError):  # noqa: N818 - spec-mandated name
 
 class LudusTimeout(LudusError):  # noqa: N818 - spec-mandated name
     """Raised when the underlying HTTP request times out."""
+
+
+class LudusNotSupported(LudusError):  # noqa: N818 - spec-mandated name
+    """Raised when an operation is not available on the target Ludus version.
+
+    Ludus v1 (1.11.x) lacks several endpoints that newer releases added
+    (groups, multi-range create/assign, blueprints, whoami, log history,
+    subscription roles, role scope, per-VM delete). The client raises this
+    instead of issuing a request that would 404, so callers and the UI can
+    surface a clear "not supported on this Ludus version" message.
+    """

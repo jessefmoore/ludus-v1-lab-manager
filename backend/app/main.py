@@ -151,11 +151,13 @@ def health(
     # Storage check
     storage_ok = Path(settings.config_storage_dir).exists()
 
-    # Ludus check
+    # Ludus check: v1 has no unauthenticated status route; the root path
+    # answers 401 ("No API Key provided") when the server is up. Any HTTP
+    # response (even 401/403) means Ludus is reachable.
     ludus_ok = True
     try:
         httpx.get(
-            f"{settings.ludus_default_url}/api/status",
+            f"{settings.ludus_default_url}/",
             timeout=3.0,
             verify=settings.ludus_default_verify_tls,
         )

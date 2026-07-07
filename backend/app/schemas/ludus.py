@@ -8,17 +8,19 @@ from pydantic import BaseModel, ConfigDict, Field
 class LudusRange(BaseModel):
     """A single range reported by Ludus.
 
-    Only ``rangeID`` and ``rangeNumber`` are guaranteed by every Ludus
-    version; the rest are optional and may vary. ``extra="allow"`` keeps
-    us forward-compatible with new fields Ludus might add.
+    On Ludus v1 a range is owned by a user and identified by ``userID`` +
+    ``rangeNumber`` (there is no ``rangeID`` string - that was added in later
+    versions). All identity fields are therefore optional and ``extra="allow"``
+    keeps us forward-compatible with new fields Ludus might add.
 
     Field names match the camelCase keys returned by the Ludus API.
     """
 
     model_config = ConfigDict(extra="allow")
 
-    rangeID: str  # noqa: N815 - matches Ludus JSON key
-    rangeNumber: int  # noqa: N815 - matches Ludus JSON key
+    userID: str | None = None  # noqa: N815 - matches Ludus JSON key (v1 range owner)
+    rangeID: str | None = None  # noqa: N815 - matches Ludus JSON key (post-v1)
+    rangeNumber: int | None = None  # noqa: N815 - matches Ludus JSON key
     name: str | None = None
     numberOfVMs: int | None = None  # noqa: N815 - matches Ludus JSON key
     rangeState: str | None = None  # noqa: N815 - matches Ludus JSON key

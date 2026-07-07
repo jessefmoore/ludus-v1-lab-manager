@@ -49,7 +49,7 @@ def testing_start(
     """Enter testing mode for a range."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.testing_start(range_id=body.range_id, user_id=body.user_id)
+        ludus.testing_start(user_id=body.user_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -75,9 +75,7 @@ def testing_stop(
     """Exit testing mode for a range."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.testing_stop(
-            range_id=body.range_id, user_id=body.user_id, force=body.force
-        )
+        ludus.testing_stop(user_id=body.user_id, force=body.force)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -104,7 +102,6 @@ def testing_allow(
     ludus = _resolve_client(registry, server)
     try:
         result = ludus.testing_allow(
-            range_id=body.range_id,
             user_id=body.user_id,
             domains=body.domains,
             ips=body.ips,
@@ -135,7 +132,6 @@ def testing_deny(
     ludus = _resolve_client(registry, server)
     try:
         result = ludus.testing_deny(
-            range_id=body.range_id,
             user_id=body.user_id,
             domains=body.domains,
             ips=body.ips,
@@ -165,7 +161,7 @@ def testing_update(
     """Update testing configuration."""
     ludus = _resolve_client(registry, server)
     try:
-        ludus.testing_update(body.name, range_id=body.range_id, user_id=body.user_id)
+        ludus.testing_update(body.name, user_id=body.user_id)
     except LudusNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

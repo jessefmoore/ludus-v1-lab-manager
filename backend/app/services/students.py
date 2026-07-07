@@ -336,7 +336,7 @@ def reset_student(
             raise ResetCooldown(f"Reset cooldown: wait {int(remaining.total_seconds())} seconds")
 
     try:
-        ludus_client.snapshot_revert(student.ludus_userid, snapshot_name)
+        ludus_client.snapshot_revert(snapshot_name, user_id=student.ludus_userid)
     except LudusError as exc:
         logger.warning(
             "student.reset: ludus snapshot_revert failed for %s: %s",

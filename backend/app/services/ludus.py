@@ -1,56 +1,73 @@
 """Single integration point between the platform and a Ludus server.
 
 Every Ludus HTTP call in the backend MUST go through `LudusClient`. This
-makes it trivial to:
-
-* swap transports (CLI -> HTTP -> future gRPC)
-* apply retries / timeouts / logging in one place
-* mock Ludus in tests
+makes it trivial to swap transports, apply retries/timeouts/logging in one
+place, and mock Ludus in tests.
 
 ================================================================
-ASSUMED HTTP ROUTES - verified against badsectorlabs/ludus Go source
-(ludus-api/routers.go, ludus-api/api_user_management.go, etc.)
-See issue #TODO to pin these once tested against a live Ludus instance.
+TARGET: Ludus v1 (verified against a live 1.11.5+b9fe95c server)
 ================================================================
-
-Base path:              /api/v2
+Base path:              (none - routes are bare, e.g. /user, /range)
 Auth header:            X-API-KEY: <api_key>
 Admin impersonation:    append ?userID=<userID> query param (admin key only)
 
-Routes used here:
-    POST   /api/v2/user                                   -> user_add
-           body: {"userID", "name", "email", "password", "isAdmin"}
-    DELETE /api/v2/user/{userID}                          -> user_rm
-    GET    /api/v2/user/all                               -> user_list
-    POST   /api/v2/ranges/assign/{userID}/{rangeID}       -> range_assign
-    GET    /api/v2/user/wireguard?userID=<userID>         -> user_wireguard
-           returns JSON {"result": {"wireGuardConfig": "<.conf text>"}}
-    POST   /api/v2/snapshots/rollback?userID=<userID>     -> snapshot_revert
-           body: {"name": "<snapshot>", "vmIDs": [...]}
-    GET    /api/v2/snapshots/list?userID=                 -> snapshot_list
-    POST   /api/v2/snapshots/create?userID=               -> snapshot_create
-           body: {"name", "description", "includeRAM", "vmIDs"}
-    POST   /api/v2/snapshots/remove?userID=               -> snapshot_delete
-           body: {"name", "vmIDs": [...]}
-    PUT    /api/v2/range/config?userID=<userID>           -> range_deploy (step 1)
-           multipart form: file=<range-config.yml>, force=true
-    POST   /api/v2/range/deploy?userID=<userID>           -> range_deploy (step 2)
-           body: {"force": false}
-    POST   /api/v2/range/deploy?rangeNumber=<N>           -> range_deploy_existing
-    DELETE /api/v2/range?rangeNumber=<N>                  -> range_destroy
-    GET    /api/v2/range/all                              -> range_list
-    GET    /api/v2/range/config?userID=|rangeNumber=      -> range_get_config
-    PUT    /api/v2/range/poweron?userID=                  -> range_power_on
-           body: {"machines": ["all"]}
-    PUT    /api/v2/range/poweroff?userID=                 -> range_power_off
-           body: {"machines": ["all"]}
-    GET    /api/v2/templates                              -> template_list
-    POST   /api/v2/templates                              -> template_build
-           body: {"templates": [...], "parallel": N}
-    POST   /api/v2/templates/abort                        -> template_abort
-    GET    /api/v2/templates/status                       -> template_status
-    GET    /api/v2/templates/logs                         -> template_logs
-    DELETE /api/v2/template/{name}                        -> template_delete
+Ludus v1 is SINGLE-RANGE-PER-USER: a user owns exactly one range, addressed
+by the user's ID via ``?userID=``. There is no ``rangeID`` string or
+``rangeNumber`` request parameter (``rangeNumber`` appears only as a
+read-only field in responses). Range sharing is done with the cross-range
+access endpoint, not a range-assignment endpoint.
+
+Routes used here (all verified present on 1.11.5):
+    POST   /user                                 -> user_add   {userID,name,email,isAdmin}
+    DELETE /user/{userID}                         -> user_rm
+    GET    /user/all                              -> user_list
+    GET    /user/wireguard?userID=<id>            -> user_wireguard  {result:{wireGuardConfig}}
+    POST   /range/access                          -> range_access_grant / range_access_revoke
+           body: {"action":"grant"|"revoke","sourceUserID","targetUserID","force"}
+    GET    /range/access                          -> range_access_list
+    PUT    /range/config?userID=<id>              -> range_deploy step 1 (multipart file, force)
+    POST   /range/deploy?userID=<id>              -> range_deploy step 2 / range_deploy_existing
+    DELETE /range?userID=<id>[&force=true]        -> range_destroy
+    GET    /range/all                             -> range_list
+    GET    /range?userID=<id>                     -> range_get_vms  (single obj with VMs[])
+    GET    /range/config?userID=<id>              -> range_get_config  {result:<yaml>}
+    GET    /range/config/example                  -> range_config_example
+    POST   /range/abort?userID=<id>               -> range_abort
+    PUT    /range/poweron?userID=<id>             -> range_power_on   {machines:[...]}
+    PUT    /range/poweroff?userID=<id>            -> range_power_off  {machines:[...]}
+    GET    /range/tags                            -> range_tags
+    GET    /range/logs?userID=<id>                -> range_logs
+    GET    /range/etchosts?userID=<id>            -> range_etchosts
+    GET    /range/sshconfig                       -> range_sshconfig
+    GET    /range/rdpconfigs?userID=<id>          -> range_rdpconfigs
+    GET    /range/ansibleinventory?userID=<id>    -> range_ansibleinventory
+    GET    /snapshots/list?userID=<id>            -> snapshot_list  {snapshots:[...]}
+    POST   /snapshots/create?userID=<id>          -> snapshot_create
+    POST   /snapshots/rollback?userID=<id>        -> snapshot_revert
+    POST   /snapshots/remove?userID=<id>          -> snapshot_delete
+    PUT    /testing/start?userID=<id>             -> testing_start
+    PUT    /testing/stop?userID=<id>              -> testing_stop
+    POST   /testing/allow?userID=<id>             -> testing_allow
+    POST   /testing/deny?userID=<id>              -> testing_deny
+    POST   /testing/update?userID=<id>            -> testing_update
+    GET    /templates                             -> template_list
+    POST   /templates                             -> template_build
+    POST   /templates/abort                       -> template_abort
+    GET    /templates/status                      -> template_status
+    GET    /templates/logs                        -> template_logs
+    DELETE /template/{name}                        -> template_delete
+    GET    /ansible?userID=<id>                   -> ansible_list
+    POST   /ansible/role                          -> ansible_role  {role,action,global,force,version}
+    POST   /ansible/collection                    -> ansible_collection
+    PUT    /ansible/role/fromtar                  -> ansible_role_from_tar
+
+NOT AVAILABLE on Ludus v1 (methods raise LudusNotSupported):
+    groups (all), /ranges/create, /ranges/accessible, /ranges/assign,
+    /ranges/revoke, /whoami, /range/logs/history, /range/{id}/vms,
+    /vm/{id}, /templates/logs/history, /ansible/subscription-roles,
+    /ansible/role/vars, /ansible/role/scope.
+    (Global role scoping on v1 is done via `ansible_role(action="install",
+    global_=True)`, exposed here as `ansible_scope_roles_global`.)
 ================================================================
 """
 
@@ -67,13 +84,15 @@ from app.services.exceptions import (
     LudusAuthError,
     LudusError,
     LudusNotFound,
+    LudusNotSupported,
     LudusTimeout,
     LudusUserExists,
 )
 
 logger = logging.getLogger(__name__)
 
-API_BASE = "/api/v2"
+# Ludus v1 serves its API at the root - there is NO version prefix.
+API_BASE = ""
 
 
 def _extract_error_detail(response: httpx.Response) -> str:
@@ -120,12 +139,28 @@ def _raise_for_status(response: httpx.Response, *, on_conflict_user_exists: bool
     raise LudusError(detail, status_code=status)
 
 
+def _user_params(user_id: str | None, **extra: Any) -> dict[str, Any] | None:
+    """Build a query-param dict for admin impersonation (``?userID=``).
+
+    Returns ``None`` when there are no params so httpx omits the query
+    string entirely (acting as the API key's own user).
+    """
+    params: dict[str, Any] = {}
+    if user_id is not None:
+        params["userID"] = user_id
+    for key, value in extra.items():
+        if value is not None:
+            params[key] = value
+    return params or None
+
+
 class LudusClient:
-    """Synchronous HTTP wrapper for the Ludus REST API (v2).
+    """Synchronous HTTP wrapper for the Ludus v1 REST API.
 
     The client is intentionally thin - each method maps to one logical
     Ludus operation and never leaks `httpx` types to callers. Errors are
-    always raised as subclasses of `LudusError`.
+    always raised as subclasses of `LudusError`. Operations that do not
+    exist on Ludus v1 raise `LudusNotSupported`.
     """
 
     def __init__(
@@ -204,9 +239,6 @@ class LudusClient:
         `_raise_for_status`. Never logs the api key or raw query string.
         """
         try:
-            # httpx sets Content-Type automatically per request:
-            #   - application/json when `json=` is provided
-            #   - multipart/form-data (with boundary) when `files=` is provided
             response = self._client.request(
                 method,
                 path,
@@ -239,25 +271,59 @@ class LudusClient:
         _raise_for_status(response, on_conflict_user_exists=on_conflict_user_exists)
         return response
 
+    def _json(self, response: httpx.Response, op: str) -> Any:
+        """Parse a JSON response body or raise a descriptive LudusError."""
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise LudusError(
+                f"Ludus returned invalid JSON for {op}",
+                status_code=response.status_code,
+            ) from exc
+
+    @staticmethod
+    def _as_list(data: Any) -> list[dict]:
+        """Normalise a list-or-single-object response to a list of dicts."""
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+        return []
+
+    @staticmethod
+    def _unwrap_result_str(response: httpx.Response) -> str:
+        """Return a string payload from a ``{"result": "..."}`` envelope
+        or raw text, whichever the server sent."""
+        content_type = response.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                body = response.json()
+            except ValueError:
+                return response.text
+            if isinstance(body, dict):
+                result = body.get("result")
+                if isinstance(result, str):
+                    return result
+            return response.text
+        return response.text
+
     # -- user management -------------------------------------------------
 
-    def user_add(self, userid: str, name: str, email: str) -> dict:
+    def user_add(self, userid: str, name: str, email: str, *, is_admin: bool = False) -> dict:
         """Create a Ludus user.
 
-        Route:  POST /api/v2/user
-        Body:   {"userID", "name", "email", "isAdmin": false}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusUserExists on 409 (or 400 "already exists").
-            LudusError on any other non-2xx.
-        Returns:
-            The parsed JSON response (typically containing userID, apiKey, ...).
+        Route:  POST /user   body {userID, name, email, isAdmin}
+        The response contains the user's plaintext ``apiKey`` (only ever
+        returned here; otherwise reset via /user/apikey).
+
+        Raises LudusUserExists on 400/409 "already exists", LudusAuthError
+        on 401/403, LudusError otherwise.
         """
         payload = {
             "userID": userid,
             "name": name,
             "email": email,
-            "isAdmin": False,
+            "isAdmin": is_admin,
         }
         response = self._request(
             "POST",
@@ -265,13 +331,7 @@ class LudusClient:
             json=payload,
             on_conflict_user_exists=True,
         )
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                f"Ludus returned non-JSON on user_add: {response.text!r}",
-                status_code=response.status_code,
-            ) from exc
+        data = self._json(response, "user_add")
         if not isinstance(data, dict):
             raise LudusError(
                 f"Unexpected user_add response shape: {type(data).__name__}",
@@ -280,89 +340,29 @@ class LudusClient:
         return data
 
     def user_rm(self, userid: str) -> None:
-        """Delete a Ludus user.
-
-        Route:  DELETE /api/v2/user/{userID}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        """
+        """Delete a Ludus user.  Route: DELETE /user/{userID}."""
         self._request("DELETE", f"{API_BASE}/user/{userid}")
 
-    # -- range access / deploy ------------------------------------------
-
-    def range_assign(self, userid: str, range_id: str) -> None:
-        """Grant *userid* access to an existing range.
-
-        Route:  POST /api/v2/ranges/assign/{userID}/{rangeID}
-
-        **Ludus API quirk:** the server may return HTTP 404 with an error
-        about the admin user's default range, yet still perform the
-        assignment successfully.  The response body in that case contains
-        two concatenated JSON objects - the first is the spurious error,
-        the second is ``{"result": "Range … assigned … successfully"}``.
-        We therefore check the body for the success sentinel before
-        raising ``LudusNotFound``.
-
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on genuine 404 (user or range truly missing).
-            LudusError on any other non-2xx.
-        """
-        path = f"{API_BASE}/ranges/assign/{userid}/{range_id}"
-        try:
-            response = self._client.request("POST", path)
-        except httpx.TimeoutException as exc:
-            raise LudusTimeout(f"Ludus request timed out: {exc}") from exc
-        except httpx.RequestError as exc:
-            raise LudusError(f"Ludus transport error: {exc}") from exc
-
-        logger.debug("Ludus POST %s -> %d", self._safe_url_for_log(path), response.status_code)
-
-        # Ludus may return 404 about the admin's default range while
-        # still completing the assignment.  Check the body first.
-        if response.status_code == 404:
-            body = response.text.lower()
-            if "assigned" in body and "successfully" in body:
-                return  # assignment succeeded despite 404 status
-        _raise_for_status(response)
+    def user_list(self) -> list[dict]:
+        """List all users.  Route: GET /user/all -> list of user dicts."""
+        response = self._request("GET", f"{API_BASE}/user/all")
+        return self._as_list(self._json(response, "user_list"))
 
     def user_wireguard(self, userid: str) -> str:
-        """Return the WireGuard .conf file text for a user.
+        """Return the WireGuard .conf text for a user.
 
-        Route:  GET /api/v2/user/wireguard?userID=<userID>
-        Response: JSON {"result": {"wireGuardConfig": "<[Interface]...>"}}
-
-        Admin impersonation via the `?userID=` query param is the only
-        supported way to fetch another user's config using the platform's
-        admin API key. Ludus also supports calling this as the target
-        user directly, but the platform always acts as admin.
-
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError if the response is not JSON with the expected shape.
-        Returns:
-            The raw `.conf` file contents.
+        Route:  GET /user/wireguard?userID=<id>
+        Response: JSON ``{"result": {"wireGuardConfig": "<...>"}}`` (verified),
+        with a raw-text fallback for older/alternate builds.
         """
         response = self._request(
             "GET",
             f"{API_BASE}/user/wireguard",
             params={"userID": userid},
         )
-
-        # Response can be JSON wrapping the config, or - depending on the
-        # Ludus version - the raw file. Handle both.
         content_type = response.headers.get("content-type", "")
         if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError as exc:
-                raise LudusError(
-                    "Ludus returned invalid JSON for user_wireguard",
-                    status_code=response.status_code,
-                ) from exc
+            body = self._json(response, "user_wireguard")
             if isinstance(body, dict):
                 result = body.get("result")
                 if isinstance(result, dict):
@@ -376,56 +376,77 @@ class LudusClient:
                 "Ludus user_wireguard response missing wireGuardConfig",
                 status_code=response.status_code,
             )
-        # Fall back to raw text (e.g. octet-stream, text/plain).
         return response.text
 
-    def snapshot_revert(
-        self,
-        userid: str,
-        name: str,
-        *,
-        vmids: list[int] | None = None,
-        range_id: str | None = None,
-    ) -> None:
-        """Revert the user's range to a named snapshot.
+    # -- range sharing (cross-range access) ------------------------------
 
-        Route:  POST /api/v2/snapshots/rollback?userID=<userID>[&rangeID=<rangeID>]
-        Body:   {"name": "<snapshot_name>", "vmIDs": [...]}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404 (snapshot or range missing).
-            LudusError on any other non-2xx.
+    def range_access_grant(
+        self,
+        source_user_id: str,
+        target_user_id: str,
+        *,
+        force: bool = False,
+    ) -> dict:
+        """Grant *source_user_id* access to *target_user_id*'s range.
+
+        This is Ludus v1's range-sharing mechanism (there is no
+        range-assignment endpoint). ``target_user_id`` is the owner of the
+        shared range; ``source_user_id`` is the user gaining access.
+
+        Route:  POST /range/access
+        Body:   {"action":"grant","sourceUserID","targetUserID","force"}
         """
-        body: dict[str, Any] = {"name": name}
-        if vmids is not None:
-            body["vmIDs"] = vmids
-        params: dict[str, str] = {"userID": userid}
-        if range_id is not None:
-            params["rangeID"] = range_id
-        self._request(
-            "POST",
-            f"{API_BASE}/snapshots/rollback",
-            params=params,
-            json=body,
-        )
+        body = {
+            "action": "grant",
+            "sourceUserID": source_user_id,
+            "targetUserID": target_user_id,
+            "force": force,
+        }
+        response = self._request("POST", f"{API_BASE}/range/access", json=body)
+        try:
+            return response.json()
+        except ValueError:
+            return {"result": "ok"}
+
+    def range_access_revoke(
+        self,
+        source_user_id: str,
+        target_user_id: str,
+        *,
+        force: bool = False,
+    ) -> dict:
+        """Revoke *source_user_id*'s access to *target_user_id*'s range.
+
+        Route:  POST /range/access
+        Body:   {"action":"revoke","sourceUserID","targetUserID","force"}
+        """
+        body = {
+            "action": "revoke",
+            "sourceUserID": source_user_id,
+            "targetUserID": target_user_id,
+            "force": force,
+        }
+        response = self._request("POST", f"{API_BASE}/range/access", json=body)
+        try:
+            return response.json()
+        except ValueError:
+            return {"result": "ok"}
+
+    def range_access_list(self) -> list[dict]:
+        """List active cross-range accesses.  Route: GET /range/access."""
+        response = self._request("GET", f"{API_BASE}/range/access")
+        return self._as_list(self._json(response, "range_access_list"))
+
+    # -- range deploy / config / lifecycle -------------------------------
 
     def range_deploy(self, userid: str, config_yaml: str) -> None:
-        """Deploy a new range for the user from raw range-config YAML.
+        """Upload a range config and deploy it for *userid*.
 
-        This is a two-step Ludus flow:
-            1. PUT  /api/v2/range/config?userID=<userID>
-               multipart form: file=<range-config.yml>, force=true
-            2. POST /api/v2/range/deploy?userID=<userID>
-               body: {}
-
-        Raises:
-            LudusAuthError on 401/403 in either step.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx (e.g. invalid YAML -> 400).
+        Two-step Ludus flow:
+            1. PUT  /range/config?userID=<id>   multipart file=<yaml>, force=true
+            2. POST /range/deploy?userID=<id>   body {}
         """
         params = {"userID": userid}
-
-        # Step 1: upload the range config.
         self._request(
             "PUT",
             f"{API_BASE}/range/config",
@@ -433,326 +454,158 @@ class LudusClient:
             files={"file": ("range-config.yml", config_yaml, "application/x-yaml")},
             data={"force": "true"},
         )
-
-        # Step 2: kick off the deployment.
         self._request(
             "POST",
             f"{API_BASE}/range/deploy",
             params=params,
+            json={},
+        )
+
+    def range_deploy_existing(self, *, user_id: str | None = None) -> None:
+        """Deploy an already-configured range.  Route: POST /range/deploy?userID=."""
+        self._request(
+            "POST",
+            f"{API_BASE}/range/deploy",
+            params=_user_params(user_id),
             json={},
         )
 
     def range_list(self) -> list[dict]:
-        """List all ranges visible to the current API key.
+        """List summary info for all ranges.  Route: GET /range/all.
 
-        Route:  GET /api/v2/range/all
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        Returns:
-            A list of range dicts. If Ludus returns a single range object,
-            it is wrapped in a one-element list for caller convenience.
+        Each item is ``{userID, rangeNumber, lastDeployment, numberOfVMs,
+        testingEnabled, rangeState, ...}``.
         """
         response = self._request("GET", f"{API_BASE}/range/all")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for range_list",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        raise LudusError(
-            f"Unexpected range_list response shape: {type(data).__name__}",
-            status_code=response.status_code,
-        )
+        return self._as_list(self._json(response, "range_list"))
 
-    def range_get_config(
-        self,
-        *,
-        user_id: str | None = None,
-        range_number: int | None = None,
-    ) -> str:
-        """Return the range-config YAML for a range.
+    def range_get_config(self, *, user_id: str | None = None) -> str:
+        """Return the range-config YAML for a user's range.
 
-        Route:  GET /api/v2/range/config?userID=<userID>
-            or  GET /api/v2/range/config?rangeNumber=<N>
-
-        Exactly one of ``user_id`` or ``range_number`` must be provided.
-
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404 (user or range missing).
-            LudusError on any other non-2xx or unexpected response shape.
-        Returns:
-            The raw YAML string.
+        Route:  GET /range/config?userID=<id>  -> {"result": "<yaml>"} or raw.
         """
-        if (user_id is None) == (range_number is None):
-            raise ValueError("Exactly one of user_id or range_number must be provided")
-
-        params: dict[str, str | int] = {}
-        if user_id is not None:
-            params["userID"] = user_id
-        else:
-            assert range_number is not None
-            params["rangeNumber"] = range_number
-
         response = self._request(
             "GET",
             f"{API_BASE}/range/config",
-            params=params,
+            params=_user_params(user_id),
         )
+        return self._unwrap_result_str(response)
 
-        # Response can be JSON wrapping the config, or raw text - handle
-        # both the same way as user_wireguard.
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError as exc:
-                raise LudusError(
-                    "Ludus returned invalid JSON for range_get_config",
-                    status_code=response.status_code,
-                ) from exc
-            if isinstance(body, dict):
-                result = body.get("result")
-                if isinstance(result, str):
-                    return result
-                # Some versions nest under "rangeConfig"
-                cfg = body.get("rangeConfig")
-                if isinstance(cfg, str):
-                    return cfg
-            raise LudusError(
-                "Ludus range_get_config response missing config data",
-                status_code=response.status_code,
-            )
-        # Fall back to raw text (e.g. text/plain, application/x-yaml).
-        return response.text
+    def range_get_vms(self, *, user_id: str | None = None) -> dict:
+        """Return a user's range with VM power/state.
 
-    # -- user listing --------------------------------------------------------
-
-    def user_list(self) -> list[dict]:
-        """List all users visible to the current API key.
-
-        Route:  GET /api/v2/user/all
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        Returns:
-            A list of user dicts. If Ludus returns a single user object,
-            it is wrapped in a one-element list for caller convenience.
+        Route:  GET /range?userID=<id>
+        Response is a single object: ``{userID, rangeNumber, numberOfVMs,
+        testingEnabled, rangeState, VMs:[{ID, proxmoxID, name, poweredOn,
+        ip}], ...}``.
         """
-        response = self._request("GET", f"{API_BASE}/user/all")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for user_list",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
+        response = self._request("GET", f"{API_BASE}/range", params=_user_params(user_id))
+        data = self._json(response, "range_get_vms")
         if isinstance(data, dict):
-            return [data]
+            return data
         raise LudusError(
-            f"Unexpected user_list response shape: {type(data).__name__}",
+            f"Unexpected range_get_vms response shape: {type(data).__name__}",
             status_code=response.status_code,
         )
 
-    # -- range deploy (existing) / destroy ----------------------------------
-
-    def range_deploy_existing(
-        self,
-        *,
-        user_id: str | None = None,
-        range_number: int | None = None,
-    ) -> None:
-        """Deploy an already-configured range.
-
-        Route:  POST /api/v2/range/deploy?userID=<userID>
-            or  POST /api/v2/range/deploy?rangeNumber=<N>
-
-        Exactly one of ``user_id`` or ``range_number`` must be provided.
-
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        """
-        if (user_id is None) == (range_number is None):
-            raise ValueError("Exactly one of user_id or range_number must be provided")
-
-        params: dict[str, str | int] = {}
-        if user_id is not None:
-            params["userID"] = user_id
-        else:
-            assert range_number is not None
-            params["rangeNumber"] = range_number
-
-        self._request(
-            "POST",
-            f"{API_BASE}/range/deploy",
-            params=params,
-            json={},
-        )
-
-    def range_destroy(
-        self,
-        range_number: int,
-        *,
-        user_id: str | None = None,
-        range_id: str | None = None,
-        force: bool = False,
-    ) -> None:
-        """Destroy a range by its number.
-
-        Route:  DELETE /api/v2/range?rangeNumber=<N>[&userID=<id>][&rangeID=<id>][&force=true]
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        """
-        params: dict[str, int | bool | str] = {"rangeNumber": range_number}
-        if user_id is not None:
-            params["userID"] = user_id
-        if range_id is not None:
-            params["rangeID"] = range_id
-        if force:
-            params["force"] = True
+    def range_destroy(self, *, user_id: str | None = None, force: bool = False) -> None:
+        """Destroy a user's range (all VMs).  Route: DELETE /range?userID=[&force=]."""
         self._request(
             "DELETE",
             f"{API_BASE}/range",
-            params=params,
+            params=_user_params(user_id, force=True if force else None),
         )
 
-    # -- power management ----------------------------------------------------
+    def range_abort(self, *, user_id: str | None = None) -> dict:
+        """Abort a running deployment.  Route: POST /range/abort?userID=."""
+        response = self._request("POST", f"{API_BASE}/range/abort", params=_user_params(user_id))
+        try:
+            return response.json()
+        except ValueError:
+            return {"result": "ok"}
+
+    def range_tags(self) -> list[str]:
+        """List available deploy tags.  Route: GET /range/tags -> {tags:[...]}."""
+        response = self._request("GET", f"{API_BASE}/range/tags")
+        data = self._json(response, "range_tags")
+        if isinstance(data, dict):
+            return data.get("tags", [])
+        if isinstance(data, list):
+            return data
+        return []
+
+    def range_config_example(self) -> str:
+        """Return an example range config.  Route: GET /range/config/example."""
+        response = self._request("GET", f"{API_BASE}/range/config/example")
+        return self._unwrap_result_str(response)
+
+    # -- power management ------------------------------------------------
 
     def range_power_on(
         self,
-        user_id: str,
+        user_id: str | None = None,
         *,
         machines: list[str] | None = None,
-        range_id: str | None = None,
     ) -> None:
-        """Power on VMs in a user's range.
-
-        Route:  PUT /api/v2/range/poweron?userID=<userID>[&rangeID=<rangeID>]
-        Body:   {"machines": ["all"]}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        """
-        params: dict[str, str] = {"userID": user_id}
-        if range_id is not None:
-            params["rangeID"] = range_id
+        """Power on VMs.  Route: PUT /range/poweron?userID=  body {machines}."""
         self._request(
             "PUT",
             f"{API_BASE}/range/poweron",
-            params=params,
+            params=_user_params(user_id),
             json={"machines": machines or ["all"]},
         )
 
     def range_power_off(
         self,
-        user_id: str,
+        user_id: str | None = None,
         *,
         machines: list[str] | None = None,
-        range_id: str | None = None,
     ) -> None:
-        """Power off VMs in a user's range.
-
-        Route:  PUT /api/v2/range/poweroff?userID=<userID>[&rangeID=<rangeID>]
-        Body:   {"machines": ["all"]}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        """
-        params: dict[str, str] = {"userID": user_id}
-        if range_id is not None:
-            params["rangeID"] = range_id
+        """Power off VMs.  Route: PUT /range/poweroff?userID=  body {machines}."""
         self._request(
             "PUT",
             f"{API_BASE}/range/poweroff",
-            params=params,
+            params=_user_params(user_id),
             json={"machines": machines or ["all"]},
         )
 
-    # -- snapshot management -------------------------------------------------
+    # -- snapshot management ---------------------------------------------
 
-    def snapshot_list(
-        self,
-        *,
-        user_id: str | None = None,
-        range_number: int | None = None,
-        range_id: str | None = None,
-    ) -> list[dict]:
-        """List snapshots for a user or range.
+    def snapshot_list(self, *, user_id: str | None = None) -> list[dict]:
+        """List snapshots for a user's range.
 
-        Route:  GET /api/v2/snapshots/list?userID=<userID>[&rangeID=<rangeID>]
-            or  GET /api/v2/snapshots/list?rangeNumber=<N>
-
-        At most one of ``user_id`` or ``range_number`` should be provided.
-        If neither is given, lists snapshots for the admin user.
-
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        Returns:
-            A list of snapshot dicts.
+        Route:  GET /snapshots/list?userID=<id>
+        Response: ``{"errors": ..., "snapshots": [ {name, includesRAM,
+        description, snaptime, parent, vmid, vmname}, ... ]}``.  Returns the
+        inner ``snapshots`` list.
         """
-        params: dict[str, str | int] = {}
-        if user_id is not None:
-            params["userID"] = user_id
-        if range_number is not None:
-            params["rangeNumber"] = range_number
-        if range_id is not None:
-            params["rangeID"] = range_id
-
         response = self._request(
             "GET",
             f"{API_BASE}/snapshots/list",
-            params=params or None,
+            params=_user_params(user_id),
         )
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for snapshot_list",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
+        data = self._json(response, "snapshot_list")
         if isinstance(data, dict):
-            return [data]
-        raise LudusError(
-            f"Unexpected snapshot_list response shape: {type(data).__name__}",
-            status_code=response.status_code,
-        )
+            snaps = data.get("snapshots")
+            if isinstance(snaps, list):
+                return snaps
+            return []
+        return self._as_list(data)
 
     def snapshot_create(
         self,
-        user_id: str,
         name: str,
         *,
+        user_id: str | None = None,
         description: str = "",
-        include_ram: bool = False,
+        include_ram: bool = True,
         vmids: list[int] | None = None,
-        range_id: str | None = None,
-    ) -> None:
-        """Create a snapshot for a user's range.
+    ) -> dict:
+        """Create a snapshot.  Route: POST /snapshots/create?userID=.
 
-        Route:  POST /api/v2/snapshots/create?userID=<userID>[&rangeID=<rangeID>]
-        Body:   {"name", "description", "includeRAM", "vmIDs"}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
+        Note: Ludus v1 includes RAM by default (CLI ``--noRAM`` to exclude),
+        so ``include_ram`` defaults to True to match server behaviour.
+        ``vmids`` limits to specific Proxmox VM IDs (default: all in range).
         """
         body: dict[str, Any] = {
             "name": name,
@@ -761,602 +614,76 @@ class LudusClient:
         }
         if vmids is not None:
             body["vmIDs"] = vmids
-        params: dict[str, str] = {"userID": user_id}
-        if range_id is not None:
-            params["rangeID"] = range_id
-        self._request(
+        response = self._request(
             "POST",
             f"{API_BASE}/snapshots/create",
-            params=params,
+            params=_user_params(user_id),
+            json=body,
+        )
+        try:
+            return response.json()
+        except ValueError:
+            return {"result": "ok"}
+
+    def snapshot_revert(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        vmids: list[int] | None = None,
+    ) -> None:
+        """Revert a range to a named snapshot.
+
+        Route:  POST /snapshots/rollback?userID=<id>  body {name, vmIDs?}
+        """
+        body: dict[str, Any] = {"name": name}
+        if vmids is not None:
+            body["vmIDs"] = vmids
+        self._request(
+            "POST",
+            f"{API_BASE}/snapshots/rollback",
+            params=_user_params(user_id),
             json=body,
         )
 
     def snapshot_delete(
         self,
-        user_id: str,
         name: str,
         *,
+        user_id: str | None = None,
         vmids: list[int] | None = None,
-        range_id: str | None = None,
     ) -> None:
-        """Delete a snapshot from a user's range.
-
-        Route:  POST /api/v2/snapshots/remove?userID=<userID>[&rangeID=<rangeID>]
-        Body:   {"name": "<snapshot>", "vmIDs": [...]}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404 (snapshot not found).
-            LudusError on any other non-2xx.
-        """
+        """Delete a snapshot.  Route: POST /snapshots/remove?userID=  body {name, vmIDs?}."""
         body: dict[str, Any] = {"name": name}
         if vmids is not None:
             body["vmIDs"] = vmids
-        params: dict[str, str] = {"userID": user_id}
-        if range_id is not None:
-            params["rangeID"] = range_id
         self._request(
             "POST",
             f"{API_BASE}/snapshots/remove",
-            params=params,
+            params=_user_params(user_id),
             json=body,
         )
 
-    # -- template management -------------------------------------------------
+    # -- testing state management ----------------------------------------
 
-    def template_list(self) -> list[dict]:
-        """List all VM templates available on the Ludus server.
-
-        Route:  GET /api/v2/templates
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        Returns:
-            A list of template dicts.
-        """
-        response = self._request("GET", f"{API_BASE}/templates")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for template_list",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        raise LudusError(
-            f"Unexpected template_list response shape: {type(data).__name__}",
-            status_code=response.status_code,
-        )
-
-    def template_delete(self, name: str) -> None:
-        """Delete a VM template by name.
-
-        Route:  DELETE /api/v2/template/{name}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusNotFound on 404.
-            LudusError on any other non-2xx.
-        """
-        self._request("DELETE", f"{API_BASE}/template/{name}")
-
-    def template_build(self, templates: list[str], *, parallel: int = 1) -> None:
-        """Build VM templates via Packer.
-
-        Route:  POST /api/v2/templates
-        Body:   {"templates": [...], "parallel": N}
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        """
-        self._request(
-            "POST",
-            f"{API_BASE}/templates",
-            json={"templates": templates, "parallel": parallel},
-        )
-
-    def template_abort(self) -> None:
-        """Abort a running Packer template build.
-
-        Route:  POST /api/v2/templates/abort
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        """
-        self._request("POST", f"{API_BASE}/templates/abort")
-
-    def template_status(self) -> list[dict]:
-        """Get the active template build queue.
-
-        Route:  GET /api/v2/templates/status
-        Returns:
-            A list of dicts with ``template`` and ``user`` keys.
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        """
-        response = self._request("GET", f"{API_BASE}/templates/status")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for template_status",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    def template_logs(self) -> str:
-        """Get live Packer build log output.
-
-        Route:  GET /api/v2/templates/logs
-        Returns:
-            Raw log text from the active build.
-        Raises:
-            LudusAuthError on 401/403.
-            LudusError on any other non-2xx.
-        """
-        response = self._request("GET", f"{API_BASE}/templates/logs")
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError:
-                return response.text
-            if isinstance(body, dict):
-                result = body.get("result")
-                if isinstance(result, str):
-                    return result
-            return str(body)
-        return response.text
-
-    # -- range detail / VM operations ----------------------------------------
-
-    def range_get_vms(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> list[dict]:
-        """Get VMs for a range with power/testing state.
-
-        Route:  GET /api/v2/range
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request("GET", f"{API_BASE}/range", params=params or None)
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for range_get_vms",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        raise LudusError(
-            f"Unexpected range_get_vms response shape: {type(data).__name__}",
-            status_code=response.status_code,
-        )
-
-    def vm_destroy(self, vm_id: int) -> dict:
-        """Destroy a single VM.
-
-        Route:  DELETE /api/v2/vm/{vmID}
-        """
-        response = self._request("DELETE", f"{API_BASE}/vm/{vm_id}")
+    def testing_start(self, *, user_id: str | None = None) -> dict:
+        """Enter testing mode.  Route: PUT /testing/start?userID=."""
+        response = self._request("PUT", f"{API_BASE}/testing/start", params=_user_params(user_id))
         try:
             return response.json()
         except ValueError:
             return {"result": "ok"}
 
-    def range_abort(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> dict:
-        """Abort a running range deployment.
-
-        Route:  POST /api/v2/range/abort
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request("POST", f"{API_BASE}/range/abort", params=params or None)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def range_delete_vms(
-        self,
-        range_id: int,
-        *,
-        user_id: str | None = None,
-    ) -> dict:
-        """Delete all VMs in a range.
-
-        Route:  DELETE /api/v2/range/{rangeID}/vms
-        """
-        params: dict[str, Any] = {}
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request(
-            "DELETE", f"{API_BASE}/range/{range_id}/vms", params=params or None
-        )
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def range_tags(self) -> list[str]:
-        """List all range tags.
-
-        Route:  GET /api/v2/range/tags
-        Returns: list of tag strings extracted from {"tags": [...]}
-        """
-        response = self._request("GET", f"{API_BASE}/range/tags")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for range_tags",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, dict):
-            return data.get("tags", [])
-        if isinstance(data, list):
-            return data
-        return []
-
-    def range_config_example(self) -> str:
-        """Get an example range config YAML.
-
-        Route:  GET /api/v2/range/config/example
-        """
-        response = self._request("GET", f"{API_BASE}/range/config/example")
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError:
-                return response.text
-            if isinstance(body, dict):
-                result = body.get("result")
-                if isinstance(result, str):
-                    return result
-            return str(body)
-        return response.text
-
-    def range_logs(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-        range_str_id: str | None = None,
-        tail: int | None = None,
-        cursor: str | None = None,
-    ) -> dict:
-        """Get deployment logs for a range.
-
-        Route:  GET /api/v2/range/logs?userID=<userID>[&rangeID=<rangeID>]
-        Returns: dict with "result" and optional "cursor"
-
-        ``range_str_id`` is the Ludus string range identifier (e.g. "GL2")
-        sent as ``rangeID``.  Required when the user's range ID differs from
-        their user ID.
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-        if range_str_id is not None:
-            params["rangeID"] = range_str_id
-        if tail is not None:
-            params["tail"] = tail
-        if cursor is not None:
-            params["cursor"] = cursor
-
-        response = self._request("GET", f"{API_BASE}/range/logs", params=params or None)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": response.text}
-
-    def range_logs_history(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> list[dict]:
-        """Get deployment log history entries.
-
-        Route:  GET /api/v2/range/logs/history
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request(
-            "GET", f"{API_BASE}/range/logs/history", params=params or None
-        )
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for range_logs_history",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            # Ludus returns {"version": "...", "result": "..."} for
-            # unrecognised routes - treat as empty history.
-            if "version" in data:
-                return []
-            return [data]
-        return []
-
-    def range_log_entry(self, log_id: int) -> dict:
-        """Get a specific deployment log entry.
-
-        Route:  GET /api/v2/range/logs/history/{logID}
-        """
-        response = self._request("GET", f"{API_BASE}/range/logs/history/{log_id}")
-        try:
-            return response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for range_log_entry",
-                status_code=response.status_code,
-            ) from exc
-
-    def range_etchosts(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> str:
-        """Get /etc/hosts content for a range.
-
-        Route:  GET /api/v2/range/etchosts
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request("GET", f"{API_BASE}/range/etchosts", params=params or None)
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError:
-                return response.text
-            if isinstance(body, dict):
-                result = body.get("result")
-                if isinstance(result, str):
-                    return result
-            return str(body)
-        return response.text
-
-    def range_sshconfig(self) -> str:
-        """Get SSH config for the range.
-
-        Route:  GET /api/v2/range/sshconfig
-        """
-        response = self._request("GET", f"{API_BASE}/range/sshconfig")
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError:
-                return response.text
-            if isinstance(body, dict):
-                result = body.get("result")
-                if isinstance(result, str):
-                    return result
-            return str(body)
-        return response.text
-
-    def range_rdpconfigs(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> bytes:
-        """Get RDP configs as a zip file.
-
-        Route:  GET /api/v2/range/rdpconfigs
-        Returns: raw bytes (zip archive)
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request("GET", f"{API_BASE}/range/rdpconfigs", params=params or None)
-        return response.content
-
-    def range_ansibleinventory(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> str:
-        """Get Ansible inventory YAML for a range.
-
-        Route:  GET /api/v2/range/ansibleinventory
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request(
-            "GET", f"{API_BASE}/range/ansibleinventory", params=params or None
-        )
-        content_type = response.headers.get("content-type", "")
-        if "application/json" in content_type:
-            try:
-                body = response.json()
-            except ValueError:
-                return response.text
-            if isinstance(body, dict):
-                result = body.get("result")
-                if isinstance(result, str):
-                    return result
-            return str(body)
-        return response.text
-
-    def range_create(
-        self,
-        name: str,
-        range_id: int,
-        **kwargs: Any,
-    ) -> dict:
-        """Create a new range.
-
-        Route:  POST /api/v2/ranges/create
-        """
-        body: dict[str, Any] = {"name": name, "rangeID": range_id, **kwargs}
-        response = self._request("POST", f"{API_BASE}/ranges/create", json=body)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def range_revoke(
-        self,
-        user_id: str,
-        range_id: int,
-        *,
-        force: bool = False,
-    ) -> dict:
-        """Revoke a user's access to a range.
-
-        Route:  DELETE /api/v2/ranges/revoke/{uID}/{rID}
-        """
-        params: dict[str, Any] = {}
-        if force:
-            params["force"] = "true"
-
-        response = self._request(
-            "DELETE",
-            f"{API_BASE}/ranges/revoke/{user_id}/{range_id}",
-            params=params or None,
-        )
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def range_users(self, range_id: str) -> list[dict]:
-        """List users with access to a range.
-
-        Route:  GET /api/v2/ranges/{rangeID}/users
-        """
-        response = self._request("GET", f"{API_BASE}/ranges/{range_id}/users")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for range_users",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    def ranges_accessible(self) -> list[dict]:
-        """List ranges accessible to the current user.
-
-        Route:  GET /api/v2/ranges/accessible
-        """
-        response = self._request("GET", f"{API_BASE}/ranges/accessible")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for ranges_accessible",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    # -- testing state management --------------------------------------------
-
-    def testing_start(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> dict:
-        """Enter testing mode for a range.
-
-        Route:  PUT /api/v2/testing/start
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request("PUT", f"{API_BASE}/testing/start", params=params or None)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def testing_stop(
-        self,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-        force: bool = False,
-    ) -> dict:
-        """Exit testing mode for a range.
-
-        Route:  PUT /api/v2/testing/stop
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
+    def testing_stop(self, *, user_id: str | None = None, force: bool = False) -> dict:
+        """Exit testing mode.  Route: PUT /testing/stop?userID=  body {force?}."""
         body: dict[str, Any] = {}
         if force:
             body["force"] = True
-
         response = self._request(
-            "PUT", f"{API_BASE}/testing/stop", params=params or None, json=body or None
+            "PUT",
+            f"{API_BASE}/testing/stop",
+            params=_user_params(user_id),
+            json=body or None,
         )
         try:
             return response.json()
@@ -1366,29 +693,21 @@ class LudusClient:
     def testing_allow(
         self,
         *,
-        range_id: int | None = None,
         user_id: str | None = None,
         domains: list[str] | None = None,
         ips: list[str] | None = None,
     ) -> dict:
-        """Allow domains/IPs during testing mode.
-
-        Route:  POST /api/v2/testing/allow
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
+        """Allow domains/IPs during testing.  Route: POST /testing/allow?userID=."""
         body: dict[str, Any] = {}
         if domains is not None:
             body["domains"] = domains
         if ips is not None:
             body["ips"] = ips
-
         response = self._request(
-            "POST", f"{API_BASE}/testing/allow", params=params or None, json=body
+            "POST",
+            f"{API_BASE}/testing/allow",
+            params=_user_params(user_id),
+            json=body,
         )
         try:
             return response.json()
@@ -1398,56 +717,33 @@ class LudusClient:
     def testing_deny(
         self,
         *,
-        range_id: int | None = None,
         user_id: str | None = None,
         domains: list[str] | None = None,
         ips: list[str] | None = None,
     ) -> dict:
-        """Deny domains/IPs during testing mode.
-
-        Route:  POST /api/v2/testing/deny
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
+        """Deny domains/IPs during testing.  Route: POST /testing/deny?userID=."""
         body: dict[str, Any] = {}
         if domains is not None:
             body["domains"] = domains
         if ips is not None:
             body["ips"] = ips
-
         response = self._request(
-            "POST", f"{API_BASE}/testing/deny", params=params or None, json=body
+            "POST",
+            f"{API_BASE}/testing/deny",
+            params=_user_params(user_id),
+            json=body,
         )
         try:
             return response.json()
         except ValueError:
             return {"result": "ok"}
 
-    def testing_update(
-        self,
-        name: str,
-        *,
-        range_id: int | None = None,
-        user_id: str | None = None,
-    ) -> dict:
-        """Update testing configuration.
-
-        Route:  POST /api/v2/testing/update
-        """
-        params: dict[str, Any] = {}
-        if range_id is not None:
-            params["rangeNumber"] = range_id
-        if user_id is not None:
-            params["userID"] = user_id
-
+    def testing_update(self, name: str, *, user_id: str | None = None) -> dict:
+        """Update a VM/group's testing config.  Route: POST /testing/update?userID=."""
         response = self._request(
             "POST",
             f"{API_BASE}/testing/update",
-            params=params or None,
+            params=_user_params(user_id),
             json={"name": name},
         )
         try:
@@ -1455,313 +751,110 @@ class LudusClient:
         except ValueError:
             return {"result": "ok"}
 
-    # -- group management ----------------------------------------------------
+    # -- template management ---------------------------------------------
 
-    def group_create(self, name: str, *, description: str | None = None) -> dict:
-        """Create a new group.
+    def template_list(self) -> list[dict]:
+        """List VM templates.  Route: GET /templates."""
+        response = self._request("GET", f"{API_BASE}/templates")
+        return self._as_list(self._json(response, "template_list"))
 
-        Route:  POST /api/v2/groups
-        """
-        body: dict[str, Any] = {"name": name}
-        if description is not None:
-            body["description"] = description
+    def template_delete(self, name: str) -> None:
+        """Delete a template.  Route: DELETE /template/{name}."""
+        self._request("DELETE", f"{API_BASE}/template/{name}")
 
-        response = self._request("POST", f"{API_BASE}/groups", json=body)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
+    def template_build(self, templates: list[str], *, parallel: int = 1) -> None:
+        """Build templates via Packer.  Route: POST /templates  body {templates, parallel}."""
+        self._request(
+            "POST",
+            f"{API_BASE}/templates",
+            json={"templates": templates, "parallel": parallel},
+        )
 
-    def group_list(self) -> list[dict]:
-        """List all groups.
+    def template_abort(self) -> None:
+        """Abort a running Packer build.  Route: POST /templates/abort."""
+        self._request("POST", f"{API_BASE}/templates/abort")
 
-        Route:  GET /api/v2/groups
-        """
-        response = self._request("GET", f"{API_BASE}/groups")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for group_list",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
+    def template_status(self) -> list[dict]:
+        """Get the Packer build queue/status.  Route: GET /templates/status."""
+        response = self._request("GET", f"{API_BASE}/templates/status")
+        return self._as_list(self._json(response, "template_status"))
 
-    def group_delete(self, group_name: str) -> None:
-        """Delete a group.
+    def template_logs(self) -> str:
+        """Get live Packer build logs.  Route: GET /templates/logs."""
+        response = self._request("GET", f"{API_BASE}/templates/logs")
+        return self._unwrap_result_str(response)
 
-        Route:  DELETE /api/v2/groups/{name}
-        """
-        self._request("DELETE", f"{API_BASE}/groups/{group_name}")
+    # -- range detail (read-only) ----------------------------------------
 
-    def group_users(self, group_name: str) -> list[dict]:
-        """List users in a group.
-
-        Route:  GET /api/v2/groups/{name}/users
-        """
-        response = self._request("GET", f"{API_BASE}/groups/{group_name}/users")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for group_users",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    def group_add_users(
-        self,
-        group_name: str,
-        user_ids: list[str],
-        *,
-        managers: bool = False,
-    ) -> dict:
-        """Add users to a group.
-
-        Route:  POST /api/v2/groups/{name}/users
-        """
-        body: dict[str, Any] = {"userIDs": user_ids}
-        if managers:
-            body["managers"] = True
-
+    def range_logs(self, *, user_id: str | None = None, tail: int | None = None) -> dict:
+        """Get the latest deploy logs.  Route: GET /range/logs?userID=[&tail=]."""
         response = self._request(
-            "POST", f"{API_BASE}/groups/{group_name}/users", json=body
+            "GET",
+            f"{API_BASE}/range/logs",
+            params=_user_params(user_id, tail=tail),
         )
         try:
             return response.json()
         except ValueError:
-            return {"result": "ok"}
+            return {"result": response.text}
 
-    def group_remove_users(self, group_name: str, user_ids: list[str]) -> dict:
-        """Remove users from a group.
+    def range_etchosts(self, *, user_id: str | None = None) -> str:
+        """Get /etc/hosts for a range.  Route: GET /range/etchosts?userID=."""
+        response = self._request("GET", f"{API_BASE}/range/etchosts", params=_user_params(user_id))
+        return self._unwrap_result_str(response)
 
-        Route:  DELETE /api/v2/groups/{name}/users
-        """
+    def range_sshconfig(self) -> str:
+        """Get the SSH config for the range.  Route: GET /range/sshconfig."""
+        response = self._request("GET", f"{API_BASE}/range/sshconfig")
+        return self._unwrap_result_str(response)
+
+    def range_rdpconfigs(self, *, user_id: str | None = None) -> bytes:
+        """Get RDP configs as a zip.  Route: GET /range/rdpconfigs?userID=."""
         response = self._request(
-            "DELETE", f"{API_BASE}/groups/{group_name}/users", json={"userIDs": user_ids}
+            "GET", f"{API_BASE}/range/rdpconfigs", params=_user_params(user_id)
         )
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
+        return response.content
 
-    def group_ranges(self, group_name: str) -> list[dict]:
-        """List ranges assigned to a group.
-
-        Route:  GET /api/v2/groups/{name}/ranges
-        """
-        response = self._request("GET", f"{API_BASE}/groups/{group_name}/ranges")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for group_ranges",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    def group_add_ranges(self, group_name: str, range_ids: list[int]) -> dict:
-        """Add ranges to a group.
-
-        Route:  POST /api/v2/groups/{name}/ranges
-        """
+    def range_ansibleinventory(self, *, user_id: str | None = None) -> str:
+        """Get the Ansible inventory.  Route: GET /range/ansibleinventory?userID=."""
         response = self._request(
-            "POST", f"{API_BASE}/groups/{group_name}/ranges", json={"rangeIDs": range_ids}
+            "GET", f"{API_BASE}/range/ansibleinventory", params=_user_params(user_id)
         )
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
+        return self._unwrap_result_str(response)
 
-    def group_remove_ranges(self, group_name: str, range_ids: list[int]) -> dict:
-        """Remove ranges from a group.
-
-        Route:  DELETE /api/v2/groups/{name}/ranges
-        """
-        response = self._request(
-            "DELETE",
-            f"{API_BASE}/groups/{group_name}/ranges",
-            json={"rangeIDs": range_ids},
-        )
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    # -- ansible management --------------------------------------------------
-
-    def ansible_subscription_roles(self) -> list[dict]:
-        """List subscription roles.
-
-        Route:  GET /api/v2/ansible/subscription-roles
-        """
-        response = self._request("GET", f"{API_BASE}/ansible/subscription-roles")
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for ansible_subscription_roles",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    def ansible_install_subscription_roles(
-        self,
-        roles: list[str],
-        *,
-        global_: bool = False,
-        force: bool = False,
-    ) -> dict:
-        """Install subscription roles.
-
-        Route:  POST /api/v2/ansible/subscription-roles
-        """
-        body: dict[str, Any] = {"roles": roles}
-        if global_:
-            body["global"] = True
-        if force:
-            body["force"] = True
-
-        response = self._request(
-            "POST", f"{API_BASE}/ansible/subscription-roles", json=body
-        )
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def ansible_role_vars(self, roles: list[str]) -> list[dict]:
-        """Get variables for roles.
-
-        Route:  POST /api/v2/ansible/role/vars
-        """
-        response = self._request(
-            "POST", f"{API_BASE}/ansible/role/vars", json={"roles": roles}
-        )
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for ansible_role_vars",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
+    # -- ansible management ----------------------------------------------
 
     def ansible_list(self, *, user_id: str | None = None) -> list[dict]:
-        """List installed ansible roles/collections.
-
-        Route:  GET /api/v2/ansible
-        """
-        params: dict[str, Any] = {}
-        if user_id is not None:
-            params["userID"] = user_id
-
-        response = self._request("GET", f"{API_BASE}/ansible", params=params or None)
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise LudusError(
-                "Ludus returned invalid JSON for ansible_list",
-                status_code=response.status_code,
-            ) from exc
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return [data]
-        return []
-
-    def ansible_role_scope(
-        self,
-        roles: list[str],
-        *,
-        global_: bool = False,
-        copy: bool = False,
-    ) -> dict:
-        """Change the scope of ansible roles.
-
-        Route:  PATCH /api/v2/ansible/role/scope
-        """
-        body: dict[str, Any] = {"roles": roles}
-        if global_:
-            body["global"] = True
-        if copy:
-            body["copy"] = True
-
-        response = self._request("PATCH", f"{API_BASE}/ansible/role/scope", json=body)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
+        """List installed roles/collections.  Route: GET /ansible?userID=."""
+        response = self._request("GET", f"{API_BASE}/ansible", params=_user_params(user_id))
+        return self._as_list(self._json(response, "ansible_list"))
 
     def ansible_role(
         self,
         role: str,
-        action: str,
+        action: str = "install",
         *,
-        version: str | None = None,
+        version: str = "",
         force: bool = False,
         global_: bool = False,
     ) -> dict:
-        """Install/remove/update an ansible role.
+        """Install or remove an Ansible role.
 
-        Route:  POST /api/v2/ansible/role
+        Route:  POST /ansible/role
+        Body:   {"role","action":"install"|"remove","global","force","version"}
+
+        On Ludus v1, installing a role globally (``global_=True``) is the way
+        to make it available to all users - there is no separate role-scope
+        endpoint.
         """
-        body: dict[str, Any] = {"role": role, "action": action}
-        if version is not None:
-            body["version"] = version
-        if force:
-            body["force"] = True
-        if global_:
-            body["global"] = True
-
+        body: dict[str, Any] = {
+            "role": role,
+            "action": action,
+            "global": global_,
+            "force": force,
+            "version": version,
+        }
         response = self._request("POST", f"{API_BASE}/ansible/role", json=body)
-        try:
-            return response.json()
-        except ValueError:
-            return {"result": "ok"}
-
-    def ansible_role_from_tar(
-        self,
-        file_data: bytes,
-        filename: str,
-        *,
-        force: bool = False,
-    ) -> dict:
-        """Install an ansible role from a tar file.
-
-        Route:  PUT /api/v2/ansible/role/fromtar
-        """
-        files_payload = {"file": (filename, file_data, "application/gzip")}
-        data_payload: dict[str, str] = {}
-        if force:
-            data_payload["force"] = "true"
-
-        response = self._request(
-            "PUT",
-            f"{API_BASE}/ansible/role/fromtar",
-            files=files_payload,
-            data=data_payload or None,
-        )
         try:
             return response.json()
         except ValueError:
@@ -1774,31 +867,121 @@ class LudusClient:
         version: str | None = None,
         force: bool = False,
     ) -> dict:
-        """Install an ansible collection.
-
-        Route:  POST /api/v2/ansible/collection
-        """
+        """Install an Ansible collection.  Route: POST /ansible/collection."""
         body: dict[str, Any] = {"collection": collection}
         if version is not None:
             body["version"] = version
         if force:
             body["force"] = True
-
         response = self._request("POST", f"{API_BASE}/ansible/collection", json=body)
         try:
             return response.json()
         except ValueError:
             return {"result": "ok"}
 
+    def ansible_role_from_tar(
+        self,
+        file_data: bytes,
+        filename: str,
+        *,
+        force: bool = False,
+    ) -> dict:
+        """Install a role from a tar file.  Route: PUT /ansible/role/fromtar."""
+        files_payload = {"file": (filename, file_data, "application/gzip")}
+        data_payload: dict[str, str] = {}
+        if force:
+            data_payload["force"] = "true"
+        response = self._request(
+            "PUT",
+            f"{API_BASE}/ansible/role/fromtar",
+            files=files_payload,
+            data=data_payload or None,
+        )
+        try:
+            return response.json()
+        except ValueError:
+            return {"result": "ok"}
+
+    def ansible_scope_roles_global(self, roles: list[str], *, force: bool = False) -> None:
+        """Make each role in *roles* global (available to all users).
+
+        Ludus v1 has no ``/ansible/role/scope`` endpoint; the equivalent is
+        (re)installing the role with ``global=True``. Best-effort: individual
+        role failures are logged and swallowed so a single bad role does not
+        abort provisioning.
+        """
+        for role in roles:
+            try:
+                self.ansible_role(role, action="install", global_=True, force=force)
+            except LudusError as exc:
+                logger.warning("ansible_scope_roles_global: role %s failed: %s", role, exc)
+
+    # -- operations NOT supported on Ludus v1 ----------------------------
+
+    def _unsupported(self, name: str, alternative: str = "") -> LudusNotSupported:
+        msg = f"'{name}' is not available on Ludus v1"
+        if alternative:
+            msg += f" ({alternative})"
+        return LudusNotSupported(msg)
+
+    def range_assign(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported(
+            "range_assign", "use range_access_grant(source_user_id, target_user_id)"
+        )
+
+    def range_revoke(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported(
+            "range_revoke", "use range_access_revoke(source_user_id, target_user_id)"
+        )
+
+    def range_users(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("range_users", "use range_access_list()")
+
+    def range_create(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("range_create", "v1 is single-range-per-user")
+
+    def ranges_accessible(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("ranges_accessible", "use range_access_list()")
+
+    def range_delete_vms(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("range_delete_vms", "use range_destroy(force=True)")
+
+    def vm_destroy(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("vm_destroy", "v1 has no per-VM delete endpoint")
+
+    def range_logs_history(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("range_logs_history")
+
+    def range_log_entry(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("range_log_entry")
+
+    def whoami(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("whoami")
+
+    def group_create(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("groups", "group management was added after v1")
+
+    # All group operations are unsupported on v1; alias them to one raiser.
+    group_list = group_delete = group_users = group_add_users = group_create
+    group_remove_users = group_ranges = group_add_ranges = group_remove_ranges = group_create
+
+    def ansible_subscription_roles(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("ansible_subscription_roles")
+
+    def ansible_install_subscription_roles(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("ansible_install_subscription_roles")
+
+    def ansible_role_vars(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported("ansible_role_vars")
+
+    def ansible_role_scope(self, *args: Any, **kwargs: Any) -> None:
+        raise self._unsupported(
+            "ansible_role_scope", "use ansible_scope_roles_global(roles) on v1"
+        )
+
 
 def get_ludus_client() -> LudusClient:
-    """FastAPI dependency: build a `LudusClient` from app settings.
-
-    The caller is responsible for closing the client (or using it as a
-    context manager) - FastAPI's dependency system handles this when
-    used with `Depends(get_ludus_client)` via a generator wrapper in the
-    routes layer.
-    """
+    """FastAPI dependency: build a `LudusClient` from app settings."""
     settings = get_settings()
     return LudusClient(
         url=settings.ludus_default_url,
