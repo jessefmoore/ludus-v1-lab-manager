@@ -52,9 +52,9 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </svg>
           <div>
             <div className="flex items-baseline gap-0 whitespace-nowrap leading-none">
-              <span className="text-lg font-bold text-text-primary">ludus</span>
+              <span className="text-lg font-bold text-text-primary">Ludus</span>
               <span className="text-lg font-bold text-accent-success">-v1</span>
-              <span className="text-lg font-bold text-text-primary">&nbsp;Manager</span>
+              <span className="text-lg font-bold text-text-primary">&nbsp;Mgr</span>
             </div>
             <p className="text-xs text-text-muted tracking-normal mt-1">
               Ludus Labs Manager
