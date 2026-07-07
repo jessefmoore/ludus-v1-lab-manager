@@ -1,1 +1,1 @@
-"""Custom middleware for the ludus-v1 Manager platform."""
+"""Custom middleware for the Ludus-v1 Mgr platform."""

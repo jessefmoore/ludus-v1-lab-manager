@@ -1,4 +1,4 @@
-"""FastAPI application entry point for ludus-v1 Manager.
+"""FastAPI application entry point for Ludus-v1 Mgr.
 
 Wires every Phase 1 router into a single app, and uses a lifespan handler
 to:
@@ -99,7 +99,7 @@ async def lifespan(app: FastAPI):
 settings = get_settings()
 
 app = FastAPI(
-    title="ludus-v1 Manager",
+    title="Ludus-v1 Mgr",
     version="0.1.0",
     lifespan=lifespan,
 )

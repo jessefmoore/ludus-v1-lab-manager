@@ -72,7 +72,7 @@ export default function Login() {
         {/* Logo */}
         <div className="relative">
           <div className="flex items-center gap-4">
-            <svg width="64" height="64" viewBox="0 0 200 200" role="img" aria-label="ludus-v1 Manager" className="shrink-0">
+            <svg width="64" height="64" viewBox="0 0 200 200" role="img" aria-label="Ludus-v1 Mgr" className="shrink-0">
               <g transform="translate(100 100)">
                 <g stroke="#1A3A35" strokeWidth="7" strokeLinecap="round" fill="none">
                   <line x1="-55" y1="-55" x2="55" y2="55"/>
@@ -95,9 +95,9 @@ export default function Login() {
             </svg>
             <div>
               <div className="flex items-baseline gap-0 whitespace-nowrap leading-none">
-                <span className="text-4xl font-bold text-text-primary">ludus</span>
+                <span className="text-4xl font-bold text-text-primary">Ludus</span>
                 <span className="text-4xl font-bold text-accent-success">-v1</span>
-                <span className="text-4xl font-bold text-text-primary">&nbsp;Manager</span>
+                <span className="text-4xl font-bold text-text-primary">&nbsp;Mgr</span>
               </div>
               <p className="text-sm text-text-muted mt-1 tracking-normal">
                 Ludus Labs Manager
@@ -159,7 +159,7 @@ export default function Login() {
 
         {/* Footer */}
         <p className="relative text-xs text-text-muted">
-          &copy; ludus-v1 Manager - built for security trainers
+          &copy; Ludus-v1 Mgr - built for security trainers
         </p>
       </div>
 
@@ -187,7 +187,7 @@ export default function Login() {
           {/* Mobile logo (hidden on desktop) */}
           <div className="lg:hidden">
             <div className="flex items-center gap-3">
-              <svg width="40" height="40" viewBox="0 0 64 64" role="img" aria-label="ludus-v1 Manager" className="shrink-0">
+              <svg width="40" height="40" viewBox="0 0 64 64" role="img" aria-label="Ludus-v1 Mgr" className="shrink-0">
                 <g transform="translate(32 32)">
                   <circle cx="0" cy="0" r="26" fill="none" stroke="#00D4AA" strokeWidth="3.5"/>
                   <circle cx="0" cy="0" r="7" fill="none" stroke="#00D4AA" strokeWidth="3.5"/>
@@ -206,9 +206,9 @@ export default function Login() {
               </svg>
               <div>
                 <div className="flex items-baseline gap-0 whitespace-nowrap leading-none">
-                  <span className="text-3xl font-bold text-text-primary">ludus</span>
+                  <span className="text-3xl font-bold text-text-primary">Ludus</span>
                   <span className="text-3xl font-bold text-accent-success">-v1</span>
-                  <span className="text-3xl font-bold text-text-primary">&nbsp;Manager</span>
+                  <span className="text-3xl font-bold text-text-primary">&nbsp;Mgr</span>
                 </div>
                 <p className="text-sm text-text-muted mt-1">Ludus Labs Manager</p>
               </div>
