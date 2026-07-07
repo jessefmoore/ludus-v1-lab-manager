@@ -115,6 +115,7 @@ class LudusClientRegistry:
                 url=cfg.url,
                 api_key=cfg.api_key,
                 verify_tls=cfg.verify_tls,
+                admin_url=cfg.admin_url,
             )
         return self._clients[name]
 
@@ -195,6 +196,7 @@ def _merge_servers(
             url=row.url,
             api_key=api_key,
             verify_tls=row.verify_tls,
+            admin_url=getattr(row, "admin_url", None),
         )
 
     return merged
@@ -219,6 +221,7 @@ def _build_ludus_client() -> LudusClient:
         url=s.ludus_default_url,
         api_key=s.ludus_default_api_key,
         verify_tls=s.ludus_default_verify_tls,
+        admin_url=s.ludus_default_admin_url,
     )
 
 

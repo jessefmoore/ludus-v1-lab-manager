@@ -17,6 +17,10 @@ class LudusServerConfig:
     url: str
     api_key: str
     verify_tls: bool = False
+    # Optional separate admin-API URL. On Ludus v1, user create/delete are
+    # served only by the admin API (127.0.0.1:8081); everything else uses
+    # ``url``. Leave None on newer Ludus where one URL serves everything.
+    admin_url: str | None = None
 
 
 class Settings(BaseSettings):
@@ -45,6 +49,8 @@ class Settings(BaseSettings):
     ludus_default_url: str
     ludus_default_api_key: str
     ludus_default_verify_tls: bool = False
+    # Optional admin-API URL for Ludus v1 user management (see LudusServerConfig).
+    ludus_default_admin_url: str | None = None
 
     # Invite
     invite_token_ttl_hours: int = 168
@@ -68,6 +74,7 @@ class Settings(BaseSettings):
                 url=self.ludus_default_url,
                 api_key=self.ludus_default_api_key,
                 verify_tls=self.ludus_default_verify_tls,
+                admin_url=self.ludus_default_admin_url,
             ),
         }
 
@@ -80,7 +87,9 @@ class Settings(BaseSettings):
                 continue
             # Extract the server name: LUDUS_<NAME>_URL -> <NAME>
             name = upper[len("LUDUS_") : -len("_URL")]
-            if not name or name == "DEFAULT" or name in seen:
+            # Skip DEFAULT (handled above) and the *_ADMIN_URL companion vars,
+            # which configure a server's admin API rather than a new server.
+            if not name or name == "DEFAULT" or name.endswith("_ADMIN") or name in seen:
                 continue
             seen.add(name)
 
@@ -97,6 +106,7 @@ class Settings(BaseSettings):
                 url=url,
                 api_key=api_key,
                 verify_tls=verify_tls,
+                admin_url=os.environ.get(f"LUDUS_{name}_ADMIN_URL"),
             )
 
         return servers

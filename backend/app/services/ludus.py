@@ -170,6 +170,7 @@ class LudusClient:
         verify_tls: bool = False,
         timeout: float = 30.0,
         client: httpx.Client | None = None,
+        admin_url: str | None = None,
     ) -> None:
         self._url = url.rstrip("/")
         self._api_key = api_key
@@ -194,7 +195,29 @@ class LudusClient:
                 },
             )
         self._owns_client = client is None
-        logger.debug("LudusClient initialised for %s", self._url)
+
+        # Ludus v1 splits its API across two ports: user management
+        # (POST/DELETE /user) is served ONLY by the admin API (127.0.0.1:8081),
+        # while range/snapshot/testing/etc. are served by the user API (:8080).
+        # When ``admin_url`` is set, user-management writes go there; otherwise
+        # they use the primary client (correct for newer Ludus where one URL
+        # serves everything).
+        if admin_url and client is None and admin_url.rstrip("/") != self._url:
+            self._admin_url = admin_url.rstrip("/")
+            self._admin_client = httpx.Client(
+                base_url=self._admin_url,
+                verify=verify_tls,
+                timeout=timeout,
+                headers={"X-API-KEY": api_key, "Accept": "application/json"},
+            )
+            self._owns_admin_client = True
+        else:
+            self._admin_url = self._url
+            self._admin_client = self._client
+            self._owns_admin_client = False
+        logger.debug(
+            "LudusClient initialised for %s (admin: %s)", self._url, self._admin_url
+        )
 
     # -- context manager / lifecycle -------------------------------------
 
@@ -210,9 +233,11 @@ class LudusClient:
         self.close()
 
     def close(self) -> None:
-        """Close the underlying httpx client if we own it."""
+        """Close the underlying httpx client(s) if we own them."""
         if self._owns_client:
             self._client.close()
+        if self._owns_admin_client:
+            self._admin_client.close()
 
     # -- low-level helpers -----------------------------------------------
 
@@ -232,14 +257,18 @@ class LudusClient:
         files: dict[str, Any] | None = None,
         data: dict[str, Any] | None = None,
         on_conflict_user_exists: bool = False,
+        client: httpx.Client | None = None,
     ) -> httpx.Response:
-        """Dispatch a request through the shared httpx.Client.
+        """Dispatch a request through an httpx.Client (primary by default).
 
-        Handles timeout translation and delegates status checking to
-        `_raise_for_status`. Never logs the api key or raw query string.
+        Pass ``client=self._admin_client`` for user-management writes that
+        Ludus v1 only serves on the admin API. Handles timeout translation and
+        delegates status checking to `_raise_for_status`. Never logs the api
+        key or raw query string.
         """
+        http = client or self._client
         try:
-            response = self._client.request(
+            response = http.request(
                 method,
                 path,
                 json=json,
@@ -330,6 +359,7 @@ class LudusClient:
             f"{API_BASE}/user",
             json=payload,
             on_conflict_user_exists=True,
+            client=self._admin_client,
         )
         data = self._json(response, "user_add")
         if not isinstance(data, dict):
@@ -340,8 +370,8 @@ class LudusClient:
         return data
 
     def user_rm(self, userid: str) -> None:
-        """Delete a Ludus user.  Route: DELETE /user/{userID}."""
-        self._request("DELETE", f"{API_BASE}/user/{userid}")
+        """Delete a Ludus user.  Route: DELETE /user/{userID} (admin API on v1)."""
+        self._request("DELETE", f"{API_BASE}/user/{userid}", client=self._admin_client)
 
     def user_list(self) -> list[dict]:
         """List all users.  Route: GET /user/all -> list of user dicts."""
@@ -984,4 +1014,5 @@ def get_ludus_client() -> LudusClient:
         url=settings.ludus_default_url,
         api_key=settings.ludus_default_api_key,
         verify_tls=settings.ludus_default_verify_tls,
+        admin_url=getattr(settings, "ludus_default_admin_url", None),
     )

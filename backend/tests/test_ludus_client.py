@@ -107,6 +107,31 @@ def test_user_rm_success(client: LudusClient, httpx_mock: HTTPXMock) -> None:
     assert httpx_mock.get_request() is not None
 
 
+def test_user_writes_use_admin_url(httpx_mock: HTTPXMock) -> None:
+    # On Ludus v1, user create/delete must hit the admin API (:8081), while
+    # everything else uses the primary URL (:8080).
+    admin = "https://ludus.test:8081"
+    c = LudusClient(url=BASE_URL, api_key=API_KEY, verify_tls=False, admin_url=admin)
+    try:
+        httpx_mock.add_response(
+            method="POST", url=f"{admin}/user", status_code=201,
+            json={"userID": "bob", "isAdmin": False, "name": "Bob"},
+        )
+        httpx_mock.add_response(method="DELETE", url=f"{admin}/user/bob", json={})
+        httpx_mock.add_response(method="GET", url=f"{BASE_URL}/user/all", json=[])
+
+        c.user_add("bob", "Bob", "bob@example.com")
+        c.user_rm("bob")
+        c.user_list()  # reads still go to the primary :8080 URL
+    finally:
+        c.close()
+
+    reqs = httpx_mock.get_requests()
+    assert str(reqs[0].url) == f"{admin}/user"          # add -> admin
+    assert str(reqs[1].url) == f"{admin}/user/bob"      # rm  -> admin
+    assert reqs[2].url.host == "ludus.test" and reqs[2].url.port == 8080  # list -> primary
+
+
 def test_user_list_success(client: LudusClient, httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         method="GET", url=_url("/user/all"),
