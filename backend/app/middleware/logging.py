@@ -8,7 +8,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-logger = logging.getLogger("insec.access")
+logger = logging.getLogger("ludus.access")
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

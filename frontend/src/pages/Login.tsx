@@ -235,7 +235,7 @@ export default function Login() {
             <Input
               label="Email"
               type="email"
-              placeholder="instructor@insec.ml"
+              placeholder="instructor@example.com"
               icon={<Mail />}
               value={email}
               onChange={(e) => setEmail(e.target.value)}

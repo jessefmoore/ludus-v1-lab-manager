@@ -1,1 +1,1 @@
-"""Custom middleware for the insec.ml platform."""
+"""Custom middleware for the ludus-v1 Manager platform."""

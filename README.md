@@ -1,4 +1,4 @@
-# ludus-helm
+# ludus-v1-mgr
 
 Training lab deployment management platform powered by [Ludus](https://ludus.cloud).
 
@@ -55,7 +55,7 @@ trainings and workshops.
 ## Project structure
 
 ```
-ludus-helm/
+ludus-v1-mgr/
 ├── backend/
 │   ├── app/
 │   │   ├── api/              # FastAPI route handlers

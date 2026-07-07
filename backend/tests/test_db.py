@@ -55,7 +55,7 @@ def test_session_can_execute_select_one(
     tmp_path: Path,
 ) -> None:
     """SessionLocal opens a working session that can execute SELECT 1."""
-    db_file = tmp_path / "data" / "insec.db"
+    db_file = tmp_path / "data" / "ludus.db"
     _apply_required_env(monkeypatch, f"sqlite:///{db_file}")
 
     try:
@@ -76,7 +76,7 @@ def test_get_db_yields_session_and_closes(
     tmp_path: Path,
 ) -> None:
     """get_db() yields a Session and closes it when the generator is exhausted."""
-    db_file = tmp_path / "data" / "insec.db"
+    db_file = tmp_path / "data" / "ludus.db"
     _apply_required_env(monkeypatch, f"sqlite:///{db_file}")
 
     try:
@@ -105,7 +105,7 @@ def test_base_is_declarative(
     tmp_path: Path,
 ) -> None:
     """Base is a SQLAlchemy DeclarativeBase subclass with a metadata registry."""
-    db_file = tmp_path / "data" / "insec.db"
+    db_file = tmp_path / "data" / "ludus.db"
     _apply_required_env(monkeypatch, f"sqlite:///{db_file}")
 
     try:

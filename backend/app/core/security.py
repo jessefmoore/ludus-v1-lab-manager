@@ -3,7 +3,7 @@
 Security design notes (Phase 1 MVP):
 
 * Sessions are carried as an HS256-signed JWT in an httpOnly cookie
-  (``insec_session``) with ``SameSite=Lax`` and ``Secure`` when
+  (``ludus_session``) with ``SameSite=Lax`` and ``Secure`` when
   ``PUBLIC_BASE_URL`` uses HTTPS.
 * CSRF protection is intentionally out of scope for Phase 1. ``SameSite=Lax``
   blocks cross-origin POST/PUT/DELETE from third-party sites on modern
@@ -28,7 +28,7 @@ from app.models.user import User
 
 JWT_ALGORITHM = "HS256"
 TOKEN_TTL = timedelta(hours=12)
-COOKIE_NAME = "insec_session"
+COOKIE_NAME = "ludus_session"
 
 # ``pwd_context`` is retained for compatibility with the project spec and
 # for any future migration scheme wiring (e.g. argon2). The actual hashing

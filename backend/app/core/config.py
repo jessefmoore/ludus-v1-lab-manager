@@ -24,7 +24,7 @@ class LudusServerConfig:
 
 
 class Settings(BaseSettings):
-    """Typed, env-driven configuration for the ludus-helm backend."""
+    """Typed, env-driven configuration for the ludus-v1-mgr backend."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     admin_password: str
 
     # Database
-    database_url: str = "sqlite:///./data/insec.db"
+    database_url: str = "sqlite:///./data/ludus.db"
 
     # Ludus
     ludus_default_url: str

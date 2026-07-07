@@ -22,7 +22,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - ludus-helm
+      - ludus-v1-mgr
     healthcheck:
       # curl is not in the slim image; python is, so use urllib.
       test:
@@ -46,7 +46,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - ludus-helm
+      - ludus-v1-mgr
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U insec"]
       interval: 10s
@@ -65,11 +65,11 @@ services:
     depends_on:
       - backend
     networks:
-      - ludus-helm
+      - ludus-v1-mgr
 
 volumes:
   pgdata:
 
 networks:
-  ludus-helm:
+  ludus-v1-mgr:
     driver: bridge

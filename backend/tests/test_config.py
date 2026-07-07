@@ -37,7 +37,7 @@ def test_settings_populated_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert settings.app_port == 9001
         assert settings.admin_email == "admin@example.com"
         assert settings.admin_password == "unit-test-password"
-        assert settings.database_url == "sqlite:///./data/insec.db"
+        assert settings.database_url == "sqlite:///./data/ludus.db"
         assert settings.ludus_default_url == "https://ludus.test:8080"
         assert settings.ludus_default_api_key == "unit-test-api-key"
         assert settings.ludus_default_verify_tls is True

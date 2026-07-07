@@ -13,7 +13,7 @@
 
 - [ ] **`POSTGRES_PASSWORD`** - Set a unique database password.
 
-- [ ] **`DOMAIN`** - Set to your real domain (e.g. `platform.insec.ml`).
+- [ ] **`DOMAIN`** - Set to your real domain (e.g. `platform.example.com`).
   Caddy auto-provisions a Let's Encrypt certificate for this domain.
   Ensure ports 80 and 443 are open and the DNS A record points to your server.
 

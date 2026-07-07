@@ -1,4 +1,4 @@
-"""FastAPI application entry point for insec.ml.
+"""FastAPI application entry point for ludus-v1 Manager.
 
 Wires every Phase 1 router into a single app, and uses a lifespan handler
 to:

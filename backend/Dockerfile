@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 #
-# ludus-helm backend image (multi-stage).
+# ludus-v1-mgr backend image (multi-stage).
 #
 # Note on migrations:
 #   The FastAPI lifespan handler in app/main.py calls `_apply_schema()`, which
