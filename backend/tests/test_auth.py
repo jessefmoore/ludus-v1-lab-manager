@@ -37,6 +37,9 @@ def settings() -> Settings:
         admin_password=ADMIN_PASSWORD,
         ludus_default_url="https://ludus.test:8080",
         ludus_default_api_key="unit-test-api-key",
+        # These tests target local (app-password) auth; keep them hermetic by
+        # not falling back to a real Ludus/Proxmox lookup.
+        ludus_auth_enabled=False,
         _env_file=None,
     )
 

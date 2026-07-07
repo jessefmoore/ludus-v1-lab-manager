@@ -26,7 +26,7 @@ export default function Login() {
       await login(email, password);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.status === 401 ? "Invalid email or password" : err.detail);
+        setError(err.status === 401 ? "Invalid username or password" : err.detail);
       } else {
         setError("An unexpected error occurred");
       }
@@ -233,9 +233,10 @@ export default function Login() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <Input
-              label="Email"
-              type="email"
-              placeholder="instructor@example.com"
+              label="Username"
+              type="text"
+              autoComplete="username"
+              placeholder="Ludus userID, Proxmox username, or email"
               icon={<Mail />}
               value={email}
               onChange={(e) => setEmail(e.target.value)}

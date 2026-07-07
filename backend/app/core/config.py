@@ -52,6 +52,30 @@ class Settings(BaseSettings):
     # Optional admin-API URL for Ludus v1 user management (see LudusServerConfig).
     ludus_default_admin_url: str | None = None
 
+    # --- Ludus/Proxmox login authentication ---
+    # When enabled, app logins can be authenticated against Ludus users'
+    # Proxmox credentials (validated via the Proxmox ticket API). Users log in
+    # with their Ludus userID (or Proxmox username) + Proxmox password.
+    ludus_auth_enabled: bool = True
+    # Only Ludus admin users may log into this instructor console. Set false to
+    # allow any valid Ludus user (e.g. students) - not recommended.
+    ludus_auth_admins_only: bool = True
+    # Proxmox base URL for the ticket check. If unset, derived from
+    # ludus_default_url's host on port 8006.
+    proxmox_url: str | None = None
+    proxmox_realm: str = "pam"
+    proxmox_verify_tls: bool = False
+
+    @property
+    def resolved_proxmox_url(self) -> str | None:
+        """Proxmox base URL for auth, explicit or derived from the Ludus host."""
+        if self.proxmox_url:
+            return self.proxmox_url.rstrip("/")
+        from urllib.parse import urlparse
+
+        host = urlparse(self.ludus_default_url).hostname
+        return f"https://{host}:8006" if host else None
+
     # Invite
     invite_token_ttl_hours: int = 168
     public_base_url: str = "http://localhost:8000"
