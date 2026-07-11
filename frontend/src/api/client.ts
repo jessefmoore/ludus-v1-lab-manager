@@ -9,6 +9,8 @@ import type {
   SessionRead,
   SessionDetailRead,
   SessionProvisionResponse,
+  SessionTeardownResponse,
+  BaselineSnapshotResponse,
   SessionQuotaRead,
   StudentCreate,
   StudentRead,
@@ -159,6 +161,12 @@ export const sessions = {
   quota: (id: number) =>
     request<SessionQuotaRead>(`/api/sessions/${id}/quota`),
 
+  baselineSnapshots: (id: number, name?: string) =>
+    request<BaselineSnapshotResponse>(
+      `/api/sessions/${id}/baseline-snapshots${name ? `?name=${encodeURIComponent(name)}` : ""}`,
+      { method: "POST" },
+    ),
+
   create: (data: SessionCreate) =>
     request<SessionRead>("/api/sessions", {
       method: "POST",
@@ -174,8 +182,17 @@ export const sessions = {
   delete: (id: number) =>
     request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
 
-  end: (id: number) =>
-    request<SessionRead>(`/api/sessions/${id}/end`, { method: "POST" }),
+  rebuild: (id: number) =>
+    request<SessionTeardownResponse>(
+      `/api/sessions/${id}/rebuild`,
+      { method: "POST" },
+    ),
+
+  teardown: (id: number) =>
+    request<SessionTeardownResponse>(
+      `/api/sessions/${id}/teardown`,
+      { method: "POST" },
+    ),
 
   provision: (id: number) =>
     request<SessionProvisionResponse>(
@@ -194,6 +211,9 @@ export const students = {
 
   delete: (id: number) =>
     request<void>(`/api/students/${id}`, { method: "DELETE" }),
+
+  removeRange: (id: number) =>
+    request<StudentRead>(`/api/students/${id}/range`, { method: "DELETE" }),
 
   reset: (id: number, data?: StudentResetRequest) =>
     request<StudentResetResponse>(`/api/students/${id}/reset`, {

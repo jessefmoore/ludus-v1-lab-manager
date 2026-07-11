@@ -19,7 +19,7 @@ from app.core.deps import (
     get_db,
     get_ludus_client_registry,
 )
-from app.models import LabTemplate, Student
+from app.models import LabTemplate, Student, StudentStatus
 from app.models import Session as SessionRow
 from app.models.event import Event
 from app.models.session import SessionStatus
@@ -34,6 +34,8 @@ from app.schemas.session import (
 from app.schemas.student import StudentRead
 from app.services import provision as provision_service
 from app.services import sessions as sessions_service
+from app.services import snapshots as snapshots_service
+from app.services import teardown as teardown_service
 from app.services.exceptions import LudusError
 from app.services.resources import compute_range_resources, compute_session_demand
 
@@ -153,7 +155,11 @@ def get_session_quota(
 
     per_range = compute_range_resources(lab_template.range_config_yaml)
     student_count = len(row.students)
+    ready_count = sum(1 for s in row.students if s.status == StudentStatus.ready)
+    # Planned footprint (all students) drives the quota gate; allocated footprint
+    # (only deployed/ready ranges) is what is actually consuming resources now.
     demand = compute_session_demand(per_range, row.mode, student_count)
+    allocated = compute_session_demand(per_range, row.mode, ready_count)
 
     within_quota = (
         (row.cpu_quota is None or demand.cpus <= row.cpu_quota)
@@ -162,10 +168,13 @@ def get_session_quota(
     return SessionQuotaRead(
         mode=row.mode,
         student_count=student_count,
+        ready_count=ready_count,
         per_range_cpus=per_range.cpus,
         per_range_ram_gb=per_range.ram_gb,
         demand_cpus=demand.cpus,
         demand_ram_gb=demand.ram_gb,
+        allocated_cpus=allocated.cpus,
+        allocated_ram_gb=allocated.ram_gb,
         cpu_quota=row.cpu_quota,
         ram_quota_gb=row.ram_quota_gb,
         within_quota=within_quota,
@@ -202,10 +211,16 @@ def patch_session(
     registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
 ) -> SessionRead:
-    """Update mutable fields on a draft session (currently ``shared_range_id``).
+    """Partially update a session's ``shared_range_id`` and/or resource quota.
 
-    Only allowed when the session is in ``draft`` status. If a non-null
-    ``shared_range_id`` is provided, the range is validated against Ludus.
+    Every field is a true partial update - only values present in the request
+    body are touched (a sent ``null`` clears that field). Status rules:
+
+    * ``shared_range_id`` may only be (re)bound while the session is ``draft``
+      (a non-null value is validated against Ludus).
+    * ``cpu_quota`` / ``ram_quota_gb`` may be edited any time *except* after
+      the session has ``ended`` - so an instructor can raise/lower a running
+      cohort's budget before provisioning more students.
     """
     session_row = sessions_service.get_session(db, session_id)
     if session_row is None:
@@ -213,14 +228,25 @@ def patch_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
         )
-    if session_row.status != SessionStatus.draft:
+
+    fields_set = payload.model_fields_set
+    changing_range = "shared_range_id" in fields_set
+    changing_quota = "cpu_quota" in fields_set or "ram_quota_gb" in fields_set
+
+    if changing_range and session_row.status != SessionStatus.draft:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"Cannot update session in status={session_row.status.value}; must be draft",
+            detail=f"shared_range_id can only be changed while the session is "
+            f"draft (status={session_row.status.value})",
+        )
+    if changing_quota and session_row.status == SessionStatus.ended:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot change the quota of an ended session",
         )
 
     # Validate the range exists on Ludus when a non-null value is provided.
-    if payload.shared_range_id is not None:
+    if changing_range and payload.shared_range_id is not None:
         lab_template = db.get(LabTemplate, session_row.lab_template_id)
         server_name = getattr(lab_template, "ludus_server", "default") or "default"
         try:
@@ -242,11 +268,9 @@ def patch_session(
                 f"Ludus server '{server_name}'",
             )
 
-    session_row.shared_range_id = payload.shared_range_id
-    # Quota fields are optional: only touch them when the caller sent them,
-    # so a shared_range_id-only PATCH doesn't wipe an existing budget. A
-    # sent null clears the budget (unlimited).
-    fields_set = payload.model_fields_set
+    # Apply only the fields the caller actually sent (true partial update).
+    if changing_range:
+        session_row.shared_range_id = payload.shared_range_id
     if "cpu_quota" in fields_set:
         session_row.cpu_quota = payload.cpu_quota
     if "ram_quota_gb" in fields_set:
@@ -255,10 +279,11 @@ def patch_session(
         Event(
             session_id=session_row.id,
             student_id=None,
-            action="session.range_updated",
+            action="session.updated",
             details_json={
                 "session_id": session_row.id,
-                "shared_range_id": payload.shared_range_id,
+                "changed": sorted(fields_set),
+                "shared_range_id": session_row.shared_range_id,
                 "cpu_quota": session_row.cpu_quota,
                 "ram_quota_gb": session_row.ram_quota_gb,
             },
@@ -269,26 +294,129 @@ def patch_session(
     return SessionRead.model_validate(session_row)
 
 
-@router.post("/{session_id}/end", response_model=SessionRead)
-def end_session(
+class SessionTeardownResponse(BaseModel):
+    """Response body for ``POST /rebuild`` and ``POST /teardown``."""
+
+    cleaned: int
+    failed: int
+    skipped: int
+    students: list[StudentRead]
+
+
+def _run_teardown_op(
+    op,
     session_id: int,
-    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
-    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
-) -> SessionRead:
-    """Transition an active/provisioning session to ``ended``."""
+    db: DBSession,
+    registry: LudusClientRegistry,
+    settings: Settings,
+) -> SessionTeardownResponse:
+    """Shared runner for rebuild/teardown - maps service errors to HTTP."""
     try:
-        session_row = sessions_service.end_session(db, session_id)
-    except sessions_service.SessionNotFound as exc:
+        result = op(db=db, registry=registry, session_id=session_id, settings=settings)
+    except teardown_service.SessionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
         ) from exc
-    except sessions_service.SessionEndConflict as exc:
+    except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         ) from exc
-    return SessionRead.model_validate(session_row)
+    return SessionTeardownResponse(
+        cleaned=result.cleaned,
+        failed=result.failed,
+        skipped=result.skipped,
+        students=[_student_to_read(s, settings) for s in result.students],
+    )
+
+
+@router.post("/{session_id}/rebuild", response_model=SessionTeardownResponse)
+def rebuild_session(
+    session_id: int,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> SessionTeardownResponse:
+    """Destroy the session's range VMs but keep its Ludus users/invites.
+
+    Provisioned students flip back to ``pending`` so a subsequent
+    ``/provision`` redeploys fresh VMs for the same people. Nothing on the
+    invite/VPN side changes.
+    """
+    return _run_teardown_op(
+        teardown_service.rebuild_session, session_id, db, registry, settings
+    )
+
+
+class BaselineSnapshotResponse(BaseModel):
+    """Response body for ``POST /{id}/baseline-snapshots``."""
+
+    created: int
+    existing: int
+    pending: int
+    failed: int
+    done: bool
+    snapshot_name: str
+
+
+@router.post("/{session_id}/baseline-snapshots", response_model=BaselineSnapshotResponse)
+def baseline_snapshots(
+    session_id: int,
+    name: str = "snapshot-1",
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> BaselineSnapshotResponse:
+    """Take the baseline snapshot for every range in the session that's deployed.
+
+    Idempotent and safe to call repeatedly: ranges still ``DEPLOYING`` are
+    reported as ``pending`` and retried next call; already-baselined ranges are
+    skipped. ``done`` is True once nothing is pending/failed, so the caller can
+    stop polling.
+    """
+    session_row = sessions_service.get_session(db, session_id)
+    if session_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+    lab_template = db.get(LabTemplate, session_row.lab_template_id)
+    server_name = getattr(lab_template, "ludus_server", "default") or "default"
+    try:
+        ludus = registry.get(server_name)
+        result = snapshots_service.ensure_baseline_snapshots(db, ludus, session_id, name)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except LudusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Ludus error: {exc}"
+        ) from exc
+    return BaselineSnapshotResponse(
+        created=result.created,
+        existing=result.existing,
+        pending=result.pending,
+        failed=result.failed,
+        done=result.done,
+        snapshot_name=name,
+    )
+
+
+@router.post("/{session_id}/teardown", response_model=SessionTeardownResponse)
+def teardown_session(
+    session_id: int,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> SessionTeardownResponse:
+    """Fully tear down a session: remove Ludus users + configs, mark it ended.
+
+    Destroys every provisioned student's range and Ludus user, deletes their
+    WireGuard config, and transitions the session to ``ended``. Per-student
+    failures are reported but do not stop the session from ending.
+    """
+    return _run_teardown_op(
+        teardown_service.teardown_session, session_id, db, registry, settings
+    )
 
 
 @router.post(

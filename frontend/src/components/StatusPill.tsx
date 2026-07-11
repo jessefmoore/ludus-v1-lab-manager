@@ -47,6 +47,12 @@ const config: Record<
     text: "text-accent-danger",
     icon: "alert",
   },
+  range_removed: {
+    label: "Range-Removed",
+    bg: "bg-accent-warning/15",
+    text: "text-accent-warning",
+    icon: "dot",
+  },
 };
 
 export default function StatusPill({ status }: { status: Status }) {

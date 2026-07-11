@@ -354,3 +354,88 @@ def test_update_lab_rejects_over_ram_cap(
         labs_service.update_lab(
             db_session, lab.id, LabTemplateUpdate(range_config_yaml=over_ram)
         )
+
+
+# ---------------------------------------------------------------------------
+# 4. editing a session's quota via PATCH (status rules)
+# ---------------------------------------------------------------------------
+
+
+def _patch_app(db_session: OrmSession, settings: Settings) -> FastAPI:
+    from app.core.deps import get_ludus_client_registry
+
+    class _Registry:
+        def get(self, name: str = "default"):
+            raise AssertionError("Ludus must not be called for a quota-only PATCH")
+
+    app = FastAPI()
+    app.include_router(sessions_router)
+    app.dependency_overrides[get_db] = _db_override(db_session)
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_ludus_client_registry] = lambda: _Registry()
+    app.dependency_overrides[get_current_user] = lambda: User(
+        email=ADMIN_EMAIL, password_hash="x", role="instructor"
+    )
+    return app
+
+
+def test_patch_quota_on_active_session_ok(
+    db_session: OrmSession, settings: Settings
+) -> None:
+    lab = _lab(db_session)
+    row = _session_with_students(
+        db_session, lab, mode=SessionMode.dedicated, n_students=1,
+    )
+    row.status = SessionStatus.active
+    db_session.commit()
+
+    with TestClient(_patch_app(db_session, settings)) as client:
+        resp = client.patch(f"/api/sessions/{row.id}", json={"cpu_quota": 20, "ram_quota_gb": 40})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cpu_quota"] == 20 and body["ram_quota_gb"] == 40
+
+
+def test_patch_quota_on_ended_session_409(
+    db_session: OrmSession, settings: Settings
+) -> None:
+    lab = _lab(db_session)
+    row = _session_with_students(db_session, lab, mode=SessionMode.shared, n_students=1)
+    row.status = SessionStatus.ended
+    db_session.commit()
+
+    with TestClient(_patch_app(db_session, settings)) as client:
+        resp = client.patch(f"/api/sessions/{row.id}", json={"cpu_quota": 12})
+    assert resp.status_code == 409
+    assert "ended" in resp.json()["detail"].lower()
+
+
+def test_patch_shared_range_on_active_session_409(
+    db_session: OrmSession, settings: Settings
+) -> None:
+    lab = _lab(db_session)
+    row = _session_with_students(db_session, lab, mode=SessionMode.shared, n_students=1)
+    row.status = SessionStatus.active
+    db_session.commit()
+
+    with TestClient(_patch_app(db_session, settings)) as client:
+        resp = client.patch(f"/api/sessions/{row.id}", json={"shared_range_id": "RZ9"})
+    assert resp.status_code == 409
+    assert "draft" in resp.json()["detail"].lower()
+
+
+def test_patch_quota_only_preserves_shared_range(
+    db_session: OrmSession, settings: Settings
+) -> None:
+    lab = _lab(db_session)
+    row = _session_with_students(db_session, lab, mode=SessionMode.shared, n_students=1)
+    row.status = SessionStatus.active
+    row.shared_range_id = "keep-me"
+    db_session.commit()
+
+    with TestClient(_patch_app(db_session, settings)) as client:
+        resp = client.patch(f"/api/sessions/{row.id}", json={"cpu_quota": 8})
+    assert resp.status_code == 200
+    # Quota-only PATCH must not wipe the existing shared_range_id.
+    assert resp.json()["shared_range_id"] == "keep-me"
+    assert resp.json()["cpu_quota"] == 8

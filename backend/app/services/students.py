@@ -365,6 +365,63 @@ def reset_student(
     )
 
 
+def remove_student_range(
+    db: DBSession,
+    ludus_client: LudusClient,
+    student_id: int,
+) -> Student:
+    """Destroy a student's range VMs but KEEP the Ludus user.
+
+    Equivalent to ``ludus range rm --user <userID>``: the range is torn down
+    (so a fresh one can be deployed for the same user later) while the user,
+    invite and WireGuard config are preserved. The student flips back to
+    ``pending`` so a re-provision rebuilds the range; a never-provisioned
+    (``pending``) student is a no-op.
+
+    Raises:
+        StudentNotFound: ``student_id`` is unknown (router -> 404).
+        LudusRemovalFailed: Ludus refused the range removal (router -> 502).
+    """
+    student = db.get(Student, student_id)
+    if student is None:
+        raise StudentNotFound(f"student id={student_id} does not exist")
+
+    if student.status == StudentStatus.pending:
+        return student  # nothing deployed - idempotent no-op
+
+    try:
+        ludus_client.range_destroy(user_id=student.ludus_userid, force=True)
+    except LudusNotFound:
+        logger.info("student.range_remove: range for %s already gone", student.ludus_userid)
+    except LudusError as exc:
+        if "not found" in str(exc).lower():
+            logger.info(
+                "student.range_remove: range for %s already gone (non-404)",
+                student.ludus_userid,
+            )
+        else:
+            logger.warning(
+                "student.range_remove: range_destroy failed for %s: %s",
+                student.ludus_userid, exc,
+            )
+            raise LudusRemovalFailed(f"Ludus range_destroy failed: {exc}") from exc
+
+    student.status = StudentStatus.range_removed
+    student.range_id = None
+    db.add(
+        Event(
+            session_id=student.session_id,
+            student_id=student.id,
+            action="student.range_removed",
+            details_json={"userid": student.ludus_userid},
+        )
+    )
+    db.commit()
+    db.refresh(student)
+    logger.info("student.range_removed id=%s userid=%s", student.id, student.ludus_userid)
+    return student
+
+
 __all__ = [
     "LudusRemovalFailed",
     "LudusResetFailed",
@@ -377,5 +434,6 @@ __all__ = [
     "UseridCollision",
     "create_student",
     "delete_student",
+    "remove_student_range",
     "reset_student",
 ]

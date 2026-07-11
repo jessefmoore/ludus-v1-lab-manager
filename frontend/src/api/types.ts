@@ -1,7 +1,7 @@
 // Enums matching backend Pydantic schemas
 export type LabMode = "shared" | "dedicated";
 export type SessionStatus = "draft" | "provisioning" | "active" | "ended";
-export type StudentStatus = "pending" | "ready" | "error";
+export type StudentStatus = "pending" | "ready" | "error" | "range_removed";
 
 // Auth
 export interface UserRead {
@@ -83,10 +83,13 @@ export interface SessionRead {
 export interface SessionQuotaRead {
   mode: LabMode;
   student_count: number;
+  ready_count: number;
   per_range_cpus: number;
   per_range_ram_gb: number;
   demand_cpus: number;
   demand_ram_gb: number;
+  allocated_cpus: number;
+  allocated_ram_gb: number;
   cpu_quota: number | null;
   ram_quota_gb: number | null;
   within_quota: boolean;
@@ -101,6 +104,24 @@ export interface SessionProvisionResponse {
   failed: number;
   skipped: number;
   students: StudentRead[];
+}
+
+// Response for rebuild (destroy VMs, keep users) and teardown (full cleanup).
+export interface SessionTeardownResponse {
+  cleaned: number;
+  failed: number;
+  skipped: number;
+  students: StudentRead[];
+}
+
+// Response for the baseline-snapshot pass (auto-run after ranges deploy).
+export interface BaselineSnapshotResponse {
+  created: number;
+  existing: number;
+  pending: number;
+  failed: number;
+  done: boolean;
+  snapshot_name: string;
 }
 
 // Students

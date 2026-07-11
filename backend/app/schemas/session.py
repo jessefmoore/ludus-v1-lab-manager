@@ -96,12 +96,18 @@ class SessionQuotaRead(BaseModel):
 
     mode: LabMode
     student_count: int
+    # Students whose range is actually deployed (status == ready).
+    ready_count: int = 0
     # Cost of a single deployed range (one student's worth).
     per_range_cpus: int
     per_range_ram_gb: int
-    # Total the session will consume once fully provisioned.
+    # Planned footprint once every enrolled student is provisioned (quota gate).
     demand_cpus: int
     demand_ram_gb: int
+    # Currently-allocated footprint (only deployed ranges) - drops when a range
+    # is removed.
+    allocated_cpus: int = 0
+    allocated_ram_gb: int = 0
     # Configured ceilings (None = unlimited).
     cpu_quota: int | None = None
     ram_quota_gb: int | None = None
