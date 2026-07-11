@@ -60,6 +60,9 @@ export interface SessionCreate {
   start_date: string | null;
   end_date: string | null;
   shared_range_id: string | null;
+  // Per-session provisioning budget. null = unlimited.
+  cpu_quota?: number | null;
+  ram_quota_gb?: number | null;
 }
 
 export interface SessionRead {
@@ -70,8 +73,23 @@ export interface SessionRead {
   start_date: string | null;
   end_date: string | null;
   shared_range_id: string | null;
+  cpu_quota: number | null;
+  ram_quota_gb: number | null;
   status: SessionStatus;
   created_at: string;
+}
+
+// Computed CPU/RAM footprint of a session vs its configured budget.
+export interface SessionQuotaRead {
+  mode: LabMode;
+  student_count: number;
+  per_range_cpus: number;
+  per_range_ram_gb: number;
+  demand_cpus: number;
+  demand_ram_gb: number;
+  cpu_quota: number | null;
+  ram_quota_gb: number | null;
+  within_quota: boolean;
 }
 
 export interface SessionDetailRead extends SessionRead {
@@ -448,6 +466,8 @@ export interface UserCreateResponse {
 // Session updates
 export interface SessionPatch {
   shared_range_id?: string | null;
+  cpu_quota?: number | null;
+  ram_quota_gb?: number | null;
 }
 
 // Events (audit log)

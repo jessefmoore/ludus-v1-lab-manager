@@ -9,6 +9,7 @@ import type {
   SessionRead,
   SessionDetailRead,
   SessionProvisionResponse,
+  SessionQuotaRead,
   StudentCreate,
   StudentRead,
   StudentResetRequest,
@@ -153,6 +154,9 @@ export const sessions = {
 
   get: (id: number) =>
     request<SessionDetailRead>(`/api/sessions/${id}`),
+
+  quota: (id: number) =>
+    request<SessionQuotaRead>(`/api/sessions/${id}/quota`),
 
   create: (data: SessionCreate) =>
     request<SessionRead>("/api/sessions", {

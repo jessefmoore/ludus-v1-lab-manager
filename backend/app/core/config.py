@@ -83,6 +83,13 @@ class Settings(BaseSettings):
     # File storage
     config_storage_dir: str = "./data/configs"
 
+    # Resource quotas. Per-range cap: the maximum CPU cores / RAM (GB) any
+    # single lab template (one range) may request, validated when a template
+    # is created or updated. None = no cap. Per-session budgets are stored on
+    # the session row (cpu_quota / ram_quota_gb), not here.
+    max_range_cpus: int | None = None
+    max_range_ram_gb: int | None = None
+
     # Seed a starter pack of Ludus v1 range configs into lab_templates on first
     # boot (once per seed version). Set false to start with no templates.
     seed_lab_templates: bool = True

@@ -84,6 +84,8 @@ def create_session(db: DBSession, payload: SessionCreate) -> SessionRow:
         start_date=payload.start_date,
         end_date=payload.end_date,
         shared_range_id=payload.shared_range_id,
+        cpu_quota=payload.cpu_quota,
+        ram_quota_gb=payload.ram_quota_gb,
         status=SessionStatus.draft,
     )
     db.add(session_row)

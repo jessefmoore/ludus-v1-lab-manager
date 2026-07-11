@@ -47,6 +47,11 @@ class Session(Base):
         nullable=False,
     )
     shared_range_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Provisioning budget for this session. NULL = unlimited. Enforced as a
+    # hard block at provision time: the session's total CPU/RAM demand (see
+    # app.services.resources) may not exceed these ceilings.
+    cpu_quota: Mapped[int | None] = mapped_column(nullable=True)
+    ram_quota_gb: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[SessionStatus] = mapped_column(
         SAEnum(SessionStatus, name="session_status"),
         nullable=False,

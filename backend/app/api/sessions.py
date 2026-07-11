@@ -24,11 +24,18 @@ from app.models import Session as SessionRow
 from app.models.event import Event
 from app.models.session import SessionStatus
 from app.models.user import User
-from app.schemas.session import SessionCreate, SessionDetailRead, SessionPatch, SessionRead
+from app.schemas.session import (
+    SessionCreate,
+    SessionDetailRead,
+    SessionPatch,
+    SessionQuotaRead,
+    SessionRead,
+)
 from app.schemas.student import StudentRead
 from app.services import provision as provision_service
 from app.services import sessions as sessions_service
 from app.services.exceptions import LudusError
+from app.services.resources import compute_range_resources, compute_session_demand
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
@@ -119,6 +126,52 @@ def get_session(
     return _session_detail(row, settings)
 
 
+@router.get("/{session_id}/quota", response_model=SessionQuotaRead)
+def get_session_quota(
+    session_id: int,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> SessionQuotaRead:
+    """Return a session's computed CPU/RAM footprint vs its budget.
+
+    A read-only preflight the UI calls before provisioning: it renders a
+    usage gauge and can warn/disable the provision button when demand
+    exceeds the configured quota (which the backend also hard-blocks).
+    """
+    row = sessions_service.get_session_with_students(db, session_id)
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+    lab_template = db.get(LabTemplate, row.lab_template_id)
+    if lab_template is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session lab template not found",
+        )
+
+    per_range = compute_range_resources(lab_template.range_config_yaml)
+    student_count = len(row.students)
+    demand = compute_session_demand(per_range, row.mode, student_count)
+
+    within_quota = (
+        (row.cpu_quota is None or demand.cpus <= row.cpu_quota)
+        and (row.ram_quota_gb is None or demand.ram_gb <= row.ram_quota_gb)
+    )
+    return SessionQuotaRead(
+        mode=row.mode,
+        student_count=student_count,
+        per_range_cpus=per_range.cpus,
+        per_range_ram_gb=per_range.ram_gb,
+        demand_cpus=demand.cpus,
+        demand_ram_gb=demand.ram_gb,
+        cpu_quota=row.cpu_quota,
+        ram_quota_gb=row.ram_quota_gb,
+        within_quota=within_quota,
+    )
+
+
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_session(
     session_id: int,
@@ -190,6 +243,14 @@ def patch_session(
             )
 
     session_row.shared_range_id = payload.shared_range_id
+    # Quota fields are optional: only touch them when the caller sent them,
+    # so a shared_range_id-only PATCH doesn't wipe an existing budget. A
+    # sent null clears the budget (unlimited).
+    fields_set = payload.model_fields_set
+    if "cpu_quota" in fields_set:
+        session_row.cpu_quota = payload.cpu_quota
+    if "ram_quota_gb" in fields_set:
+        session_row.ram_quota_gb = payload.ram_quota_gb
     db.add(
         Event(
             session_id=session_row.id,
@@ -198,6 +259,8 @@ def patch_session(
             details_json={
                 "session_id": session_row.id,
                 "shared_range_id": payload.shared_range_id,
+                "cpu_quota": session_row.cpu_quota,
+                "ram_quota_gb": session_row.ram_quota_gb,
             },
         )
     )
@@ -260,6 +323,11 @@ def provision_session(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        ) from exc
+    except provision_service.QuotaExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
         ) from exc
     except ValueError as exc:
         raise HTTPException(

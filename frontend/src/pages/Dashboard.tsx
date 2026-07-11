@@ -309,6 +309,8 @@ function CreateSessionModal({
   const [rangeId, setRangeId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [cpuQuota, setCpuQuota] = useState("");
+  const [ramQuota, setRamQuota] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -350,6 +352,8 @@ function CreateSessionModal({
     setRanges([]);
     setStartDate("");
     setEndDate("");
+    setCpuQuota("");
+    setRamQuota("");
     setError("");
   };
 
@@ -366,6 +370,8 @@ function CreateSessionModal({
         shared_range_id: mode === "shared" && rangeId && rangeId !== "__auto__" ? rangeId : null,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         end_date: endDate ? new Date(endDate).toISOString() : null,
+        cpu_quota: cpuQuota ? Number(cpuQuota) : null,
+        ram_quota_gb: ramQuota ? Number(ramQuota) : null,
       });
       reset();
       onCreated();
@@ -489,6 +495,36 @@ function CreateSessionModal({
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
+            Resource Quota <span className="text-text-muted normal-case">(optional — blank = unlimited)</span>
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Max CPU cores"
+              type="number"
+              min={1}
+              placeholder="unlimited"
+              value={cpuQuota}
+              onChange={(e) => setCpuQuota(e.target.value)}
+            />
+            <Input
+              label="Max RAM (GB)"
+              type="number"
+              min={1}
+              placeholder="unlimited"
+              value={ramQuota}
+              onChange={(e) => setRamQuota(e.target.value)}
+            />
+          </div>
+          <p className="text-[13px] text-text-muted">
+            Provisioning is blocked if the session's total demand exceeds this budget.
+            {mode === "dedicated"
+              ? " Dedicated mode counts one range per student."
+              : " Shared mode counts a single range regardless of headcount."}
+          </p>
         </div>
 
         <div className="flex justify-end gap-3 pt-2">

@@ -18,6 +18,7 @@ import {
 import { sessions, students, labs, events, ludus, ApiError } from "@/api";
 import type {
   SessionDetailRead,
+  SessionQuotaRead,
   LabTemplateRead,
   StudentRead,
   EventRead,
@@ -41,6 +42,7 @@ export default function SessionDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [session, setSession] = useState<SessionDetailRead | null>(null);
+  const [quota, setQuota] = useState<SessionQuotaRead | null>(null);
   const [lab, setLab] = useState<LabTemplateRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddStudent, setShowAddStudent] = useState(false);
@@ -73,6 +75,8 @@ export default function SessionDetail() {
       .get(Number(id))
       .then(async (s) => {
         setSession(s);
+        // Preflight resource footprint vs budget (non-fatal if it fails).
+        sessions.quota(s.id).then(setQuota).catch(() => setQuota(null));
         try {
           const l = await labs.get(s.lab_template_id);
           setLab(l);
@@ -100,6 +104,7 @@ export default function SessionDetail() {
     const interval = setInterval(() => {
       if (shouldPoll()) {
         sessions.get(Number(id)).then(setSession).catch(() => {});
+        sessions.quota(Number(id)).then(setQuota).catch(() => {});
       } else {
         clearInterval(interval);
       }
@@ -421,6 +426,12 @@ export default function SessionDetail() {
                   variant="primary"
                   loading={provisioning}
                   onClick={handleProvision}
+                  disabled={quota ? !quota.within_quota : false}
+                  title={
+                    quota && !quota.within_quota
+                      ? "Session demand exceeds its resource budget"
+                      : undefined
+                  }
                 >
                   Provision All ({pendingCount})
                 </Button>
@@ -555,6 +566,9 @@ export default function SessionDetail() {
             </p>
           </Card>
         </div>
+
+        {/* Resource budget */}
+        {quota && <QuotaCard quota={quota} />}
 
         {/* Students */}
         <Card variant="gradient" className="p-0 overflow-hidden">
@@ -752,6 +766,97 @@ export default function SessionDetail() {
         </div>
       </Modal>
     </>
+  );
+}
+
+function QuotaMeter({
+  label,
+  demand,
+  quota,
+  unit,
+  over,
+}: {
+  label: string;
+  demand: number;
+  quota: number | null;
+  unit: string;
+  over: boolean;
+}) {
+  // With no quota, show a neutral full-width "unlimited" bar; otherwise fill
+  // proportionally and cap the visual at 100% even when over budget.
+  const pct = quota ? Math.min((demand / quota) * 100, 100) : 100;
+  const barColor = quota == null
+    ? "bg-text-muted/40"
+    : over
+      ? "bg-accent-danger"
+      : "bg-accent-success";
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="text-text-secondary">{label}</span>
+        <span className={over ? "text-accent-danger font-medium" : "text-text-primary"}>
+          {demand} {unit}
+          {quota != null ? ` / ${quota} ${unit}` : " / unlimited"}
+        </span>
+      </div>
+      <div className="h-2 rounded-full bg-bg-elevated overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function QuotaCard({ quota }: { quota: SessionQuotaRead }) {
+  const overCpu = quota.cpu_quota != null && quota.demand_cpus > quota.cpu_quota;
+  const overRam = quota.ram_quota_gb != null && quota.demand_ram_gb > quota.ram_quota_gb;
+  const hasBudget = quota.cpu_quota != null || quota.ram_quota_gb != null;
+
+  return (
+    <Card variant="stat" className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-text-secondary">
+          <Server className="h-4 w-4" />
+          <span className="text-[13px] uppercase tracking-wider font-medium">
+            Resource Budget
+          </span>
+        </div>
+        <span className="text-xs text-text-muted">
+          {quota.student_count} student{quota.student_count === 1 ? "" : "s"} ·{" "}
+          {quota.per_range_cpus} CPU / {quota.per_range_ram_gb} GB per range
+        </span>
+      </div>
+
+      <QuotaMeter
+        label="CPU cores"
+        demand={quota.demand_cpus}
+        quota={quota.cpu_quota}
+        unit="cores"
+        over={overCpu}
+      />
+      <QuotaMeter
+        label="RAM"
+        demand={quota.demand_ram_gb}
+        quota={quota.ram_quota_gb}
+        unit="GB"
+        over={overRam}
+      />
+
+      {!quota.within_quota && (
+        <div className="p-2.5 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-[13px] text-accent-danger">
+          Demand exceeds the session budget — provisioning will be blocked until you raise
+          the quota, switch to shared mode, or reduce students.
+        </div>
+      )}
+      {!hasBudget && (
+        <p className="text-[13px] text-text-muted">
+          No budget set — provisioning is unrestricted. Add a quota when creating the session
+          to cap consumption.
+        </p>
+      )}
+    </Card>
   );
 }
 
