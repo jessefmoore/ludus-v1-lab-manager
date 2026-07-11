@@ -14,7 +14,7 @@ Semantics note on ``shared_range_id``:
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.common import LabMode, SessionStatus
 from app.schemas.student import StudentRead
@@ -29,6 +29,10 @@ class SessionCreate(BaseModel):
     start_date: datetime | None = None
     end_date: datetime | None = None
     shared_range_id: str | None = None
+    # Provisioning budget for the whole session. None = unlimited. Enforced
+    # as a hard block at provision time (see app.services.resources).
+    cpu_quota: int | None = Field(default=None, ge=1)
+    ram_quota_gb: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def _check_mode_range_consistency(self) -> "SessionCreate":
@@ -42,9 +46,16 @@ class SessionCreate(BaseModel):
 
 
 class SessionPatch(BaseModel):
-    """Payload to partially update a session (currently only ``shared_range_id``)."""
+    """Payload to partially update a draft session.
+
+    ``model_fields_set`` distinguishes "field omitted" from "field set to
+    None". Setting ``cpu_quota``/``ram_quota_gb`` to null clears the budget
+    (unlimited); omitting them leaves the stored value untouched.
+    """
 
     shared_range_id: str | None = None
+    cpu_quota: int | None = Field(default=None, ge=1)
+    ram_quota_gb: int | None = Field(default=None, ge=1)
 
 
 class SessionRead(BaseModel):
@@ -59,6 +70,8 @@ class SessionRead(BaseModel):
     start_date: datetime | None = None
     end_date: datetime | None = None
     shared_range_id: str | None = None
+    cpu_quota: int | None = None
+    ram_quota_gb: int | None = None
     status: SessionStatus
     created_at: datetime
 
@@ -74,4 +87,37 @@ class SessionDetailRead(SessionRead):
     students: list[StudentRead] = []
 
 
-__all__ = ["SessionCreate", "SessionDetailRead", "SessionPatch", "SessionRead"]
+class SessionQuotaRead(BaseModel):
+    """Computed resource footprint for a session vs its configured budget.
+
+    Powers the provision preflight / usage gauge in the UI. ``within_quota``
+    is ``True`` when no budget is set (unlimited) or demand fits the budget.
+    """
+
+    mode: LabMode
+    student_count: int
+    # Students whose range is actually deployed (status == ready).
+    ready_count: int = 0
+    # Cost of a single deployed range (one student's worth).
+    per_range_cpus: int
+    per_range_ram_gb: int
+    # Planned footprint once every enrolled student is provisioned (quota gate).
+    demand_cpus: int
+    demand_ram_gb: int
+    # Currently-allocated footprint (only deployed ranges) - drops when a range
+    # is removed.
+    allocated_cpus: int = 0
+    allocated_ram_gb: int = 0
+    # Configured ceilings (None = unlimited).
+    cpu_quota: int | None = None
+    ram_quota_gb: int | None = None
+    within_quota: bool
+
+
+__all__ = [
+    "SessionCreate",
+    "SessionDetailRead",
+    "SessionPatch",
+    "SessionQuotaRead",
+    "SessionRead",
+]

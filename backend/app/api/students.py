@@ -26,14 +26,15 @@ from app.schemas.student import StudentCreate, StudentRead
 from app.services import students as students_service
 from app.services.ludus import LudusClient
 
-_DEFAULT_SNAPSHOT_NAME = "ctf-initial"
+_DEFAULT_SNAPSHOT_NAME = "snapshot-1"
 
 
 class StudentResetRequest(BaseModel):
     """Optional body for ``POST /api/students/{id}/reset``.
 
-    ``snapshot_name`` defaults to ``ctf-initial`` so callers can POST an
-    empty body (or omit the field entirely) for the common case.
+    ``snapshot_name`` defaults to ``snapshot-1`` (the baseline snapshot taken
+    automatically after a range deploys) so callers can POST an empty body
+    (or omit the field entirely) for the common case.
     """
 
     snapshot_name: str = Field(default=_DEFAULT_SNAPSHOT_NAME, min_length=1)
@@ -286,9 +287,42 @@ def reset_student(
     except students_service.LudusResetFailed as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Ludus snapshot revert failed",
+            detail=(
+                f"Ludus snapshot revert failed. Does a snapshot named "
+                f"'{snapshot_name}' exist for this range? Baseline snapshots are "
+                f"created automatically once a range finishes deploying."
+            ),
         ) from exc
     return StudentResetResponse(
         status="reset_triggered",
         snapshot_name=snapshot_name,
     )
+
+
+@router.delete("/api/students/{student_id}/range", response_model=StudentRead)
+def remove_student_range(
+    student_id: int,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+    ludus_client: LudusClient = Depends(get_ludus_client),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> StudentRead:
+    """Destroy a student's range VMs but keep the Ludus user (``range rm``).
+
+    Frees the range so a fresh one can be deployed for the same user later.
+    The student flips back to ``pending``; re-provision to rebuild. Returns the
+    updated student.
+    """
+    try:
+        student = students_service.remove_student_range(db, ludus_client, student_id)
+    except students_service.StudentNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student not found",
+        ) from exc
+    except students_service.LudusRemovalFailed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    return _student_to_read(student, settings)

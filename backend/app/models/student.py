@@ -22,6 +22,9 @@ class StudentStatus(enum.StrEnum):
     pending = "pending"
     ready = "ready"
     error = "error"
+    # Range was explicitly torn down (VMs destroyed) but the user is kept.
+    # Behaves like ``pending`` for provisioning; surfaced distinctly in the UI.
+    range_removed = "range_removed"
 
 
 class Student(Base):

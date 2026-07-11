@@ -83,6 +83,27 @@ class Settings(BaseSettings):
     # File storage
     config_storage_dir: str = "./data/configs"
 
+    # Optional prefix for auto-generated Ludus user IDs. When set, generated
+    # IDs look like ``<prefix><hex>`` (e.g. ``stfuser1a2b3c``) instead of being
+    # derived from the student's name. Sanitised to ``[a-z0-9]`` since Ludus
+    # forbids hyphens/punctuation. Empty = keep name-based generation.
+    student_userid_prefix: str | None = None
+
+    # Resource quotas. Per-range cap: the maximum CPU cores / RAM (GB) any
+    # single lab template (one range) may request, validated when a template
+    # is created or updated. None = no cap. Per-session budgets are stored on
+    # the session row (cpu_quota / ram_quota_gb), not here.
+    max_range_cpus: int | None = None
+    max_range_ram_gb: int | None = None
+
+    # Physical capacity of the DEFAULT Ludus/Proxmox host, used by the host
+    # capacity dashboard to show how much CPU/RAM is left to assign. Ludus v1
+    # exposes no host-resource endpoint, so these are configured manually.
+    # None = unconfigured (dashboard prompts to set them). DB-managed servers
+    # store their own capacity on the ludus_servers row.
+    ludus_default_cpu_capacity: int | None = None
+    ludus_default_ram_capacity_gb: int | None = None
+
     # Seed a starter pack of Ludus v1 range configs into lab_templates on first
     # boot (once per seed version). Set false to start with no templates.
     seed_lab_templates: bool = True

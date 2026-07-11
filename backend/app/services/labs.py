@@ -18,6 +18,7 @@ from app.models.lab_template import LabTemplate
 from app.models.session import Session as SessionModel
 from app.models.session import SessionStatus
 from app.schemas.lab import LabTemplateCreate, LabTemplateUpdate
+from app.services.resources import compute_range_resources
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,33 @@ _IMAGE_EXTENSIONS = {
 
 # 5 MB limit.
 _MAX_IMAGE_SIZE = 5 * 1024 * 1024
+
+
+def _validate_range_cap(range_config_yaml: str) -> None:
+    """Reject a range config whose total CPU/RAM exceeds the global cap.
+
+    The cap comes from ``MAX_RANGE_CPUS`` / ``MAX_RANGE_RAM_GB`` settings;
+    either being ``None`` disables that dimension. Raises ``ValueError``
+    (router -> HTTP 422) with an actionable message. Assumes the YAML has
+    already been validated as a parseable mapping by the caller.
+    """
+    settings = get_settings()
+    max_cpus = settings.max_range_cpus
+    max_ram = settings.max_range_ram_gb
+    if max_cpus is None and max_ram is None:
+        return
+
+    res = compute_range_resources(range_config_yaml)
+    if max_cpus is not None and res.cpus > max_cpus:
+        raise ValueError(
+            f"range requests {res.cpus} CPU cores, exceeding the per-range "
+            f"cap of {max_cpus}"
+        )
+    if max_ram is not None and res.ram_gb > max_ram:
+        raise ValueError(
+            f"range requests {res.ram_gb}GB RAM, exceeding the per-range "
+            f"cap of {max_ram}GB"
+        )
 
 
 def _uploads_dir() -> Path:
@@ -176,6 +204,9 @@ def create_lab(db: DBSession, payload: LabTemplateCreate) -> LabTemplate:
             f"range_config_yaml must parse to a YAML mapping (dict), got {type(parsed).__name__}"
         )
 
+    # Enforce the per-range CPU/RAM cap (no-op when unset).
+    _validate_range_cap(payload.range_config_yaml)
+
     lab = LabTemplate(
         name=payload.name,
         description=payload.description,
@@ -231,6 +262,8 @@ def update_lab(db: DBSession, lab_id: int, payload: LabTemplateUpdate) -> LabTem
                 "range_config_yaml must parse to a YAML mapping (dict), "
                 f"got {type(parsed).__name__}"
             )
+        # Enforce the per-range CPU/RAM cap on the incoming config.
+        _validate_range_cap(raw_yaml)
 
     for key, value in updates.items():
         setattr(lab, key, value)

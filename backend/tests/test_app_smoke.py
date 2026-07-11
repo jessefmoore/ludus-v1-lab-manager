@@ -218,7 +218,9 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
             r = client.post(f"/api/sessions/{session_id}/provision")
             assert r.status_code == 200, r.text
             prov_body = r.json()
-            assert prov_body["provisioned"] == 1
+            # Two provisioned: the auto-enrolled range owner "DEMO" (lead) plus
+            # the enrolled Smoke Student who shares the range.
+            assert prov_body["provisioned"] == 2
             assert prov_body["failed"] == 0
             assert prov_body["skipped"] == 0
 
@@ -228,7 +230,12 @@ def test_app_smoke_exercises_every_phase1_endpoint(_smoke_env: dict[str, str]) -
                 {"userid": fake_ludus.user_add_calls[0]["userid"], "range_id": "DEMO"}
             ]
             assert fake_ludus.range_deploy_calls == []
-            assert fake_ludus.user_wireguard_calls == [fake_ludus.user_add_calls[0]["userid"]]
+            # WireGuard is fetched for the owner "DEMO" (lead, enrolled first)
+            # and the sharing student; only the student needed a user_add.
+            assert fake_ludus.user_wireguard_calls == [
+                "DEMO",
+                fake_ludus.user_add_calls[0]["userid"],
+            ]
 
             # The provisioner wrote the config to disk at the documented
             # path layout.

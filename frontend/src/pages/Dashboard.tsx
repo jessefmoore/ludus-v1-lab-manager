@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent, type ReactNode } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import {
   Plus,
@@ -10,12 +10,16 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Server,
+  Cpu,
+  MemoryStick,
 } from "lucide-react";
 import { sessions, labs, ludus, ApiError } from "@/api";
 import type {
   SessionRead,
   LabTemplateRead,
   LudusRange,
+  LudusCapacity,
   SessionStatus,
   LabMode,
 } from "@/api";
@@ -33,8 +37,13 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [sessionList, setSessionList] = useState<SessionRead[]>([]);
   const [labList, setLabList] = useState<LabTemplateRead[]>([]);
+  const [capacity, setCapacity] = useState<LudusCapacity | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+
+  // Host capacity is best-effort: a Ludus outage shouldn't blank the dashboard.
+  const fetchCapacity = () =>
+    ludus.capacity().then(setCapacity).catch(() => setCapacity(null));
 
   const fetchData = () => {
     setLoading(true);
@@ -45,6 +54,7 @@ export default function Dashboard() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    fetchCapacity();
   };
 
   useEffect(fetchData, []);
@@ -58,6 +68,7 @@ export default function Dashboard() {
           setLabList(l);
         })
         .catch(() => {});
+      fetchCapacity();
     }, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -236,6 +247,9 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* Host capacity */}
+        {capacity && <HostCapacityCard capacity={capacity} />}
+
         {/* Sessions table */}
         <Card variant="gradient" className="p-0 overflow-hidden">
           <div className="h-1 bg-gradient-to-r from-accent-success via-accent-info/60 to-transparent" />
@@ -292,6 +306,107 @@ export default function Dashboard() {
   );
 }
 
+function CapacityBar({
+  icon,
+  label,
+  allocated,
+  capacity,
+  available,
+  unit,
+}: {
+  icon: ReactNode;
+  label: string;
+  allocated: number;
+  capacity: number | null;
+  available: number | null;
+  unit: string;
+}) {
+  const over = available != null && available < 0;
+  // Fill fraction of allocation against capacity; capped at 100% for the bar.
+  const pct = capacity && capacity > 0 ? Math.min((allocated / capacity) * 100, 100) : 0;
+  const barColor = over ? "bg-accent-danger" : "bg-accent-success";
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="flex items-center gap-1.5 text-text-secondary">
+          {icon}
+          {label}
+        </span>
+        {capacity == null ? (
+          <span className="text-text-muted">{allocated} {unit} allocated · capacity not set</span>
+        ) : over ? (
+          <span className="text-accent-danger font-medium">
+            overcommitted by {Math.abs(available!)} {unit}
+          </span>
+        ) : (
+          <span className="text-text-primary">
+            <span className="font-semibold text-accent-success">{available} {unit}</span> free
+          </span>
+        )}
+      </div>
+      <div className="h-2 rounded-full bg-bg-elevated overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {capacity != null && (
+        <div className="text-xs text-text-muted">
+          {allocated} / {capacity} {unit} committed by active sessions
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HostCapacityCard({ capacity }: { capacity: LudusCapacity }) {
+  return (
+    <Card variant="stat" className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-text-secondary">
+          <Server className="h-4 w-4" />
+          <span className="text-[13px] uppercase tracking-wider font-medium">
+            Host Capacity{capacity.server !== "default" ? ` · ${capacity.server}` : ""}
+          </span>
+        </div>
+        <span className="text-xs text-text-muted">
+          {capacity.session_count} active session{capacity.session_count === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <CapacityBar
+        icon={<Cpu className="h-3.5 w-3.5" />}
+        label="CPU cores"
+        allocated={capacity.cpu_allocated}
+        capacity={capacity.cpu_capacity}
+        available={capacity.cpu_available}
+        unit="cores"
+      />
+      <CapacityBar
+        icon={<MemoryStick className="h-3.5 w-3.5" />}
+        label="RAM"
+        allocated={capacity.ram_allocated_gb}
+        capacity={capacity.ram_capacity_gb}
+        available={capacity.ram_available_gb}
+        unit="GB"
+      />
+
+      {!capacity.configured && (
+        <p className="text-[13px] text-text-muted">
+          Set this host's total CPU/RAM (LUDUS_DEFAULT_CPU_CAPACITY /
+          LUDUS_DEFAULT_RAM_CAPACITY_GB, or per-server in Settings) to see how much
+          is left to assign.
+        </p>
+      )}
+      <p className="text-[13px] text-text-muted">
+        Allocated = CPU/RAM committed by your active sessions (dedicated counts one
+        range per student; shared counts one). Ranges created outside this app are
+        not included.
+      </p>
+    </Card>
+  );
+}
+
 function CreateSessionModal({
   open,
   onClose,
@@ -309,6 +424,8 @@ function CreateSessionModal({
   const [rangeId, setRangeId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [cpuQuota, setCpuQuota] = useState("");
+  const [ramQuota, setRamQuota] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -350,6 +467,8 @@ function CreateSessionModal({
     setRanges([]);
     setStartDate("");
     setEndDate("");
+    setCpuQuota("");
+    setRamQuota("");
     setError("");
   };
 
@@ -366,6 +485,8 @@ function CreateSessionModal({
         shared_range_id: mode === "shared" && rangeId && rangeId !== "__auto__" ? rangeId : null,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         end_date: endDate ? new Date(endDate).toISOString() : null,
+        cpu_quota: cpuQuota ? Number(cpuQuota) : null,
+        ram_quota_gb: ramQuota ? Number(ramQuota) : null,
       });
       reset();
       onCreated();
@@ -489,6 +610,36 @@ function CreateSessionModal({
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block text-[13px] uppercase tracking-wider text-text-secondary">
+            Resource Quota <span className="text-text-muted normal-case">(optional — blank = unlimited)</span>
+          </label>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Max CPU cores"
+              type="number"
+              min={1}
+              placeholder="unlimited"
+              value={cpuQuota}
+              onChange={(e) => setCpuQuota(e.target.value)}
+            />
+            <Input
+              label="Max RAM (GB)"
+              type="number"
+              min={1}
+              placeholder="unlimited"
+              value={ramQuota}
+              onChange={(e) => setRamQuota(e.target.value)}
+            />
+          </div>
+          <p className="text-[13px] text-text-muted">
+            Provisioning is blocked if the session's total demand exceeds this budget.
+            {mode === "dedicated"
+              ? " Dedicated mode counts one range per student."
+              : " Shared mode counts a single range regardless of headcount."}
+          </p>
         </div>
 
         <div className="flex justify-end gap-3 pt-2">

@@ -37,6 +37,7 @@ from app.models import LabTemplate, SessionMode, SessionStatus, Student, Student
 from app.models import Session as SessionRow
 from app.models.event import Event
 from app.services.exceptions import LudusError, LudusUserExists
+from app.services.resources import compute_range_resources, compute_session_demand
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session as DBSession
@@ -49,6 +50,72 @@ logger = logging.getLogger(__name__)
 
 class SessionNotFound(Exception):  # noqa: N818 -- spec-mandated name
     """Raised when ``session_id`` does not correspond to an existing session."""
+
+
+class QuotaExceeded(Exception):  # noqa: N818 -- consistent with SessionNotFound
+    """Raised when a session's resource demand exceeds its configured budget.
+
+    Carries the computed demand and the breached ceilings so the router can
+    build an actionable 409 message. Provisioning is aborted *before* any
+    Ludus call is made, so no partial range is created.
+    """
+
+    def __init__(
+        self,
+        *,
+        demand_cpus: int,
+        demand_ram_gb: int,
+        cpu_quota: int | None,
+        ram_quota_gb: int | None,
+        student_count: int,
+    ) -> None:
+        self.demand_cpus = demand_cpus
+        self.demand_ram_gb = demand_ram_gb
+        self.cpu_quota = cpu_quota
+        self.ram_quota_gb = ram_quota_gb
+        self.student_count = student_count
+        breaches = []
+        if cpu_quota is not None and demand_cpus > cpu_quota:
+            breaches.append(f"CPU {demand_cpus} > quota {cpu_quota}")
+        if ram_quota_gb is not None and demand_ram_gb > ram_quota_gb:
+            breaches.append(f"RAM {demand_ram_gb}GB > quota {ram_quota_gb}GB")
+        super().__init__(
+            "Session resource demand exceeds its quota ("
+            + "; ".join(breaches)
+            + f") for {student_count} student(s)"
+        )
+
+
+def check_session_quota(
+    session_row: SessionRow,
+    lab_template: LabTemplate,
+) -> None:
+    """Raise :class:`QuotaExceeded` if the session over-runs its budget.
+
+    Demand is the session's *full* footprint (all enrolled students), not
+    just the current provisioning batch, so a quota check is stable across
+    repeated/partial provision passes. A ``None`` ceiling means unlimited on
+    that dimension. No-op when both ceilings are unset.
+    """
+    cpu_quota = session_row.cpu_quota
+    ram_quota_gb = session_row.ram_quota_gb
+    if cpu_quota is None and ram_quota_gb is None:
+        return
+
+    per_range = compute_range_resources(lab_template.range_config_yaml)
+    student_count = len(session_row.students)
+    demand = compute_session_demand(per_range, session_row.mode, student_count)
+
+    over_cpu = cpu_quota is not None and demand.cpus > cpu_quota
+    over_ram = ram_quota_gb is not None and demand.ram_gb > ram_quota_gb
+    if over_cpu or over_ram:
+        raise QuotaExceeded(
+            demand_cpus=demand.cpus,
+            demand_ram_gb=demand.ram_gb,
+            cpu_quota=cpu_quota,
+            ram_quota_gb=ram_quota_gb,
+            student_count=student_count,
+        )
 
 
 @dataclass
@@ -480,6 +547,10 @@ def provision_session(
             f"{session_row.lab_template_id}"
         )
 
+    # Enforce the session's resource budget BEFORE any Ludus interaction so
+    # a quota breach never leaves a half-created range behind. Hard block.
+    check_session_quota(session_row, lab_template)
+
     # Resolve the Ludus client: prefer registry (server-aware), fall back
     # to the explicitly-passed client for backwards compat.
     if ludus is None:
@@ -541,6 +612,12 @@ def provision_session(
             else:
                 # Refresh after auto-create committed changes.
                 db.refresh(session_row)
+    elif session_row.mode == SessionMode.shared and session_row.shared_range_id:
+        # A specific existing range was picked: its owner (== shared_range_id)
+        # is the lead who already owns the deployed range. Marking them lead
+        # skips user_add/deploy/access-grant for that student and just fetches
+        # their WireGuard config; everyone else gets cross-range access.
+        lead_userid = session_row.shared_range_id
 
     # Signal that a provisioning pass is in flight before we start
     # calling Ludus, so concurrent callers see the state transition.
@@ -588,7 +665,9 @@ def provision_session(
 
 __all__ = [
     "ProvisionResult",
+    "QuotaExceeded",
     "SessionNotFound",
+    "check_session_quota",
     "extract_role_names",
     "provision_session",
 ]

@@ -299,16 +299,16 @@ def test_reset_ready_student_default_snapshot_returns_202(
     assert resp.status_code == 202
     assert resp.json() == {
         "status": "reset_triggered",
-        "snapshot_name": "ctf-initial",
+        "snapshot_name": "snapshot-1",
     }
-    assert fake_ludus.snapshot_revert_calls == [(userid, "ctf-initial")]
+    assert fake_ludus.snapshot_revert_calls == [(userid, "snapshot-1")]
 
     event = db_session.execute(select(Event).where(Event.action == "student.reset")).scalar_one()
     assert event.student_id == sid
     assert event.session_id == draft_session.id
     assert event.details_json is not None
     assert event.details_json["userid"] == userid
-    assert event.details_json["snapshot_name"] == "ctf-initial"
+    assert event.details_json["snapshot_name"] == "snapshot-1"
     assert event.details_json["range_id"] == "42"
 
 
@@ -318,7 +318,7 @@ def test_reset_ready_student_no_body_uses_default_snapshot(
     draft_session: SessionRow,
     fake_ludus: FakeLudus,
 ) -> None:
-    """Calling with no body at all should still default to ctf-initial."""
+    """Calling with no body at all should still default to snapshot-1."""
     student = _make_student(
         db_session,
         draft_session,
@@ -328,8 +328,8 @@ def test_reset_ready_student_no_body_uses_default_snapshot(
     )
     resp = client.post(f"/api/students/{student.id}/reset")
     assert resp.status_code == 202
-    assert resp.json()["snapshot_name"] == "ctf-initial"
-    assert fake_ludus.snapshot_revert_calls == [(student.ludus_userid, "ctf-initial")]
+    assert resp.json()["snapshot_name"] == "snapshot-1"
+    assert fake_ludus.snapshot_revert_calls == [(student.ludus_userid, "snapshot-1")]
 
 
 def test_reset_ready_student_custom_snapshot(

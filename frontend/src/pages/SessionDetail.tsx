@@ -11,13 +11,19 @@ import {
   Layers,
   CalendarRange,
   Server,
+  ServerOff,
+  Camera,
   ChevronDown,
   Clock,
   Download,
+  Pencil,
+  UserMinus,
 } from "lucide-react";
 import { sessions, students, labs, events, ludus, ApiError } from "@/api";
 import type {
   SessionDetailRead,
+  SessionQuotaRead,
+  BaselineSnapshotResponse,
   LabTemplateRead,
   StudentRead,
   EventRead,
@@ -41,13 +47,16 @@ export default function SessionDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [session, setSession] = useState<SessionDetailRead | null>(null);
+  const [quota, setQuota] = useState<SessionQuotaRead | null>(null);
+  const [baseline, setBaseline] = useState<BaselineSnapshotResponse | null>(null);
+  const [resetTarget, setResetTarget] = useState<{ id: number; name: string; snapshot: string } | null>(null);
+  const [resetting, setResetting] = useState(false);
   const [lab, setLab] = useState<LabTemplateRead | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [provisioning, setProvisioning] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [ending, setEnding] = useState(false);
 
   // Activity log
   const [activityEvents, setActivityEvents] = useState<EventRead[]>([]);
@@ -73,6 +82,8 @@ export default function SessionDetail() {
       .get(Number(id))
       .then(async (s) => {
         setSession(s);
+        // Preflight resource footprint vs budget (non-fatal if it fails).
+        sessions.quota(s.id).then(setQuota).catch(() => setQuota(null));
         try {
           const l = await labs.get(s.lab_template_id);
           setLab(l);
@@ -85,6 +96,42 @@ export default function SessionDetail() {
   }, [id, navigate]);
 
   useEffect(fetchSession, [fetchSession]);
+
+  // Lightweight refresh after a quota edit: update the session + gauge
+  // without the full-page loading skeleton.
+  const refreshQuota = useCallback(() => {
+    if (!id) return;
+    sessions.get(Number(id)).then(setSession).catch(() => {});
+    sessions.quota(Number(id)).then(setQuota).catch(() => setQuota(null));
+  }, [id]);
+
+  // Auto-baseline: once ranges finish deploying (SUCCESS), snapshot each so
+  // Reset Environment works. Idempotent + patient - poll until nothing pending.
+  const readyStudentCount = session?.students.filter((s) => s.status === "ready").length ?? 0;
+  useEffect(() => {
+    if (!session) return;
+    if (session.status !== "active" && session.status !== "provisioning") return;
+    if (readyStudentCount === 0) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const r = await sessions.baselineSnapshots(session.id);
+        if (stopped) return;
+        setBaseline(r);
+        if (r.done) return; // all ranges baselined - stop polling
+      } catch {
+        /* transient - retry */
+      }
+      if (!stopped) timer = setTimeout(tick, 20000);
+    };
+    tick();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [session?.id, session?.status, readyStudentCount]);
 
   // Poll every 5s while any student is provisioning or session is provisioning
   const sessionRef = useRef(session);
@@ -100,6 +147,7 @@ export default function SessionDetail() {
     const interval = setInterval(() => {
       if (shouldPoll()) {
         sessions.get(Number(id)).then(setSession).catch(() => {});
+        sessions.quota(Number(id)).then(setQuota).catch(() => {});
       } else {
         clearInterval(interval);
       }
@@ -160,20 +208,39 @@ export default function SessionDetail() {
     });
   };
 
-  const handleEndSession = () => {
+  const handleRebuild = () => {
     setConfirmModal({
-      title: "End Session",
-      message: `This will end "${session.name}". ${readyCount} student(s) will lose VPN access.`,
+      title: "Rebuild Session",
+      message: `Destroy the VMs for "${session.name}" but keep the ${totalStudents} student user(s) and their VPN configs. Students return to "pending" so you can Provision All to deploy fresh VMs. Continue?`,
       action: async () => {
-        setEnding(true);
         try {
-          await sessions.end(session.id);
-          toast("success", "Session ended");
+          const r = await sessions.rebuild(session.id);
+          toast(
+            "success",
+            `Rebuilt: ${r.cleaned} range(s) destroyed${r.failed ? `, ${r.failed} failed` : ""}. Provision All to deploy fresh VMs.`,
+          );
           fetchSession();
         } catch (err) {
-          toast("error", err instanceof ApiError ? err.detail : "Failed to end session");
-        } finally {
-          setEnding(false);
+          toast("error", err instanceof ApiError ? err.detail : "Rebuild failed");
+        }
+      },
+    });
+  };
+
+  const handleTeardown = () => {
+    setConfirmModal({
+      title: "Tear Down Session",
+      message: `Permanently destroy all VMs, remove the ${totalStudents} Ludus user(s) and their VPN configs, and mark "${session.name}" ended. This cannot be undone. Continue?`,
+      action: async () => {
+        try {
+          const r = await sessions.teardown(session.id);
+          toast(
+            "success",
+            `Torn down: ${r.cleaned} removed${r.failed ? `, ${r.failed} failed` : ""}. Session ended.`,
+          );
+          fetchSession();
+        } catch (err) {
+          toast("error", err instanceof ApiError ? err.detail : "Teardown failed");
         }
       },
     });
@@ -196,10 +263,18 @@ export default function SessionDetail() {
     });
   };
 
-  const handleResetStudent = async (studentId: number) => {
+  const handleResetStudent = (studentId: number) => {
+    const student = session?.students.find((s) => s.id === studentId);
+    setResetTarget({ id: studentId, name: student?.full_name ?? "student", snapshot: "snapshot-1" });
+  };
+
+  const submitReset = async () => {
+    if (!resetTarget) return;
+    setResetting(true);
     try {
-      await students.reset(studentId);
-      toast("success", "Environment reset triggered");
+      await students.reset(resetTarget.id, { snapshot_name: resetTarget.snapshot });
+      toast("success", `Reverting to snapshot "${resetTarget.snapshot}"`);
+      setResetTarget(null);
       fetchSession();
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
@@ -207,7 +282,26 @@ export default function SessionDetail() {
       } else {
         toast("error", err instanceof ApiError ? err.detail : "Failed to reset student");
       }
+    } finally {
+      setResetting(false);
     }
+  };
+
+  const handleRemoveRange = (studentId: number) => {
+    const student = session?.students.find((s) => s.id === studentId);
+    setConfirmModal({
+      title: "Remove Range",
+      message: `Destroy the range VMs for ${student?.full_name ?? "this student"} but keep their Ludus user and VPN config. They return to "pending" so you can re-provision to deploy a fresh range. Continue?`,
+      action: async () => {
+        try {
+          await students.removeRange(studentId);
+          toast("success", "Range removed — re-provision to deploy fresh VMs");
+          fetchSession();
+        } catch (err) {
+          toast("error", err instanceof ApiError ? err.detail : "Failed to remove range");
+        }
+      },
+    });
   };
 
   // Instructor-side quick download of a student's WireGuard config (by Ludus
@@ -308,28 +402,56 @@ export default function SessionDetail() {
     {
       key: "actions",
       label: "Actions",
-      render: (s) => (
-        <div className="flex items-center gap-1">
-          {s.status === "ready" && (
-            <Button
-              variant="icon"
-              onClick={() => handleResetStudent(s.id)}
-              title="Reset student environment"
-              aria-label="Reset student environment"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          )}
-          <Button
-            variant="icon"
-            onClick={() => handleDeleteStudent(s.id)}
-            title="Remove student"
-            aria-label="Remove student"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      ),
+      render: (s) => {
+        // In shared mode only the range owner (== shared_range_id) owns the
+        // range; everyone else just has cross-range access. Dedicated students
+        // each own their own range.
+        const isRangeOwner =
+          session.mode !== "shared" || s.ludus_userid === session.shared_range_id;
+        const provisioned = s.status === "ready" || s.status === "error";
+        return (
+          <div className="flex items-center gap-1">
+            {s.status === "ready" && (
+              <Button
+                variant="icon"
+                onClick={() => handleResetStudent(s.id)}
+                title="Reset environment (revert to baseline snapshot)"
+                aria-label="Reset environment"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            )}
+            {provisioned && isRangeOwner ? (
+              <Button
+                variant="icon"
+                onClick={() => handleRemoveRange(s.id)}
+                title="Remove range (destroy VMs, keep user so you can redeploy)"
+                aria-label="Remove range"
+              >
+                <ServerOff className="h-4 w-4" />
+              </Button>
+            ) : provisioned ? (
+              <Button
+                variant="icon"
+                onClick={() => handleDeleteStudent(s.id)}
+                title="Remove user (revoke this user's access to the shared range)"
+                aria-label="Remove user"
+              >
+                <UserMinus className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="icon"
+                onClick={() => handleDeleteStudent(s.id)}
+                title="Remove student"
+                aria-label="Remove student"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -393,7 +515,7 @@ export default function SessionDetail() {
   };
 
   const pendingCount = session.students.filter(
-    (s) => s.status === "pending" || s.status === "error",
+    (s) => s.status === "pending" || s.status === "error" || s.status === "range_removed",
   ).length;
   const readyCount = session.students.filter(
     (s) => s.status === "ready",
@@ -421,6 +543,12 @@ export default function SessionDetail() {
                   variant="primary"
                   loading={provisioning}
                   onClick={handleProvision}
+                  disabled={quota ? !quota.within_quota : false}
+                  title={
+                    quota && !quota.within_quota
+                      ? "Session demand exceeds its resource budget"
+                      : undefined
+                  }
                 >
                   Provision All ({pendingCount})
                 </Button>
@@ -428,13 +556,16 @@ export default function SessionDetail() {
               </>
             )}
             {(session.status === "active" || session.status === "provisioning") && (
-              <Button
-                variant="secondary"
-                loading={ending}
-                onClick={handleEndSession}
-              >
-                End Session
-              </Button>
+              <>
+                {readyCount > 0 && (
+                  <Button variant="secondary" onClick={handleRebuild} title="Destroy VMs but keep users, then re-provision for fresh VMs">
+                    Rebuild
+                  </Button>
+                )}
+                <Button variant="danger" onClick={handleTeardown} title="Destroy VMs, remove Ludus users + configs, end the session">
+                  Tear Down
+                </Button>
+              </>
             )}
             <Button
               variant="icon"
@@ -555,6 +686,41 @@ export default function SessionDetail() {
             </p>
           </Card>
         </div>
+
+        {/* Resource budget */}
+        {quota && (
+          <QuotaCard
+            quota={quota}
+            sessionId={session.id}
+            status={session.status}
+            onSaved={refreshQuota}
+          />
+        )}
+
+        {/* Baseline snapshot status */}
+        {baseline && (baseline.pending > 0 || baseline.failed > 0 || baseline.created > 0) && (
+          <div
+            className={`flex items-center gap-2 rounded-md px-4 py-2.5 text-[13px] border ${
+              baseline.failed > 0
+                ? "bg-accent-danger/10 border-accent-danger/30 text-accent-danger"
+                : baseline.pending > 0
+                  ? "bg-accent-info/10 border-accent-info/30 text-text-secondary"
+                  : "bg-accent-success/10 border-accent-success/30 text-text-secondary"
+            }`}
+          >
+            <Camera className="h-4 w-4 shrink-0" />
+            {baseline.pending > 0 ? (
+              <span>
+                Creating baseline snapshots… {baseline.pending} range(s) still deploying.
+                Reset Environment will work once they finish.
+              </span>
+            ) : baseline.failed > 0 ? (
+              <span>{baseline.failed} baseline snapshot(s) failed — Reset may not work for those ranges.</span>
+            ) : (
+              <span>Baseline snapshots ready — Reset Environment is available.</span>
+            )}
+          </div>
+        )}
 
         {/* Students */}
         <Card variant="gradient" className="p-0 overflow-hidden">
@@ -751,7 +917,247 @@ export default function SessionDetail() {
           </Button>
         </div>
       </Modal>
+
+      {/* Reset environment modal (configurable snapshot) */}
+      <Modal
+        open={!!resetTarget}
+        onClose={() => !resetting && setResetTarget(null)}
+        title="Reset Environment"
+        size="sm"
+      >
+        <p className="text-[15px] text-text-secondary mb-4">
+          Revert {resetTarget?.name}'s range to a snapshot. The baseline taken after
+          deploy is <span className="font-mono">snapshot-1</span>.
+        </p>
+        <Input
+          label="Snapshot name"
+          value={resetTarget?.snapshot ?? ""}
+          onChange={(e) =>
+            setResetTarget((t) => (t ? { ...t, snapshot: e.target.value } : t))
+          }
+        />
+        <div className="flex justify-end gap-3 mt-6">
+          <Button variant="secondary" onClick={() => setResetTarget(null)} disabled={resetting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={submitReset}
+            loading={resetting}
+            disabled={!resetTarget?.snapshot?.trim()}
+          >
+            Revert to snapshot
+          </Button>
+        </div>
+      </Modal>
     </>
+  );
+}
+
+function QuotaMeter({
+  label,
+  allocated,
+  quota,
+  unit,
+  over,
+}: {
+  label: string;
+  allocated: number;
+  quota: number | null;
+  unit: string;
+  over: boolean;
+}) {
+  const pct = quota ? Math.min((allocated / quota) * 100, 100) : 0;
+  const barColor = over ? "bg-accent-danger" : "bg-accent-success";
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between text-[13px]">
+        <span className="text-text-secondary">{label}</span>
+        <span className={over ? "text-accent-danger font-medium" : "text-text-primary"}>
+          <span className="font-semibold">{allocated}</span> allocated
+          {quota != null ? (
+            <> / <span className="font-semibold">{quota}</span> quota {unit}</>
+          ) : (
+            <span className="text-text-muted"> · no quota set</span>
+          )}
+        </span>
+      </div>
+      {quota != null && (
+        <div className="h-2 rounded-full bg-bg-elevated overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuotaEditor({
+  sessionId,
+  cpuQuota,
+  ramQuota,
+  onDone,
+}: {
+  sessionId: number;
+  cpuQuota: number | null;
+  ramQuota: number | null;
+  onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const [cpu, setCpu] = useState(cpuQuota != null ? String(cpuQuota) : "");
+  const [ram, setRam] = useState(ramQuota != null ? String(ramQuota) : "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await sessions.patch(sessionId, {
+        cpu_quota: cpu ? Number(cpu) : null,
+        ram_quota_gb: ram ? Number(ram) : null,
+      });
+      toast("success", "Resource quota updated");
+      onDone();
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to update quota");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-text-muted">
+        Set the session's budget (blank = unlimited). Provisioning is blocked if allocation
+        exceeds it.
+      </p>
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Max CPU cores"
+          type="number"
+          min={1}
+          placeholder="unlimited"
+          value={cpu}
+          onChange={(e) => setCpu(e.target.value)}
+        />
+        <Input
+          label="Max RAM (GB)"
+          type="number"
+          min={1}
+          placeholder="unlimited"
+          value={ram}
+          onChange={(e) => setRam(e.target.value)}
+        />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onDone} disabled={saving}>
+          Cancel
+        </Button>
+        <Button variant="primary" onClick={save} loading={saving}>
+          Save budget
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function QuotaCard({
+  quota,
+  sessionId,
+  status,
+  onSaved,
+}: {
+  quota: SessionQuotaRead;
+  sessionId: number;
+  status: SessionDetailRead["status"];
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  // Meters show what's actually deployed (allocated); it drops when a range is
+  // removed. The over-budget block still keys off the full planned footprint.
+  const overCpu = quota.cpu_quota != null && quota.allocated_cpus > quota.cpu_quota;
+  const overRam = quota.ram_quota_gb != null && quota.allocated_ram_gb > quota.ram_quota_gb;
+  const hasBudget = quota.cpu_quota != null || quota.ram_quota_gb != null;
+  // Quota can be edited any time except after the session has ended.
+  const canEdit = status !== "ended";
+
+  return (
+    <Card variant="stat" className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-text-secondary">
+          <Server className="h-4 w-4" />
+          <span className="text-[13px] uppercase tracking-wider font-medium">
+            Resource Budget
+          </span>
+        </div>
+        {editing ? (
+          <span className="text-xs text-text-muted">
+            {quota.ready_count}/{quota.student_count} deployed ·{" "}
+            {quota.per_range_cpus} CPU / {quota.per_range_ram_gb} GB per range
+          </span>
+        ) : (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-text-muted">
+              {quota.student_count} student{quota.student_count === 1 ? "" : "s"} ·{" "}
+              {quota.per_range_cpus} CPU / {quota.per_range_ram_gb} GB per range
+            </span>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="flex items-center gap-1 text-xs text-accent-success hover:underline"
+              >
+                <Pencil className="h-3 w-3" />
+                {hasBudget ? "Edit" : "Set budget"}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {editing ? (
+        <QuotaEditor
+          sessionId={sessionId}
+          cpuQuota={quota.cpu_quota}
+          ramQuota={quota.ram_quota_gb}
+          onDone={() => {
+            setEditing(false);
+            onSaved();
+          }}
+        />
+      ) : (
+        <>
+          <QuotaMeter
+            label="CPU cores"
+            allocated={quota.allocated_cpus}
+            quota={quota.cpu_quota}
+            unit="cores"
+            over={overCpu}
+          />
+          <QuotaMeter
+            label="RAM"
+            allocated={quota.allocated_ram_gb}
+            quota={quota.ram_quota_gb}
+            unit="GB"
+            over={overRam}
+          />
+
+          {!quota.within_quota && (
+            <div className="p-2.5 rounded-md bg-accent-danger/10 border border-accent-danger/30 text-[13px] text-accent-danger">
+              Allocation exceeds the session budget — provisioning is blocked until you raise
+              the quota, switch to shared mode, or reduce students.
+            </div>
+          )}
+          {!hasBudget && (
+            <p className="text-[13px] text-text-muted">
+              No budget set — provisioning is unrestricted. Use “Set budget” to cap this
+              session's CPU/RAM.
+            </p>
+          )}
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -894,6 +1300,7 @@ function AddStudentModal({
   // Manual mode state
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [ludusUserid, setLudusUserid] = useState("");
 
   // Ludus user mode state
   const [ludusUsers, setLudusUsers] = useState<LudusUser[]>([]);
@@ -907,6 +1314,7 @@ function AddStudentModal({
   const resetForm = () => {
     setFullName("");
     setEmail("");
+    setLudusUserid("");
     setError("");
     setSelectedUsers(new Set());
     setUserSearch("");
@@ -931,10 +1339,20 @@ function AddStudentModal({
 
   const handleManualSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const uid = ludusUserid.trim();
+    if (uid && !/^[A-Za-z0-9]{1,20}$/.test(uid)) {
+      setError("Ludus User ID must be 1-20 letters/numbers only (no spaces or symbols).");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
-      await students.create(sessionId, { full_name: fullName, email });
+      await students.create(sessionId, {
+        full_name: fullName,
+        email,
+        // Blank = auto-generate; set = deploy the range under this exact userID.
+        ludus_userid: uid || undefined,
+      });
       resetForm();
       onCreated();
     } catch (err) {
@@ -1042,6 +1460,18 @@ function AddStudentModal({
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+            <div>
+              <Input
+                label="Ludus User ID (optional)"
+                placeholder="blank = auto-generate"
+                value={ludusUserid}
+                onChange={(e) => setLudusUserid(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Set to deploy this student's range under an exact Ludus user (1-20
+                letters/numbers). Leave blank to auto-generate one.
+              </p>
+            </div>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="secondary" type="button" onClick={onClose}>
                 Cancel

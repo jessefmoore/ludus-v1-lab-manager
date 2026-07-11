@@ -1,7 +1,7 @@
 // Enums matching backend Pydantic schemas
 export type LabMode = "shared" | "dedicated";
 export type SessionStatus = "draft" | "provisioning" | "active" | "ended";
-export type StudentStatus = "pending" | "ready" | "error";
+export type StudentStatus = "pending" | "ready" | "error" | "range_removed";
 
 // Auth
 export interface UserRead {
@@ -60,6 +60,9 @@ export interface SessionCreate {
   start_date: string | null;
   end_date: string | null;
   shared_range_id: string | null;
+  // Per-session provisioning budget. null = unlimited.
+  cpu_quota?: number | null;
+  ram_quota_gb?: number | null;
 }
 
 export interface SessionRead {
@@ -70,8 +73,26 @@ export interface SessionRead {
   start_date: string | null;
   end_date: string | null;
   shared_range_id: string | null;
+  cpu_quota: number | null;
+  ram_quota_gb: number | null;
   status: SessionStatus;
   created_at: string;
+}
+
+// Computed CPU/RAM footprint of a session vs its configured budget.
+export interface SessionQuotaRead {
+  mode: LabMode;
+  student_count: number;
+  ready_count: number;
+  per_range_cpus: number;
+  per_range_ram_gb: number;
+  demand_cpus: number;
+  demand_ram_gb: number;
+  allocated_cpus: number;
+  allocated_ram_gb: number;
+  cpu_quota: number | null;
+  ram_quota_gb: number | null;
+  within_quota: boolean;
 }
 
 export interface SessionDetailRead extends SessionRead {
@@ -83,6 +104,24 @@ export interface SessionProvisionResponse {
   failed: number;
   skipped: number;
   students: StudentRead[];
+}
+
+// Response for rebuild (destroy VMs, keep users) and teardown (full cleanup).
+export interface SessionTeardownResponse {
+  cleaned: number;
+  failed: number;
+  skipped: number;
+  students: StudentRead[];
+}
+
+// Response for the baseline-snapshot pass (auto-run after ranges deploy).
+export interface BaselineSnapshotResponse {
+  created: number;
+  existing: number;
+  pending: number;
+  failed: number;
+  done: boolean;
+  snapshot_name: string;
 }
 
 // Students
@@ -139,6 +178,19 @@ export interface LudusRange {
 
 export interface LudusRangeListResponse {
   ranges: LudusRange[];
+}
+
+// Host CPU/RAM capacity vs deployed-range allocation for a Ludus server.
+export interface LudusCapacity {
+  server: string;
+  configured: boolean;
+  cpu_capacity: number | null;
+  ram_capacity_gb: number | null;
+  cpu_allocated: number;
+  ram_allocated_gb: number;
+  cpu_available: number | null;
+  ram_available_gb: number | null;
+  session_count: number;
 }
 
 export interface LudusRangeConfigResponse {
@@ -231,6 +283,8 @@ export interface LudusServerInfo {
   api_key_masked: string;
   verify_tls: boolean;
   source: "env" | "db";
+  cpu_capacity?: number | null;
+  ram_capacity_gb?: number | null;
 }
 
 export interface LudusServersResponse {
@@ -242,12 +296,16 @@ export interface LudusServerCreate {
   url: string;
   api_key: string;
   verify_tls: boolean;
+  cpu_capacity?: number | null;
+  ram_capacity_gb?: number | null;
 }
 
 export interface LudusServerUpdate {
   url?: string;
   api_key?: string;
   verify_tls?: boolean;
+  cpu_capacity?: number | null;
+  ram_capacity_gb?: number | null;
 }
 
 // Ludus Range Detail / VMs
@@ -448,6 +506,8 @@ export interface UserCreateResponse {
 // Session updates
 export interface SessionPatch {
   shared_range_id?: string | null;
+  cpu_quota?: number | null;
+  ram_quota_gb?: number | null;
 }
 
 // Events (audit log)

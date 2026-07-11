@@ -207,7 +207,7 @@ def test_first_reset_succeeds(
     student = _make_ready_student(db_session, draft_session)
     resp = client.post(f"/api/students/{student.id}/reset", json={})
     assert resp.status_code == 202
-    assert fake_ludus.snapshot_revert_calls == [(student.ludus_userid, "ctf-initial")]
+    assert fake_ludus.snapshot_revert_calls == [(student.ludus_userid, "snapshot-1")]
 
 
 def test_immediate_second_reset_returns_429(

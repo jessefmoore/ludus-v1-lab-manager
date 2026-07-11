@@ -310,6 +310,19 @@ def test_create_student_twice_generates_distinct_userids(
     assert resp1.json()["ludus_userid"] != resp2.json()["ludus_userid"]
 
 
+def test_make_userid_prefix_overrides_name() -> None:
+    """A configured prefix yields <prefix><hex>, ignoring the name."""
+    uid = students_service._make_userid("Alice Example", prefix="stf-user")
+    assert uid.startswith("stfuser")  # hyphen sanitised away
+    assert uid[len("stfuser"):].isalnum()
+    assert len(uid) <= 20
+
+
+def test_make_userid_no_prefix_uses_name() -> None:
+    uid = students_service._make_userid("Alice Example")
+    assert uid.startswith("aliceexample")
+
+
 def test_create_student_writes_created_event(
     client: TestClient, db_session: OrmSession, draft_session: SessionRow
 ) -> None:
@@ -351,7 +364,7 @@ def test_create_student_retries_on_userid_collision(
 
     call_count = {"n": 0}
 
-    def fake_make_userid(base: str) -> str:
+    def fake_make_userid(base: str, prefix: str = "") -> str:
         call_count["n"] += 1
         if call_count["n"] <= 2:
             return "existing-userid"
