@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     # File storage
     config_storage_dir: str = "./data/configs"
 
+    # Optional prefix for auto-generated Ludus user IDs. When set, generated
+    # IDs look like ``<prefix><hex>`` (e.g. ``stfuser1a2b3c``) instead of being
+    # derived from the student's name. Sanitised to ``[a-z0-9]`` since Ludus
+    # forbids hyphens/punctuation. Empty = keep name-based generation.
+    student_userid_prefix: str | None = None
+
     # Resource quotas. Per-range cap: the maximum CPU cores / RAM (GB) any
     # single lab template (one range) may request, validated when a template
     # is created or updated. None = no cap. Per-session budgets are stored on

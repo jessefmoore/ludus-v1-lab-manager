@@ -150,6 +150,21 @@ def test_student_create_rejects_invalid_email() -> None:
         StudentCreate(full_name="Alice", email="not-an-email")
 
 
+def test_student_create_explicit_userid_ok() -> None:
+    """An explicit, Ludus-valid userID is accepted (name/email optional)."""
+    payload = StudentCreate(ludus_userid="RTA3")
+    assert payload.ludus_userid == "RTA3"
+
+
+@pytest.mark.parametrize(
+    "bad", ["has space", "under_score", "dash-es", "toolongxxxxxxxxxxxxxxx", ""]
+)
+def test_student_create_rejects_bad_userid(bad: str) -> None:
+    """userIDs must match Ludus's ^[A-Za-z0-9]{1,20}$."""
+    with pytest.raises(ValidationError):
+        StudentCreate(ludus_userid=bad, full_name="A", email="a@example.com")
+
+
 def test_invite_page_data_happy_path() -> None:
     """InvitePageData validates a plausible render payload."""
     data = InvitePageData(

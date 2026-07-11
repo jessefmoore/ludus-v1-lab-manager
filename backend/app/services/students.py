@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import desc, select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.core.config import get_settings
 from app.models import Session as SessionRow
 from app.models import Student, StudentStatus
 from app.models.event import Event
@@ -95,7 +96,7 @@ def _slugify(name: str) -> str:
     return cleaned[:_SLUG_MAX_LEN]
 
 
-def _make_userid(base: str) -> str:
+def _make_userid(base: str, prefix: str = "") -> str:
     """Build a Ludus-compatible userid: ``<slug><hex>`` or ``usr<hex>``.
 
     Ludus enforces ``^[A-Za-z0-9]{1,20}$`` - no hyphens, underscores,
@@ -103,9 +104,16 @@ def _make_userid(base: str) -> str:
     ``_MAX_USERID_LEN``. The hex suffix gives ~16M variants per slug,
     which combined with the unique-constraint retry loop makes
     collisions vanishingly unlikely in practice.
+
+    When *prefix* is set (from ``student_userid_prefix``) it takes
+    precedence over the name-derived slug, yielding recognisable IDs like
+    ``stfuser1a2b3c``.
     """
-    slug = _slugify(base)
     suffix = secrets.token_hex(_USERID_SUFFIX_BYTES)
+    prefix_slug = _slugify(prefix)
+    if prefix_slug:
+        return f"{prefix_slug}{suffix}"[:_MAX_USERID_LEN]
+    slug = _slugify(base)
     if not slug:
         # token_hex(4) = 8 chars => "usr" + 8 = 11 chars total.
         return f"usr{secrets.token_hex(4)}"
@@ -145,13 +153,18 @@ def create_student(
         resolved_name = payload.full_name
         resolved_email = str(payload.email)
 
+    userid_prefix = get_settings().student_userid_prefix or ""
     last_error: IntegrityError | None = None
     for attempt in range(1, _INSERT_RETRY_LIMIT + 1):
         student = Student(
             session_id=session_id,
             full_name=resolved_name,
             email=resolved_email,
-            ludus_userid=resolved_userid if resolved_userid else _make_userid(resolved_name),
+            ludus_userid=(
+                resolved_userid
+                if resolved_userid
+                else _make_userid(resolved_name, prefix=userid_prefix)
+            ),
             invite_token=secrets.token_hex(16),
             status=StudentStatus.pending,
             range_id=None,

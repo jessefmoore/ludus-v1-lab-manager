@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, EmailStr, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.schemas.common import StudentStatus
 
@@ -32,7 +32,9 @@ class StudentCreate(BaseModel):
 
     full_name: str | None = None
     email: EmailStr | None = None
-    ludus_userid: str | None = None
+    # Ludus enforces ^[A-Za-z0-9]{1,20}$ for userIDs (no hyphens/punctuation).
+    # Validate it here so a bad ID fails at enrollment, not deep in provisioning.
+    ludus_userid: str | None = Field(default=None, pattern=r"^[A-Za-z0-9]{1,20}$")
 
     @model_validator(mode="after")
     def check_either_manual_or_ludus(self) -> Self:

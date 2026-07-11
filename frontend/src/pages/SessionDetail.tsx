@@ -1282,6 +1282,7 @@ function AddStudentModal({
   // Manual mode state
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [ludusUserid, setLudusUserid] = useState("");
 
   // Ludus user mode state
   const [ludusUsers, setLudusUsers] = useState<LudusUser[]>([]);
@@ -1295,6 +1296,7 @@ function AddStudentModal({
   const resetForm = () => {
     setFullName("");
     setEmail("");
+    setLudusUserid("");
     setError("");
     setSelectedUsers(new Set());
     setUserSearch("");
@@ -1319,10 +1321,20 @@ function AddStudentModal({
 
   const handleManualSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const uid = ludusUserid.trim();
+    if (uid && !/^[A-Za-z0-9]{1,20}$/.test(uid)) {
+      setError("Ludus User ID must be 1-20 letters/numbers only (no spaces or symbols).");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
-      await students.create(sessionId, { full_name: fullName, email });
+      await students.create(sessionId, {
+        full_name: fullName,
+        email,
+        // Blank = auto-generate; set = deploy the range under this exact userID.
+        ludus_userid: uid || undefined,
+      });
       resetForm();
       onCreated();
     } catch (err) {
@@ -1430,6 +1442,18 @@ function AddStudentModal({
               onChange={(e) => setEmail(e.target.value)}
               required
             />
+            <div>
+              <Input
+                label="Ludus User ID (optional)"
+                placeholder="blank = auto-generate"
+                value={ludusUserid}
+                onChange={(e) => setLudusUserid(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Set to deploy this student's range under an exact Ludus user (1-20
+                letters/numbers). Leave blank to auto-generate one.
+              </p>
+            </div>
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="secondary" type="button" onClick={onClose}>
                 Cancel
