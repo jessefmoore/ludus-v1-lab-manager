@@ -240,6 +240,44 @@ def test_create_session_happy_path_returns_201_and_draft(
     assert body["created_at"] is not None
 
 
+def test_create_shared_session_autoenrolls_range_owner(
+    client: TestClient, lab_template: LabTemplate
+) -> None:
+    """A shared session created with a picked range auto-enrols its owner."""
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "name": "Shared cohort",
+            "lab_template_id": lab_template.id,
+            "mode": "shared",
+            "shared_range_id": "RXOWNER1",
+        },
+    )
+    assert resp.status_code == 201
+    sid = resp.json()["id"]
+    detail = client.get(f"/api/sessions/{sid}")
+    uids = [s["ludus_userid"] for s in detail.json()["students"]]
+    assert uids == ["RXOWNER1"]  # the range owner is enrolled
+
+
+def test_create_dedicated_session_does_not_autoenroll(
+    client: TestClient, lab_template: LabTemplate
+) -> None:
+    """Auto-enrolment is shared-mode only, even if a range id is supplied."""
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "name": "Dedicated cohort",
+            "lab_template_id": lab_template.id,
+            "mode": "dedicated",
+            "shared_range_id": "IGNORED1",
+        },
+    )
+    sid = resp.json()["id"]
+    detail = client.get(f"/api/sessions/{sid}")
+    assert detail.json()["students"] == []
+
+
 def test_list_sessions_contains_created_row(client: TestClient, lab_template: LabTemplate) -> None:
     """A session created through POST appears in the GET list."""
     create = client.post(

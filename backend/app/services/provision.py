@@ -612,6 +612,12 @@ def provision_session(
             else:
                 # Refresh after auto-create committed changes.
                 db.refresh(session_row)
+    elif session_row.mode == SessionMode.shared and session_row.shared_range_id:
+        # A specific existing range was picked: its owner (== shared_range_id)
+        # is the lead who already owns the deployed range. Marking them lead
+        # skips user_add/deploy/access-grant for that student and just fetches
+        # their WireGuard config; everyone else gets cross-range access.
+        lead_userid = session_row.shared_range_id
 
     # Signal that a provisioning pass is in flight before we start
     # calling Ludus, so concurrent callers see the state transition.

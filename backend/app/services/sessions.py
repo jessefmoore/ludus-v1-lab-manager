@@ -12,16 +12,17 @@ and lives in a separate service introduced by task #21.
 """
 
 import logging
+import secrets
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.orm import joinedload
 
 from app.models import Session as SessionRow
-from app.models import Student
+from app.models import Student, StudentStatus
 from app.models.event import Event
 from app.models.lab_template import LabTemplate
-from app.models.session import SessionStatus
+from app.models.session import SessionMode, SessionStatus
 from app.schemas.session import SessionCreate
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,40 @@ def create_session(db: DBSession, payload: SessionCreate) -> SessionRow:
         },
     )
     db.add(event)
+
+    # In shared mode with a pre-selected range, auto-enrol the range owner
+    # (== shared_range_id) as the first student so they appear on the session
+    # page as the range owner; "Add User" then adds additional users who share
+    # the range. Skipped if that Ludus user is already enrolled anywhere
+    # (ludus_userid is globally unique).
+    if session_row.mode == SessionMode.shared and payload.shared_range_id:
+        owner_uid = payload.shared_range_id
+        already_enrolled = db.execute(
+            select(Student).where(Student.ludus_userid == owner_uid)
+        ).scalar_one_or_none()
+        if already_enrolled is None:
+            owner = Student(
+                session_id=session_row.id,
+                full_name=owner_uid,
+                email=f"{owner_uid}@ludus.local",
+                ludus_userid=owner_uid,
+                invite_token=secrets.token_hex(16),
+                status=StudentStatus.pending,
+            )
+            db.add(owner)
+            db.flush()
+            db.add(
+                Event(
+                    session_id=session_row.id,
+                    student_id=owner.id,
+                    action="student.range_owner_enrolled",
+                    details_json={"session_id": session_row.id, "userid": owner_uid},
+                )
+            )
+            logger.info(
+                "session.create auto-enrolled range owner %s for session id=%s",
+                owner_uid, session_row.id,
+            )
 
     db.commit()
     db.refresh(session_row)

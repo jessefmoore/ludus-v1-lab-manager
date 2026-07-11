@@ -17,6 +17,7 @@ import {
   Clock,
   Download,
   Pencil,
+  UserMinus,
 } from "lucide-react";
 import { sessions, students, labs, events, ludus, ApiError } from "@/api";
 import type {
@@ -401,39 +402,56 @@ export default function SessionDetail() {
     {
       key: "actions",
       label: "Actions",
-      render: (s) => (
-        <div className="flex items-center gap-1">
-          {s.status === "ready" && (
-            <Button
-              variant="icon"
-              onClick={() => handleResetStudent(s.id)}
-              title="Reset environment (revert to baseline snapshot)"
-              aria-label="Reset environment"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          )}
-          {s.status === "ready" || s.status === "error" ? (
-            <Button
-              variant="icon"
-              onClick={() => handleRemoveRange(s.id)}
-              title="Remove range (destroy VMs, keep user so you can redeploy)"
-              aria-label="Remove range"
-            >
-              <ServerOff className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              variant="icon"
-              onClick={() => handleDeleteStudent(s.id)}
-              title="Remove student"
-              aria-label="Remove student"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      ),
+      render: (s) => {
+        // In shared mode only the range owner (== shared_range_id) owns the
+        // range; everyone else just has cross-range access. Dedicated students
+        // each own their own range.
+        const isRangeOwner =
+          session.mode !== "shared" || s.ludus_userid === session.shared_range_id;
+        const provisioned = s.status === "ready" || s.status === "error";
+        return (
+          <div className="flex items-center gap-1">
+            {s.status === "ready" && (
+              <Button
+                variant="icon"
+                onClick={() => handleResetStudent(s.id)}
+                title="Reset environment (revert to baseline snapshot)"
+                aria-label="Reset environment"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            )}
+            {provisioned && isRangeOwner ? (
+              <Button
+                variant="icon"
+                onClick={() => handleRemoveRange(s.id)}
+                title="Remove range (destroy VMs, keep user so you can redeploy)"
+                aria-label="Remove range"
+              >
+                <ServerOff className="h-4 w-4" />
+              </Button>
+            ) : provisioned ? (
+              <Button
+                variant="icon"
+                onClick={() => handleDeleteStudent(s.id)}
+                title="Remove user (revoke this user's access to the shared range)"
+                aria-label="Remove user"
+              >
+                <UserMinus className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="icon"
+                onClick={() => handleDeleteStudent(s.id)}
+                title="Remove student"
+                aria-label="Remove student"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 

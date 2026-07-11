@@ -430,6 +430,46 @@ def test_provision_shared_session_happy_path_two_students(
     assert len(provisioned_events) == 2
 
 
+def test_provision_shared_owner_is_lead(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    settings: Settings,
+    fake_ludus: FakeLudus,
+) -> None:
+    """The student whose userid == shared_range_id owns the range (lead).
+
+    That student gets neither user_add nor an access grant (they already own
+    the deployed range); the other students get cross-range access to it.
+    """
+    session_row = _make_session(
+        db_session, lab_template, mode=SessionMode.shared, shared_range_id="ownerx",
+    )
+    _make_student(
+        db_session, session_row, ludus_userid="ownerx", invite_token="o" * 32,
+        full_name="Owner", email="owner@example.com",
+    )
+    _make_student(
+        db_session, session_row, ludus_userid="sharera", invite_token="s" * 32,
+        full_name="Sharer", email="sharer@example.com",
+    )
+
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    assert resp.json()["provisioned"] == 2
+
+    # Owner is lead: no user_add, no access grant for them.
+    added = {c["userid"] for c in fake_ludus.user_add_calls}
+    assert "ownerx" not in added and "sharera" in added
+    granted = [c["userid"] for c in fake_ludus.range_assign_calls]
+    assert granted == ["sharera"]  # only the sharer is granted access
+    # But both get a WireGuard config and end ready on the shared range.
+    assert set(fake_ludus.user_wireguard_calls) == {"ownerx", "sharera"}
+    db_session.expire_all()
+    rows = db_session.execute(select(Student).order_by(Student.id)).scalars().all()
+    assert all(r.status == StudentStatus.ready and r.range_id == "ownerx" for r in rows)
+
+
 def test_provision_shared_session_wireguard_timeout_marks_error(
     client: TestClient,
     db_session: OrmSession,
