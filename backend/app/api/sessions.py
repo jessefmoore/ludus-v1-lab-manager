@@ -184,12 +184,20 @@ def get_session_quota(
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_session(
     session_id: int,
+    destroy_ranges: bool = False,
     db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
 ) -> None:
-    """Delete a draft/ended session with no ``ready`` students attached."""
+    """Delete a session, cleaning up lingering Ludus users.
+
+    ``destroy_ranges=true`` additionally destroys every deployed range's VMs
+    (via ``user_rm``) so a session with live ranges can be removed in one step.
+    """
     try:
-        sessions_service.delete_session(db, session_id)
+        sessions_service.delete_session(
+            db, session_id, registry=registry, destroy_ranges=destroy_ranges
+        )
     except sessions_service.SessionNotFound as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

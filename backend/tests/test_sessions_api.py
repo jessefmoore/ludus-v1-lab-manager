@@ -18,7 +18,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.sessions import router as sessions_router
 from app.core.config import Settings, get_settings
 from app.core.db import Base, get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, get_ludus_client_registry
 from app.models import (
     Event,
     LabTemplate,
@@ -103,11 +103,35 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
     return template
 
 
+class _FakeLudus:
+    """Records user_rm so delete-cleanup can be asserted."""
+
+    def __init__(self) -> None:
+        self.user_rm_calls: list[str] = []
+
+    def user_rm(self, userid: str) -> None:
+        self.user_rm_calls.append(userid)
+
+
+class _FakeRegistry:
+    def __init__(self) -> None:
+        self.fake = _FakeLudus()
+
+    def get(self, name: str = "default") -> _FakeLudus:
+        return self.fake
+
+
+@pytest.fixture
+def fake_registry() -> _FakeRegistry:
+    return _FakeRegistry()
+
+
 @pytest.fixture
 def app_factory(
     db_session: OrmSession,
     settings: Settings,
     fake_user: User,
+    fake_registry: _FakeRegistry,
 ):
     """Build a FastAPI app wired to the fixture DB/settings/user.
 
@@ -127,6 +151,7 @@ def app_factory(
 
         app.dependency_overrides[get_db] = _override_get_db
         app.dependency_overrides[get_settings] = _override_get_settings
+        app.dependency_overrides[get_ludus_client_registry] = lambda: fake_registry
         if authenticated:
             app.dependency_overrides[get_current_user] = lambda: fake_user
         return app
@@ -361,29 +386,65 @@ def test_delete_draft_session_returns_204(
     assert all(r["id"] != sid for r in listing)
 
 
-def test_delete_active_session_returns_409(
+def test_delete_session_with_ready_student_returns_409(
     client: TestClient, db_session: OrmSession, lab_template: LabTemplate
 ) -> None:
-    """Active sessions cannot be deleted via this endpoint."""
+    """A session with a live (ready) range must be torn down before deletion."""
     row = _create_session_row(db_session, lab_template, status=SessionStatus.active)
+    _create_student_row(
+        db_session, row, ludus_userid="ready-user", invite_token="tok-ready",
+        status=StudentStatus.ready,
+    )
     resp = client.delete(f"/api/sessions/{row.id}")
     assert resp.status_code == 409
 
 
-def test_delete_draft_session_with_ready_student_succeeds(
+def test_delete_provisioning_session_returns_409(
     client: TestClient, db_session: OrmSession, lab_template: LabTemplate
 ) -> None:
-    """A draft session with a ready student can be deleted (cascade cleans up)."""
-    row = _create_session_row(db_session, lab_template)
+    row = _create_session_row(
+        db_session, lab_template, status=SessionStatus.provisioning
+    )
+    resp = client.delete(f"/api/sessions/{row.id}")
+    assert resp.status_code == 409
+
+
+def test_delete_active_session_no_live_ranges_cleans_up_and_succeeds(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    fake_registry: _FakeRegistry,
+) -> None:
+    """An active session whose ranges were removed deletes + removes lingering users."""
+    row = _create_session_row(db_session, lab_template, status=SessionStatus.active)
     _create_student_row(
-        db_session,
-        row,
-        ludus_userid="ready-user",
-        invite_token="tok-ready",
-        status=StudentStatus.ready,
+        db_session, row, ludus_userid="gone-user", invite_token="tok-gone",
+        status=StudentStatus.range_removed,
     )
     resp = client.delete(f"/api/sessions/{row.id}")
     assert resp.status_code == 204
+    # The lingering Ludus user was cleaned up.
+    assert fake_registry.fake.user_rm_calls == ["gone-user"]
+    listing = client.get("/api/sessions").json()
+    assert all(r["id"] != row.id for r in listing)
+
+
+def test_delete_with_destroy_ranges_removes_live_ranges(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    fake_registry: _FakeRegistry,
+) -> None:
+    """destroy_ranges=true deletes even a session with a live range, via user_rm."""
+    row = _create_session_row(db_session, lab_template, status=SessionStatus.active)
+    _create_student_row(
+        db_session, row, ludus_userid="live-user", invite_token="tok-live",
+        status=StudentStatus.ready,
+    )
+    resp = client.delete(f"/api/sessions/{row.id}?destroy_ranges=true")
+    assert resp.status_code == 204
+    # user_rm on the ready student destroys its range VMs + removes the user.
+    assert fake_registry.fake.user_rm_calls == ["live-user"]
 
 
 def test_delete_missing_session_returns_404(client: TestClient) -> None:

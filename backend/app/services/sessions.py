@@ -11,8 +11,11 @@ Provisioning (spinning up Ludus ranges) is deliberately out of scope here
 and lives in a separate service introduced by task #21.
 """
 
+import contextlib
 import logging
+import os
 import secrets
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session as DBSession
@@ -24,11 +27,17 @@ from app.models.event import Event
 from app.models.lab_template import LabTemplate
 from app.models.session import SessionMode, SessionStatus
 from app.schemas.session import SessionCreate
+from app.services.exceptions import LudusError, LudusNotFound
+
+if TYPE_CHECKING:
+    from app.core.deps import LudusClientRegistry
 
 logger = logging.getLogger(__name__)
 
-_DELETABLE_STATUSES = {SessionStatus.draft, SessionStatus.ended}
 _ENDABLE_STATUSES = {SessionStatus.active, SessionStatus.provisioning}
+# Students that were provisioned at some point still own a Ludus user even
+# after their range is removed; clean these up on delete so nothing orphans.
+_PROVISIONED_STATUSES = {StudentStatus.error, StudentStatus.range_removed}
 
 
 class LabTemplateNotFound(Exception):  # noqa: N818 -- spec-mandated name
@@ -149,12 +158,24 @@ def create_session(db: DBSession, payload: SessionCreate) -> SessionRow:
     return session_row
 
 
-def delete_session(db: DBSession, sid: int) -> None:
-    """Delete a session if its status and students permit it.
+def delete_session(
+    db: DBSession,
+    sid: int,
+    *,
+    registry: "LudusClientRegistry | None" = None,
+    destroy_ranges: bool = False,
+) -> None:
+    """Delete a session if its state permits it, cleaning up Ludus users.
 
     Rules (enforced here so the router stays thin):
-    * ``status`` must be in ``{draft, ended}``.
-    * No attached student may have ``status == ready``.
+    * A ``provisioning`` session cannot be deleted (wait for it to finish).
+    * By default a session with any ``ready`` student (live deployed range)
+      cannot be deleted - tear those down first so their VMs aren't orphaned.
+      Pass ``destroy_ranges=True`` to override: every provisioned user is then
+      removed (``user_rm`` also destroys their Proxmox pool / range VMs), so the
+      delete tears the whole session down.
+    * Otherwise it is deleted. Lingering Ludus users for provisioned students
+      are removed best-effort via *registry* so nothing orphans.
 
     Violations raise ``SessionDeleteConflict`` (mapped to 409). A missing id
     raises ``SessionNotFound`` (mapped to 404).
@@ -168,18 +189,57 @@ def delete_session(db: DBSession, sid: int) -> None:
     if session_row is None:
         raise SessionNotFound(f"session id={sid} does not exist")
 
-    if session_row.status not in _DELETABLE_STATUSES:
+    if session_row.status == SessionStatus.provisioning:
         raise SessionDeleteConflict(
-            f"session is in status={session_row.status.value}; "
-            f"only {sorted(s.value for s in _DELETABLE_STATUSES)} may be deleted"
+            "session is provisioning; wait for it to finish before deleting"
         )
+
+    students = list(
+        db.execute(select(Student).where(Student.session_id == sid)).scalars().all()
+    )
+    # A session with live deployed ranges must be torn down first - a plain
+    # delete would orphan those ranges/VMs on Ludus. ``destroy_ranges`` opts in
+    # to destroying them as part of the delete instead.
+    if not destroy_ranges and any(s.status == StudentStatus.ready for s in students):
+        raise SessionDeleteConflict(
+            "session has live deployed ranges; tear them down first, or delete "
+            "with the 'destroy VMs' option"
+        )
+
+    # Users to remove: with destroy_ranges, every provisioned student (incl.
+    # ready -> user_rm destroys their live range VMs); otherwise just the
+    # lingering error/range-removed users so nothing orphans.
+    if destroy_ranges:
+        to_clean = [s for s in students if s.status != StudentStatus.pending]
+    else:
+        to_clean = [s for s in students if s.status in _PROVISIONED_STATUSES]
+    if to_clean and registry is not None:
+        lab = db.get(LabTemplate, session_row.lab_template_id)
+        server = getattr(lab, "ludus_server", "default") or "default"
+        try:
+            ludus = registry.get(server)
+        except ValueError:
+            ludus = None
+        if ludus is not None:
+            for s in to_clean:
+                try:
+                    ludus.user_rm(s.ludus_userid)
+                except LudusNotFound:
+                    pass
+                except LudusError as exc:
+                    if "not found" not in str(exc).lower():
+                        logger.warning(
+                            "session.delete: user_rm failed for %s: %s",
+                            s.ludus_userid, exc,
+                        )
+                if s.wg_config_path:
+                    with contextlib.suppress(OSError):
+                        os.unlink(s.wg_config_path)
 
     name_snapshot = session_row.name
 
     # Collect student ids before cascade deletes them.
-    student_ids = list(db.execute(
-        select(Student.id).where(Student.session_id == sid)
-    ).scalars().all())
+    student_ids = [s.id for s in students]
 
     # Null out FK references in events to avoid Postgres FK violations.
     # The audit rows survive with session_id/student_id = NULL.

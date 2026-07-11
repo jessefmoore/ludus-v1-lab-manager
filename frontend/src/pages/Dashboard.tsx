@@ -13,6 +13,7 @@ import {
   Server,
   Cpu,
   MemoryStick,
+  Trash2,
 } from "lucide-react";
 import { sessions, labs, ludus, ApiError } from "@/api";
 import type {
@@ -32,14 +33,44 @@ import StatusPill from "@/components/StatusPill";
 import DataTable, { type Column } from "@/components/DataTable";
 import { TableSkeleton } from "@/components/Skeleton";
 import PageTransition from "@/components/PageTransition";
+import { useToast } from "@/components/Toast";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [sessionList, setSessionList] = useState<SessionRead[]>([]);
   const [labList, setLabList] = useState<LabTemplateRead[]>([]);
   const [capacity, setCapacity] = useState<LudusCapacity | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SessionRead | null>(null);
+  const [destroyRanges, setDestroyRanges] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const openDelete = (s: SessionRead) => {
+    setDestroyRanges(false);
+    setDeleteTarget(s);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await sessions.delete(deleteTarget.id, destroyRanges);
+      toast(
+        "success",
+        destroyRanges
+          ? `Deleted "${deleteTarget.name}" and destroyed its VMs`
+          : `Deleted "${deleteTarget.name}"`,
+      );
+      setDeleteTarget(null);
+      fetchData();
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to delete session");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Host capacity is best-effort: a Ludus outage shouldn't blank the dashboard.
   const fetchCapacity = () =>
@@ -114,6 +145,25 @@ export default function Dashboard() {
         <span className="font-mono text-text-muted">
           {new Date(s.created_at).toLocaleDateString()}
         </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      render: (s) => (
+        <div className="flex justify-end">
+          <Button
+            variant="icon"
+            title="Delete session"
+            aria-label="Delete session"
+            onClick={(e) => {
+              e.stopPropagation(); // don't trigger the row's navigate
+              openDelete(s);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -302,6 +352,43 @@ export default function Dashboard() {
         }}
         labTemplates={labList}
       />
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        title="Delete Session"
+        size="sm"
+      >
+        <p className="text-[15px] text-text-secondary mb-4">
+          Delete <span className="font-medium text-text-primary">{deleteTarget?.name}</span>?
+          This removes the session and any leftover Ludus users for it. By default a
+          session with live (deployed) ranges can't be deleted — unless you choose to
+          destroy its VMs below.
+        </p>
+        <label className="flex items-start gap-2.5 mb-6 cursor-pointer rounded-md border border-border p-3 hover:bg-bg-elevated">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-accent-danger"
+            checked={destroyRanges}
+            onChange={(e) => setDestroyRanges(e.target.checked)}
+          />
+          <span className="text-[13px]">
+            <span className="font-medium text-accent-danger">Also destroy all VMs</span>{" "}
+            <span className="text-text-secondary">
+              in this session's range(s) and remove every Ludus user. Permanently deletes
+              running machines — cannot be undone.
+            </span>
+          </span>
+        </label>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={confirmDelete} loading={deleting}>
+            {destroyRanges ? "Destroy & Delete" : "Delete"}
+          </Button>
+        </div>
+      </Modal>
     </>
   );
 }
