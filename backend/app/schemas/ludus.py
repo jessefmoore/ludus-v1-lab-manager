@@ -573,3 +573,24 @@ class AnsibleCollectionRequest(BaseModel):
     collection: str
     version: str | None = None
     force: bool = False
+
+
+class LudusCapacityResponse(BaseModel):
+    """Host CPU/RAM capacity vs this app's committed session allocation.
+
+    ``configured`` is False when no capacity has been set, in which case the
+    ``*_available`` fields are null and the UI prompts the operator to
+    configure the host's totals. ``*_allocated`` is the CPU/RAM committed by
+    the app's live (active/provisioning) sessions on this server. Available may
+    be negative when overcommitted - reported truthfully, not clamped.
+    """
+
+    server: str
+    configured: bool
+    cpu_capacity: int | None = None
+    ram_capacity_gb: int | None = None
+    cpu_allocated: int
+    ram_allocated_gb: int
+    cpu_available: int | None = None
+    ram_available_gb: int | None = None
+    session_count: int

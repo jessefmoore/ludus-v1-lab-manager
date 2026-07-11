@@ -18,6 +18,9 @@ class LudusServer(Base):
     url: Mapped[str] = mapped_column(String(512), nullable=False)
     api_key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     verify_tls: Mapped[bool] = mapped_column(default=False, nullable=False)
+    # Physical host capacity for the resource dashboard. NULL = unconfigured.
+    cpu_capacity: Mapped[int | None] = mapped_column(nullable=True)
+    ram_capacity_gb: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -12,14 +12,22 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session as DBSession
 
-from app.core.deps import LudusClientRegistry, get_current_user, get_ludus_client_registry
+from app.core.config import Settings, get_settings
+from app.core.deps import (
+    LudusClientRegistry,
+    get_current_user,
+    get_db,
+    get_ludus_client_registry,
+)
 from app.models.user import User
 from app.schemas.ludus import (
     DeployRequest,
     LudusAccessibleRange,
     LudusAccessibleRangesResponse,
     LudusActionResponse,
+    LudusCapacityResponse,
     LudusLogEntryDetailResponse,
     LudusLogHistoryEntry,
     LudusLogHistoryResponse,
@@ -52,6 +60,7 @@ from app.schemas.ludus import (
     UserCreateRequest,
     UserCreateResponse,
 )
+from app.services import capacity as capacity_service
 from app.services.exceptions import LudusError, LudusNotFound, LudusUserExists
 from app.services.ludus import LudusClient
 
@@ -118,6 +127,35 @@ def list_ranges(
 
     ranges = [LudusRange.model_validate(r) for r in raw]
     return LudusRangeListResponse(ranges=ranges)
+
+
+@router.get("/capacity", response_model=LudusCapacityResponse)
+def get_host_capacity(
+    server: str = "default",
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> LudusCapacityResponse:
+    """Host CPU/RAM capacity vs this app's committed session allocation.
+
+    Powers the dashboard's "how much can I still assign" card. Capacity is
+    the manually-configured host total (env for ``default``, DB row for
+    managed servers); allocation is summed from the app's live sessions
+    (active/provisioning) whose lab template targets this server - external
+    Ludus ranges are intentionally excluded.
+    """
+    view = capacity_service.build_capacity_view(db, settings, server)
+    return LudusCapacityResponse(
+        server=view.server,
+        configured=view.configured,
+        cpu_capacity=view.cpu_capacity,
+        ram_capacity_gb=view.ram_capacity_gb,
+        cpu_allocated=view.cpu_allocated,
+        ram_allocated_gb=view.ram_allocated_gb,
+        cpu_available=view.cpu_available,
+        ram_available_gb=view.ram_available_gb,
+        session_count=view.session_count,
+    )
 
 
 @router.get("/ranges/{range_number}/config", response_model=LudusRangeConfigResponse)

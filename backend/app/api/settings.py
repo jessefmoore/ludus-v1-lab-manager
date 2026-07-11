@@ -76,15 +76,19 @@ def list_ludus_servers(
     """
     from app.core.encryption import decrypt_value
 
-    # Start with env-based servers.
+    # Start with env-based servers. The default host's capacity comes from
+    # env settings (there is no DB row for it).
     result: dict[str, LudusServerInfo] = {}
     for cfg in app_settings.ludus_servers.values():
+        is_default = cfg.name == "default"
         result[cfg.name] = LudusServerInfo(
             name=cfg.name,
             url=cfg.url,
             api_key_masked=_mask_key(cfg.api_key),
             verify_tls=cfg.verify_tls,
             source="env",
+            cpu_capacity=app_settings.ludus_default_cpu_capacity if is_default else None,
+            ram_capacity_gb=app_settings.ludus_default_ram_capacity_gb if is_default else None,
         )
 
     # Layer DB servers on top (DB wins on name collision).
@@ -99,6 +103,8 @@ def list_ludus_servers(
             api_key_masked=_mask_key(api_key) if api_key else "****",
             verify_tls=row.verify_tls,
             source="db",
+            cpu_capacity=row.cpu_capacity,
+            ram_capacity_gb=row.ram_capacity_gb,
         )
 
     return LudusServersResponse(servers=list(result.values()))
@@ -162,6 +168,8 @@ def create_ludus_server(
         url=payload.url,
         api_key_encrypted=encrypt_value(payload.api_key, settings.app_secret_key),
         verify_tls=payload.verify_tls,
+        cpu_capacity=payload.cpu_capacity,
+        ram_capacity_gb=payload.ram_capacity_gb,
     )
     db.add(row)
 
@@ -181,6 +189,8 @@ def create_ludus_server(
         api_key_masked=_mask_key(payload.api_key),
         verify_tls=row.verify_tls,
         source="db",
+        cpu_capacity=row.cpu_capacity,
+        ram_capacity_gb=row.ram_capacity_gb,
     )
 
 
@@ -206,6 +216,13 @@ def update_ludus_server(
         row.api_key_encrypted = encrypt_value(payload.api_key, settings.app_secret_key)
     if payload.verify_tls is not None:
         row.verify_tls = payload.verify_tls
+    # Capacity fields: only touch when explicitly provided (a sent null clears
+    # the value; omitting leaves it unchanged).
+    fields_set = payload.model_fields_set
+    if "cpu_capacity" in fields_set:
+        row.cpu_capacity = payload.cpu_capacity
+    if "ram_capacity_gb" in fields_set:
+        row.ram_capacity_gb = payload.ram_capacity_gb
 
     db.add(Event(
         session_id=None,
@@ -228,6 +245,8 @@ def update_ludus_server(
         api_key_masked=masked,
         verify_tls=row.verify_tls,
         source="db",
+        cpu_capacity=row.cpu_capacity,
+        ram_capacity_gb=row.ram_capacity_gb,
     )
 
 

@@ -17,6 +17,7 @@ import type {
   CSVImportResponse,
   EventRead,
   LudusRangeListResponse,
+  LudusCapacity,
   LudusRangeConfigResponse,
   LudusRangeDetailResponse,
   LudusRangeTagsResponse,
@@ -229,6 +230,9 @@ function serverQs(server?: string, extra?: Record<string, string>): string {
 export const ludus = {
   ranges: (server?: string) =>
     request<LudusRangeListResponse>(`/api/ludus/ranges${serverQs(server)}`),
+
+  capacity: (server?: string) =>
+    request<LudusCapacity>(`/api/ludus/capacity${serverQs(server)}`),
 
   rangeConfig: (rangeNumber: number, server?: string) =>
     request<LudusRangeConfigResponse>(`/api/ludus/ranges/${rangeNumber}/config${serverQs(server)}`),

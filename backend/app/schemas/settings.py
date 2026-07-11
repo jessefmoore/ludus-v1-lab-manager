@@ -40,6 +40,9 @@ class LudusServerInfo(BaseModel):
     api_key_masked: str
     verify_tls: bool
     source: Literal["env", "db"] = "env"
+    # Manually-configured physical host capacity (None = unset).
+    cpu_capacity: int | None = None
+    ram_capacity_gb: int | None = None
 
 
 class LudusServersResponse(BaseModel):
@@ -55,6 +58,8 @@ class LudusServerCreate(BaseModel):
     url: str = Field(min_length=1)
     api_key: str = Field(min_length=1)
     verify_tls: bool = False
+    cpu_capacity: int | None = Field(default=None, ge=1)
+    ram_capacity_gb: int | None = Field(default=None, ge=1)
 
 
 class LudusServerUpdate(BaseModel):
@@ -63,3 +68,5 @@ class LudusServerUpdate(BaseModel):
     url: str | None = None
     api_key: str | None = None
     verify_tls: bool | None = None
+    cpu_capacity: int | None = Field(default=None, ge=1)
+    ram_capacity_gb: int | None = Field(default=None, ge=1)

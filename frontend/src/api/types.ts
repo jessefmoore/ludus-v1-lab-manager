@@ -159,6 +159,19 @@ export interface LudusRangeListResponse {
   ranges: LudusRange[];
 }
 
+// Host CPU/RAM capacity vs deployed-range allocation for a Ludus server.
+export interface LudusCapacity {
+  server: string;
+  configured: boolean;
+  cpu_capacity: number | null;
+  ram_capacity_gb: number | null;
+  cpu_allocated: number;
+  ram_allocated_gb: number;
+  cpu_available: number | null;
+  ram_available_gb: number | null;
+  session_count: number;
+}
+
 export interface LudusRangeConfigResponse {
   range_number: number;
   config_yaml: string;
@@ -249,6 +262,8 @@ export interface LudusServerInfo {
   api_key_masked: string;
   verify_tls: boolean;
   source: "env" | "db";
+  cpu_capacity?: number | null;
+  ram_capacity_gb?: number | null;
 }
 
 export interface LudusServersResponse {
@@ -260,12 +275,16 @@ export interface LudusServerCreate {
   url: string;
   api_key: string;
   verify_tls: boolean;
+  cpu_capacity?: number | null;
+  ram_capacity_gb?: number | null;
 }
 
 export interface LudusServerUpdate {
   url?: string;
   api_key?: string;
   verify_tls?: boolean;
+  cpu_capacity?: number | null;
+  ram_capacity_gb?: number | null;
 }
 
 // Ludus Range Detail / VMs
