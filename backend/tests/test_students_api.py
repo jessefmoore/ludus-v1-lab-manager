@@ -59,10 +59,12 @@ class FakeLudus:
 
     def __init__(self) -> None:
         self.user_rm_calls: list[str] = []
+        self.user_rm_delete_range: list[bool] = []
         self.user_rm_exc: Exception | None = None
 
-    def user_rm(self, userid: str) -> None:
+    def user_rm(self, userid: str, *, delete_range: bool = False) -> None:
         self.user_rm_calls.append(userid)
+        self.user_rm_delete_range.append(delete_range)
         if self.user_rm_exc is not None:
             raise self.user_rm_exc
 
@@ -438,6 +440,8 @@ def test_delete_ready_student_calls_ludus(
     resp = client.delete(f"/api/students/{sid}")
     assert resp.status_code == 204
     assert fake_ludus.user_rm_calls == ["ready-user"]
+    # Atomic removal: Ludus destroys the range VMs as part of deleting the user.
+    assert fake_ludus.user_rm_delete_range == [True]
     assert db_session.get(Student, sid) is None
 
 

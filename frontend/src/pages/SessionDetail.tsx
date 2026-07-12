@@ -279,15 +279,15 @@ export default function SessionDetail() {
   const handleDeleteStudent = (studentId: number) => {
     const student = session.students.find((s) => s.id === studentId);
     setConfirmModal({
-      title: "Remove Student",
-      message: `Remove ${student?.full_name ?? "this student"} (${student?.email ?? ""}) from the session? Their Ludus user and VPN config will be deleted.`,
+      title: "Remove Ludus User",
+      message: `Permanently delete Ludus user "${student?.ludus_userid ?? ""}" and destroy their range VMs, removing ${student?.full_name ?? "this student"} from the session. This frees the Ludus user slot and cannot be undone. Continue?`,
       action: async () => {
         try {
           await students.delete(studentId);
-          toast("success", "Student removed");
+          toast("success", `Ludus user "${student?.ludus_userid ?? ""}" removed and range destroyed`);
           fetchSession();
         } catch (err) {
-          toast("error", err instanceof ApiError ? err.detail : "Failed to remove student");
+          toast("error", err instanceof ApiError ? err.detail : "Failed to remove user");
         }
       },
     });
@@ -451,7 +451,8 @@ export default function SessionDetail() {
                 <RotateCcw className="h-4 w-4" />
               </Button>
             )}
-            {provisioned && isRangeOwner ? (
+            {/* Remove Range: owner/dedicated only - destroy VMs, KEEP the user. */}
+            {provisioned && isRangeOwner && (
               <Button
                 variant="icon"
                 onClick={() => handleRemoveRange(s.id)}
@@ -460,12 +461,15 @@ export default function SessionDetail() {
               >
                 <ServerOff className="h-4 w-4" />
               </Button>
-            ) : provisioned ? (
+            )}
+            {/* Remove User: fully delete the Ludus user + its range (provisioned),
+                or just remove the row for a not-yet-provisioned student. */}
+            {provisioned ? (
               <Button
                 variant="icon"
                 onClick={() => handleDeleteStudent(s.id)}
-                title="Remove user (revoke this user's access to the shared range)"
-                aria-label="Remove user"
+                title="Remove Ludus user (delete the user and destroy their range VMs)"
+                aria-label="Remove Ludus user"
               >
                 <UserMinus className="h-4 w-4" />
               </Button>
@@ -473,7 +477,7 @@ export default function SessionDetail() {
               <Button
                 variant="icon"
                 onClick={() => handleDeleteStudent(s.id)}
-                title="Remove student"
+                title="Remove student from the session"
                 aria-label="Remove student"
               >
                 <Trash2 className="h-4 w-4" />

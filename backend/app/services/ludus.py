@@ -377,11 +377,20 @@ class LudusClient:
     # well over the default request timeout on a busy host.
     USER_DELETE_TIMEOUT = 180.0
 
-    def user_rm(self, userid: str) -> None:
-        """Delete a Ludus user.  Route: DELETE /user/{userID} (admin API on v1)."""
+    def user_rm(self, userid: str, *, delete_range: bool = False) -> None:
+        """Delete a Ludus user.  Route: DELETE /user/{userID} (admin API on v1).
+
+        When *delete_range* is True, ``deleteDefaultRange=true`` is passed so
+        Ludus atomically destroys the user's range VMs (and Proxmox pool) as
+        part of removing the user. This is the safe way to fully remove a user
+        that still owns VMs: a separate ``range rm`` is asynchronous and would
+        race the user's pool delete, orphaning VMs.
+        """
+        params = {"deleteDefaultRange": "true"} if delete_range else None
         self._request(
             "DELETE",
             f"{API_BASE}/user/{userid}",
+            params=params,
             client=self._admin_client,
             timeout=self.USER_DELETE_TIMEOUT,
         )

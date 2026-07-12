@@ -225,7 +225,12 @@ def delete_student(
     ludus_client: LudusClient,
     student_id: int,
 ) -> None:
-    """Remove a student, cleaning up Ludus + on-disk config best-effort.
+    """Fully remove a student: delete their Ludus user + range VMs, then the row.
+
+    Uses Ludus's atomic ``deleteUser?deleteDefaultRange=true`` so the range VMs
+    (and Proxmox pool) are destroyed as part of removing the user - safe even
+    when the user still owns live VMs (a separate ``range rm`` is asynchronous
+    and would race the pool delete, orphaning VMs).
 
     * If the student was never provisioned (``status=pending``) we skip
       the Ludus call entirely.
@@ -243,7 +248,7 @@ def delete_student(
 
     if student.status != StudentStatus.pending:
         try:
-            ludus_client.user_rm(student.ludus_userid)
+            ludus_client.user_rm(student.ludus_userid, delete_range=True)
         except LudusNotFound:
             logger.info(
                 "student.delete: ludus user %s already gone, proceeding",
@@ -263,7 +268,7 @@ def delete_student(
                     student.ludus_userid,
                     exc,
                 )
-                raise LudusRemovalFailed(f"Ludus user_rm failed: {exc}") from exc
+                raise LudusRemovalFailed(f"Ludus user removal failed: {exc}") from exc
 
     if student.wg_config_path:
         try:
