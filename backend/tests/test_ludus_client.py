@@ -101,6 +101,29 @@ def test_user_add_400_already_exists_raises_exists(
         client.user_add("alice", "Alice", "alice@example.com")
 
 
+def test_user_add_400_host_system_pam_conflict_is_hard_error(
+    client: LudusClient, httpx_mock: HTTPXMock
+) -> None:
+    """A leftover OS/PAM user is NOT an existing Ludus user - surface it.
+
+    Regression: this 400 also contains 'already exists', but treating it as
+    LudusUserExists made provisioning skip user creation and fail later with a
+    confusing 'User not found' at range_deploy.
+    """
+    httpx_mock.add_response(
+        method="POST", url=_url("/user"), status_code=400,
+        json={
+            "error": "User with that name already exists on the host system. "
+            "Ludus uses the PAM for user authentication, so you must use a "
+            "unique username for each Ludus user."
+        },
+    )
+    with pytest.raises(LudusError) as exc:
+        client.user_add("alice", "Alice", "alice@example.com")
+    assert not isinstance(exc.value, LudusUserExists)
+    assert "host system" in str(exc.value)
+
+
 def test_user_rm_success(client: LudusClient, httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(method="DELETE", url=_url("/user/alice"), status_code=200, json={})
     client.user_rm("alice")

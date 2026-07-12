@@ -117,19 +117,31 @@ def _raise_for_status(response: httpx.Response, *, on_conflict_user_exists: bool
     for user_add so that 409 becomes `LudusUserExists` (Ludus actually
     uses 400 for "User with that ID already exists", so we treat 400
     containing "already exists" the same way for robustness).
+
+    Exception: a 400 saying the name "already exists on the host system" is a
+    *PAM/OS* username collision (a leftover Linux user), NOT an existing Ludus
+    user. Treating it as "exists" makes the app skip user creation and then
+    fail confusingly at range_deploy with "User not found", so it is surfaced
+    as a real error instead.
     """
     status = response.status_code
     if 200 <= status < 300:
         return
 
     detail = _extract_error_detail(response)
+    detail_lower = detail.lower()
 
     if status in (401, 403):
         raise LudusAuthError(detail, status_code=status)
     if status == 404:
         raise LudusNotFound(detail, status_code=status)
     if on_conflict_user_exists and (
-        status == 409 or (status == 400 and "already exists" in detail.lower())
+        status == 409
+        or (
+            status == 400
+            and "already exists" in detail_lower
+            and "host system" not in detail_lower
+        )
     ):
         raise LudusUserExists(detail, status_code=status)
     if status == 409:
