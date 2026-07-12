@@ -179,8 +179,11 @@ export const sessions = {
       body: JSON.stringify(data),
     }),
 
-  delete: (id: number) =>
-    request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
+  delete: (id: number, destroyRanges = false) =>
+    request<void>(
+      `/api/sessions/${id}${destroyRanges ? "?destroy_ranges=true" : ""}`,
+      { method: "DELETE" },
+    ),
 
   rebuild: (id: number) =>
     request<SessionTeardownResponse>(

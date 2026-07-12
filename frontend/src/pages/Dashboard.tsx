@@ -13,6 +13,7 @@ import {
   Server,
   Cpu,
   MemoryStick,
+  Trash2,
 } from "lucide-react";
 import { sessions, labs, ludus, ApiError } from "@/api";
 import type {
@@ -32,14 +33,44 @@ import StatusPill from "@/components/StatusPill";
 import DataTable, { type Column } from "@/components/DataTable";
 import { TableSkeleton } from "@/components/Skeleton";
 import PageTransition from "@/components/PageTransition";
+import { useToast } from "@/components/Toast";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [sessionList, setSessionList] = useState<SessionRead[]>([]);
   const [labList, setLabList] = useState<LabTemplateRead[]>([]);
   const [capacity, setCapacity] = useState<LudusCapacity | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SessionRead | null>(null);
+  const [destroyRanges, setDestroyRanges] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const openDelete = (s: SessionRead) => {
+    setDestroyRanges(false);
+    setDeleteTarget(s);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await sessions.delete(deleteTarget.id, destroyRanges);
+      toast(
+        "success",
+        destroyRanges
+          ? `Deleted "${deleteTarget.name}" and destroyed its VMs`
+          : `Deleted "${deleteTarget.name}"`,
+      );
+      setDeleteTarget(null);
+      fetchData();
+    } catch (err) {
+      toast("error", err instanceof ApiError ? err.detail : "Failed to delete session");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Host capacity is best-effort: a Ludus outage shouldn't blank the dashboard.
   const fetchCapacity = () =>
@@ -114,6 +145,25 @@ export default function Dashboard() {
         <span className="font-mono text-text-muted">
           {new Date(s.created_at).toLocaleDateString()}
         </span>
+      ),
+    },
+    {
+      key: "actions",
+      label: "",
+      render: (s) => (
+        <div className="flex justify-end">
+          <Button
+            variant="icon"
+            title="Delete session"
+            aria-label="Delete session"
+            onClick={(e) => {
+              e.stopPropagation(); // don't trigger the row's navigate
+              openDelete(s);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -302,6 +352,43 @@ export default function Dashboard() {
         }}
         labTemplates={labList}
       />
+
+      <Modal
+        open={!!deleteTarget}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        title="Delete Session"
+        size="sm"
+      >
+        <p className="text-[15px] text-text-secondary mb-4">
+          Delete <span className="font-medium text-text-primary">{deleteTarget?.name}</span>?
+          This removes the session and any leftover Ludus users for it. By default a
+          session with live (deployed) ranges can't be deleted — unless you choose to
+          destroy its VMs below.
+        </p>
+        <label className="flex items-start gap-2.5 mb-6 cursor-pointer rounded-md border border-border p-3 hover:bg-bg-elevated">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-accent-danger"
+            checked={destroyRanges}
+            onChange={(e) => setDestroyRanges(e.target.checked)}
+          />
+          <span className="text-[13px]">
+            <span className="font-medium text-accent-danger">Also destroy all VMs</span>{" "}
+            <span className="text-text-secondary">
+              in this session's range(s) and remove every Ludus user. Permanently deletes
+              running machines — cannot be undone.
+            </span>
+          </span>
+        </label>
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={confirmDelete} loading={deleting}>
+            {destroyRanges ? "Destroy & Delete" : "Delete"}
+          </Button>
+        </div>
+      </Modal>
     </>
   );
 }
@@ -422,6 +509,7 @@ function CreateSessionModal({
   const [labId, setLabId] = useState<number | "">("");
   const [mode, setMode] = useState<LabMode>("shared");
   const [rangeId, setRangeId] = useState("");
+  const [ownerUserid, setOwnerUserid] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [cpuQuota, setCpuQuota] = useState("");
@@ -464,6 +552,7 @@ function CreateSessionModal({
     setLabId("");
     setMode("shared");
     setRangeId("");
+    setOwnerUserid("");
     setRanges([]);
     setStartDate("");
     setEndDate("");
@@ -475,6 +564,13 @@ function CreateSessionModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (labId === "") return;
+    // Owner userID only applies when auto-creating a new shared range.
+    const autoCreating = !rangeId || rangeId === "__auto__";
+    const owner = mode === "shared" && autoCreating ? ownerUserid.trim() : "";
+    if (owner && !/^[A-Za-z0-9]{1,20}$/.test(owner)) {
+      setError("Owner User ID must be 1-20 letters/numbers only (no spaces or symbols).");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
@@ -483,6 +579,7 @@ function CreateSessionModal({
         lab_template_id: labId,
         mode,
         shared_range_id: mode === "shared" && rangeId && rangeId !== "__auto__" ? rangeId : null,
+        owner_userid: owner || null,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         end_date: endDate ? new Date(endDate).toISOString() : null,
         cpu_quota: cpuQuota ? Number(cpuQuota) : null,
@@ -593,6 +690,21 @@ function CreateSessionModal({
                   );
                 })}
               </select>
+            )}
+            {(!rangeId || rangeId === "__auto__") && (
+              <div className="pt-1">
+                <Input
+                  label="Owner User ID (optional)"
+                  placeholder="blank = auto-generate"
+                  value={ownerUserid}
+                  onChange={(e) => setOwnerUserid(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-text-muted">
+                  When auto-creating the shared range, deploy it under this exact Ludus
+                  user (1-20 letters/numbers) — e.g. to reuse a userID from a torn-down
+                  session. They're enrolled as the range owner; others you add share it.
+                </p>
+              </div>
             )}
           </div>
         )}

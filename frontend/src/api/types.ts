@@ -60,6 +60,8 @@ export interface SessionCreate {
   start_date: string | null;
   end_date: string | null;
   shared_range_id: string | null;
+  // Shared mode: userID that owns a newly auto-created shared range.
+  owner_userid?: string | null;
   // Per-session provisioning budget. null = unlimited.
   cpu_quota?: number | null;
   ram_quota_gb?: number | null;
