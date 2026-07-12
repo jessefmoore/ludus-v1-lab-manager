@@ -227,6 +227,21 @@ def teardown_session(
         if student.status == StudentStatus.pending:
             result.skipped += 1
             continue
+        # Destroy the range VMs FIRST. Ludus's user removal deletes the user's
+        # Proxmox pool, which fails if the pool still holds VMs ("pool is not
+        # empty"). force=True tears the VMs down so the pool is empty for
+        # user_rm. Missing/already-gone ranges are fine.
+        try:
+            client.range_destroy(user_id=student.ludus_userid, force=True)
+        except LudusError as exc:
+            if not _is_missing(exc):
+                student.status = StudentStatus.error
+                _emit(db, session_id, student.id, "student.teardown_failed",
+                      {"student_id": student.id, "userid": student.ludus_userid,
+                       "step": "range_destroy", "reason": repr(exc)})
+                result.failed += 1
+                db.commit()
+                continue
         try:
             client.user_rm(student.ludus_userid)
         except LudusError as exc:
@@ -236,7 +251,7 @@ def teardown_session(
                 student.status = StudentStatus.error
                 _emit(db, session_id, student.id, "student.teardown_failed",
                       {"student_id": student.id, "userid": student.ludus_userid,
-                       "reason": repr(exc)})
+                       "step": "user_rm", "reason": repr(exc)})
                 result.failed += 1
                 db.commit()
                 continue

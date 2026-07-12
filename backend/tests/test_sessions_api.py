@@ -104,10 +104,14 @@ def lab_template(db_session: OrmSession) -> LabTemplate:
 
 
 class _FakeLudus:
-    """Records user_rm so delete-cleanup can be asserted."""
+    """Records range_destroy / user_rm so delete-cleanup can be asserted."""
 
     def __init__(self) -> None:
         self.user_rm_calls: list[str] = []
+        self.range_destroy_calls: list[str] = []
+
+    def range_destroy(self, *, user_id: str | None = None, force: bool = False) -> None:
+        self.range_destroy_calls.append(user_id or "")
 
     def user_rm(self, userid: str) -> None:
         self.user_rm_calls.append(userid)

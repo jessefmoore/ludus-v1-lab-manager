@@ -225,6 +225,18 @@ def delete_session(
             ludus = None
         if ludus is not None:
             for s in to_clean:
+                # Destroy range VMs before removing the user: user_rm deletes
+                # the user's Proxmox pool and fails if it still holds VMs.
+                try:
+                    ludus.range_destroy(user_id=s.ludus_userid, force=True)
+                except LudusNotFound:
+                    pass
+                except LudusError as exc:
+                    if "not found" not in str(exc).lower():
+                        logger.warning(
+                            "session.delete: range_destroy failed for %s: %s",
+                            s.ludus_userid, exc,
+                        )
                 try:
                     ludus.user_rm(s.ludus_userid)
                 except LudusNotFound:

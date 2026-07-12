@@ -196,6 +196,8 @@ def test_teardown_removes_users_and_ends_session(
     result = td.teardown_session(db_session, row.id, settings, registry=FakeRegistry(fake))
 
     assert sorted(fake.user_rm_calls) == ["u1", "u2"]
+    # Ranges must be destroyed too, so user_rm doesn't fail on a non-empty pool.
+    assert sorted(fake.range_destroy_calls) == ["u1", "u2"]
     assert result.cleaned == 2 and result.failed == 0
     assert not cfg.exists()  # config unlinked
     db_session.refresh(row)
