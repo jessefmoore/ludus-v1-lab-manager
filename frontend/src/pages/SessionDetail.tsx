@@ -761,7 +761,7 @@ export default function SessionDetail() {
           <div className="h-1 bg-gradient-to-r from-accent-success via-accent-info/60 to-transparent" />
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 className="text-lg font-semibold text-text-primary">
-              Students ({totalStudents})
+              {totalStudents} {totalStudents === 1 ? "Student" : "Students"}
             </h2>
             <div className="flex items-center gap-2">
               {inviteReadyCount > 0 && (
