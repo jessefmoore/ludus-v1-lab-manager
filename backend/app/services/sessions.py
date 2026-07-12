@@ -168,17 +168,20 @@ def delete_session(
     registry: "LudusClientRegistry | None" = None,
     destroy_ranges: bool = False,
 ) -> None:
-    """Delete a session if its state permits it, cleaning up Ludus users.
+    """Delete a session if its state permits it, cleaning up Ludus ranges.
 
     Rules (enforced here so the router stays thin):
     * A ``provisioning`` session cannot be deleted (wait for it to finish).
     * By default a session with any ``ready`` student (live deployed range)
       cannot be deleted - tear those down first so their VMs aren't orphaned.
-      Pass ``destroy_ranges=True`` to override: every provisioned user is then
-      removed (``user_rm`` also destroys their Proxmox pool / range VMs), so the
-      delete tears the whole session down.
-    * Otherwise it is deleted. Lingering Ludus users for provisioned students
-      are removed best-effort via *registry* so nothing orphans.
+      Pass ``destroy_ranges=True`` to override: every provisioned student's
+      range VMs are destroyed (``range rm --user``) as part of the delete.
+    * Ludus users are KEPT, not removed. ``user_rm`` deletes the user's Proxmox
+      pool and races the asynchronous VM destroy, which fails on a non-empty
+      pool and orphans VMs; destroying the range (VMs) and leaving the reusable
+      user avoids that entirely.
+    * Otherwise it is deleted. Leftover ranges for error/range-removed students
+      are destroyed best-effort via *registry* so no VMs orphan.
 
     Violations raise ``SessionDeleteConflict`` (mapped to 409). A missing id
     raises ``SessionNotFound`` (mapped to 404).
@@ -209,9 +212,9 @@ def delete_session(
             "with the 'destroy VMs' option"
         )
 
-    # Users to remove: with destroy_ranges, every provisioned student (incl.
-    # ready -> user_rm destroys their live range VMs); otherwise just the
-    # lingering error/range-removed users so nothing orphans.
+    # Ranges to destroy: with destroy_ranges, every provisioned student (incl.
+    # ready -> destroy their live range VMs); otherwise just leftover
+    # error/range-removed ranges so no VMs orphan. Users are always kept.
     if destroy_ranges:
         to_clean = [s for s in students if s.status != StudentStatus.pending]
     else:
@@ -225,8 +228,9 @@ def delete_session(
             ludus = None
         if ludus is not None:
             for s in to_clean:
-                # Destroy range VMs before removing the user: user_rm deletes
-                # the user's Proxmox pool and fails if it still holds VMs.
+                # Destroy the range VMs (range rm --user); KEEP the Ludus user.
+                # user_rm would delete the Proxmox pool and race the async VM
+                # destroy, orphaning VMs - so we never call it here.
                 try:
                     ludus.range_destroy(user_id=s.ludus_userid, force=True)
                 except LudusNotFound:
@@ -235,16 +239,6 @@ def delete_session(
                     if "not found" not in str(exc).lower():
                         logger.warning(
                             "session.delete: range_destroy failed for %s: %s",
-                            s.ludus_userid, exc,
-                        )
-                try:
-                    ludus.user_rm(s.ludus_userid)
-                except LudusNotFound:
-                    pass
-                except LudusError as exc:
-                    if "not found" not in str(exc).lower():
-                        logger.warning(
-                            "session.delete: user_rm failed for %s: %s",
                             s.ludus_userid, exc,
                         )
                 if s.wg_config_path:

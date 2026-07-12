@@ -361,9 +361,8 @@ export default function Dashboard() {
       >
         <p className="text-[15px] text-text-secondary mb-4">
           Delete <span className="font-medium text-text-primary">{deleteTarget?.name}</span>?
-          This removes the session and any leftover Ludus users for it. By default a
-          session with live (deployed) ranges can't be deleted — unless you choose to
-          destroy its VMs below.
+          This removes the session from the manager. By default a session with live
+          (deployed) ranges can't be deleted — unless you choose to destroy its VMs below.
         </p>
         <label className="flex items-start gap-2.5 mb-6 cursor-pointer rounded-md border border-border p-3 hover:bg-bg-elevated">
           <input
@@ -375,8 +374,8 @@ export default function Dashboard() {
           <span className="text-[13px]">
             <span className="font-medium text-accent-danger">Also destroy all VMs</span>{" "}
             <span className="text-text-secondary">
-              in this session's range(s) and remove every Ludus user. Permanently deletes
-              running machines — cannot be undone.
+              in this session's range(s). The Ludus users are kept (so their ranges can be
+              reused). Permanently deletes running machines — cannot be undone.
             </span>
           </span>
         </label>

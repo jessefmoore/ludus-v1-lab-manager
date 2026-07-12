@@ -438,7 +438,7 @@ def test_delete_active_session_no_live_ranges_cleans_up_and_succeeds(
     lab_template: LabTemplate,
     fake_registry: _FakeRegistry,
 ) -> None:
-    """An active session whose ranges were removed deletes + removes lingering users."""
+    """An active session whose ranges were removed deletes + destroys leftover ranges."""
     row = _create_session_row(db_session, lab_template, status=SessionStatus.active)
     _create_student_row(
         db_session, row, ludus_userid="gone-user", invite_token="tok-gone",
@@ -446,8 +446,9 @@ def test_delete_active_session_no_live_ranges_cleans_up_and_succeeds(
     )
     resp = client.delete(f"/api/sessions/{row.id}")
     assert resp.status_code == 204
-    # The lingering Ludus user was cleaned up.
-    assert fake_registry.fake.user_rm_calls == ["gone-user"]
+    # The leftover range was destroyed; the Ludus user is KEPT (no user_rm).
+    assert fake_registry.fake.range_destroy_calls == ["gone-user"]
+    assert fake_registry.fake.user_rm_calls == []
     listing = client.get("/api/sessions").json()
     assert all(r["id"] != row.id for r in listing)
 
@@ -458,7 +459,7 @@ def test_delete_with_destroy_ranges_removes_live_ranges(
     lab_template: LabTemplate,
     fake_registry: _FakeRegistry,
 ) -> None:
-    """destroy_ranges=true deletes even a session with a live range, via user_rm."""
+    """destroy_ranges=true deletes even a session with a live range (range rm, keep user)."""
     row = _create_session_row(db_session, lab_template, status=SessionStatus.active)
     _create_student_row(
         db_session, row, ludus_userid="live-user", invite_token="tok-live",
@@ -466,8 +467,9 @@ def test_delete_with_destroy_ranges_removes_live_ranges(
     )
     resp = client.delete(f"/api/sessions/{row.id}?destroy_ranges=true")
     assert resp.status_code == 204
-    # user_rm on the ready student destroys its range VMs + removes the user.
-    assert fake_registry.fake.user_rm_calls == ["live-user"]
+    # The ready student's range VMs are destroyed; the Ludus user is KEPT.
+    assert fake_registry.fake.range_destroy_calls == ["live-user"]
+    assert fake_registry.fake.user_rm_calls == []
 
 
 def test_delete_missing_session_returns_404(client: TestClient) -> None:
