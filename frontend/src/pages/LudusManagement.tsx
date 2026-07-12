@@ -463,7 +463,8 @@ function RangesTab({ server }: { server: string }) {
         searchable
         searchPlaceholder="Search ranges..."
         searchFilter={(r, q) =>
-          r.rangeID.toLowerCase().includes(q) ||
+          // Ludus v1 has a null rangeID; ranges are keyed by the owning userID.
+          (r.rangeID || r.userID || "").toLowerCase().includes(q) ||
           (r.name || "").toLowerCase().includes(q)
         }
         pageSize={10}
@@ -1159,7 +1160,7 @@ function TemplatesTab({ server }: { server: string }) {
         searchable
         searchPlaceholder="Search templates..."
         searchFilter={(t, q) =>
-          t.name.toLowerCase().includes(q) ||
+          (t.name || "").toLowerCase().includes(q) ||
           (t.os || "").toLowerCase().includes(q)
         }
         pageSize={10}
@@ -1389,7 +1390,7 @@ function UsersTab({ server }: { server: string }) {
         searchable
         searchPlaceholder="Search users..."
         searchFilter={(u, q) =>
-          u.userID.toLowerCase().includes(q) ||
+          (u.userID || "").toLowerCase().includes(q) ||
           (u.name || "").toLowerCase().includes(q)
         }
         pageSize={10}
@@ -1927,7 +1928,7 @@ function GroupsTab({ server }: { server: string }) {
           searchable
           searchPlaceholder="Search groups..."
           searchFilter={(g, q) =>
-            g.name.toLowerCase().includes(q) ||
+            (g.name || "").toLowerCase().includes(q) ||
             (g.description || "").toLowerCase().includes(q)
           }
           pageSize={10}
@@ -2032,7 +2033,7 @@ function AddUsersToGroupModal({
   const filtered = search
     ? available.filter(
         (u) =>
-          u.userID.toLowerCase().includes(search.toLowerCase()) ||
+          (u.userID || "").toLowerCase().includes(search.toLowerCase()) ||
           (u.name || "").toLowerCase().includes(search.toLowerCase()),
       )
     : available;
@@ -2225,7 +2226,7 @@ function AnsibleTab({ server }: { server: string }) {
         keyExtractor={(r) => r.name}
         searchable
         searchPlaceholder="Search roles..."
-        searchFilter={(r, q) => r.name.toLowerCase().includes(q)}
+        searchFilter={(r, q) => (r.name || "").toLowerCase().includes(q)}
         pageSize={10}
         emptyState={
           <div className="flex flex-col items-center justify-center py-12">
