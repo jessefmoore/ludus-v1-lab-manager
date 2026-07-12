@@ -1335,6 +1335,19 @@ function AddStudentModal({
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [ludusUserid, setLudusUserid] = useState("");
+  // Track manual edits so typing the username only auto-fills untouched fields.
+  const [emailEdited, setEmailEdited] = useState(false);
+  const [useridEdited, setUseridEdited] = useState(false);
+
+  // Typing the username auto-populates email (<username>@ludus.local) and the
+  // Ludus User ID (the username, alphanumeric-only), unless the user has
+  // manually edited those fields.
+  const onUsernameChange = (value: string) => {
+    setFullName(value);
+    const v = value.trim();
+    if (!emailEdited) setEmail(v ? `${v}@ludus.local` : "");
+    if (!useridEdited) setLudusUserid(v.replace(/[^A-Za-z0-9]/g, "").slice(0, 20));
+  };
 
   // Ludus user mode state
   const [ludusUsers, setLudusUsers] = useState<LudusUser[]>([]);
@@ -1349,6 +1362,8 @@ function AddStudentModal({
     setFullName("");
     setEmail("");
     setLudusUserid("");
+    setEmailEdited(false);
+    setUseridEdited(false);
     setError("");
     setSelectedUsers(new Set());
     setUserSearch("");
@@ -1479,19 +1494,27 @@ function AddStudentModal({
         {/* Manual mode */}
         {mode === "manual" && (
           <form onSubmit={handleManualSubmit} className="space-y-4">
-            <Input
-              label="Full Name"
-              placeholder="e.g. Alex Chen"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-            />
+            <div>
+              <Input
+                label="Username"
+                placeholder="e.g. RTA1"
+                value={fullName}
+                onChange={(e) => onUsernameChange(e.target.value)}
+                required
+              />
+              <p className="mt-1 text-xs text-text-muted">
+                Auto-fills the email and Ludus User ID below as you type.
+              </p>
+            </div>
             <Input
               label="Email"
               type="email"
-              placeholder="e.g. alex@company.com"
+              placeholder="e.g. RTA1@ludus.local"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmailEdited(true);
+                setEmail(e.target.value);
+              }}
               required
             />
             <div>
@@ -1499,11 +1522,14 @@ function AddStudentModal({
                 label="Ludus User ID (optional)"
                 placeholder="blank = auto-generate"
                 value={ludusUserid}
-                onChange={(e) => setLudusUserid(e.target.value)}
+                onChange={(e) => {
+                  setUseridEdited(true);
+                  setLudusUserid(e.target.value);
+                }}
               />
               <p className="mt-1 text-xs text-text-muted">
-                Set to deploy this student's range under an exact Ludus user (1-20
-                letters/numbers). Leave blank to auto-generate one.
+                The range deploys under this exact Ludus user (1-20 letters/numbers).
+                Clear it to auto-generate one instead.
               </p>
             </div>
             <div className="flex justify-end gap-3 pt-2">
