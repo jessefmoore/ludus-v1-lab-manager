@@ -113,13 +113,16 @@ def create_session(db: DBSession, payload: SessionCreate) -> SessionRow:
     )
     db.add(event)
 
-    # In shared mode with a pre-selected range, auto-enrol the range owner
-    # (== shared_range_id) as the first student so they appear on the session
-    # page as the range owner; "Add User" then adds additional users who share
-    # the range. Skipped if that Ludus user is already enrolled anywhere
-    # (ludus_userid is globally unique).
-    if session_row.mode == SessionMode.shared and payload.shared_range_id:
-        owner_uid = payload.shared_range_id
+    # In shared mode, auto-enrol the range owner as the first student so they
+    # appear on the session page as the owner; "Add User" then adds additional
+    # users who share the range. The owner is either an existing range picked
+    # via ``shared_range_id`` (provisioning reuses it) or a chosen new owner via
+    # ``owner_userid`` (provisioning auto-creates the range under them). Skipped
+    # if that Ludus user is already enrolled anywhere (ludus_userid is unique).
+    owner_uid = None
+    if session_row.mode == SessionMode.shared:
+        owner_uid = payload.shared_range_id or payload.owner_userid
+    if owner_uid:
         already_enrolled = db.execute(
             select(Student).where(Student.ludus_userid == owner_uid)
         ).scalar_one_or_none()

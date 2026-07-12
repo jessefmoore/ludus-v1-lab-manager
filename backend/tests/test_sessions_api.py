@@ -285,6 +285,25 @@ def test_create_shared_session_autoenrolls_range_owner(
     assert uids == ["RXOWNER1"]  # the range owner is enrolled
 
 
+def test_create_shared_session_owner_userid_autoenrolls(
+    client: TestClient, lab_template: LabTemplate
+) -> None:
+    """owner_userid (new auto-created range) enrols that user as the owner."""
+    resp = client.post(
+        "/api/sessions",
+        json={
+            "name": "New shared",
+            "lab_template_id": lab_template.id,
+            "mode": "shared",
+            "owner_userid": "CHOSENOWNER",
+        },
+    )
+    assert resp.status_code == 201
+    sid = resp.json()["id"]
+    detail = client.get(f"/api/sessions/{sid}")
+    assert [s["ludus_userid"] for s in detail.json()["students"]] == ["CHOSENOWNER"]
+
+
 def test_create_dedicated_session_does_not_autoenroll(
     client: TestClient, lab_template: LabTemplate
 ) -> None:

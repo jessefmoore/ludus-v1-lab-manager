@@ -509,6 +509,7 @@ function CreateSessionModal({
   const [labId, setLabId] = useState<number | "">("");
   const [mode, setMode] = useState<LabMode>("shared");
   const [rangeId, setRangeId] = useState("");
+  const [ownerUserid, setOwnerUserid] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [cpuQuota, setCpuQuota] = useState("");
@@ -551,6 +552,7 @@ function CreateSessionModal({
     setLabId("");
     setMode("shared");
     setRangeId("");
+    setOwnerUserid("");
     setRanges([]);
     setStartDate("");
     setEndDate("");
@@ -562,6 +564,13 @@ function CreateSessionModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (labId === "") return;
+    // Owner userID only applies when auto-creating a new shared range.
+    const autoCreating = !rangeId || rangeId === "__auto__";
+    const owner = mode === "shared" && autoCreating ? ownerUserid.trim() : "";
+    if (owner && !/^[A-Za-z0-9]{1,20}$/.test(owner)) {
+      setError("Owner User ID must be 1-20 letters/numbers only (no spaces or symbols).");
+      return;
+    }
     setError("");
     setSaving(true);
     try {
@@ -570,6 +579,7 @@ function CreateSessionModal({
         lab_template_id: labId,
         mode,
         shared_range_id: mode === "shared" && rangeId && rangeId !== "__auto__" ? rangeId : null,
+        owner_userid: owner || null,
         start_date: startDate ? new Date(startDate).toISOString() : null,
         end_date: endDate ? new Date(endDate).toISOString() : null,
         cpu_quota: cpuQuota ? Number(cpuQuota) : null,
@@ -680,6 +690,21 @@ function CreateSessionModal({
                   );
                 })}
               </select>
+            )}
+            {(!rangeId || rangeId === "__auto__") && (
+              <div className="pt-1">
+                <Input
+                  label="Owner User ID (optional)"
+                  placeholder="blank = auto-generate"
+                  value={ownerUserid}
+                  onChange={(e) => setOwnerUserid(e.target.value)}
+                />
+                <p className="mt-1 text-xs text-text-muted">
+                  When auto-creating the shared range, deploy it under this exact Ludus
+                  user (1-20 letters/numbers) — e.g. to reuse a userID from a torn-down
+                  session. They're enrolled as the range owner; others you add share it.
+                </p>
+              </div>
             )}
           </div>
         )}

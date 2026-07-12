@@ -29,6 +29,11 @@ class SessionCreate(BaseModel):
     start_date: datetime | None = None
     end_date: datetime | None = None
     shared_range_id: str | None = None
+    # Shared mode only: the Ludus userID that should own the shared range when
+    # auto-creating a new one (as opposed to picking an existing range via
+    # ``shared_range_id``). Enrolled as the first student so provisioning
+    # deploys the shared range under them. None = auto-generate the owner.
+    owner_userid: str | None = Field(default=None, pattern=r"^[A-Za-z0-9]{1,20}$")
     # Provisioning budget for the whole session. None = unlimited. Enforced
     # as a hard block at provision time (see app.services.resources).
     cpu_quota: int | None = Field(default=None, ge=1)
