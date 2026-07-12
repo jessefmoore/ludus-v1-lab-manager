@@ -354,6 +354,11 @@ class LudusClient:
 
     # -- user management -------------------------------------------------
 
+    # Creating a Ludus user provisions a Proxmox user + pool synchronously
+    # ("this can take up to a minute" per the docs), which exceeds the default
+    # request timeout on a busy host.
+    USER_ADD_TIMEOUT = 120.0
+
     def user_add(self, userid: str, name: str, email: str, *, is_admin: bool = False) -> dict:
         """Create a Ludus user.
 
@@ -376,6 +381,7 @@ class LudusClient:
             json=payload,
             on_conflict_user_exists=True,
             client=self._admin_client,
+            timeout=self.USER_ADD_TIMEOUT,
         )
         data = self._json(response, "user_add")
         if not isinstance(data, dict):
