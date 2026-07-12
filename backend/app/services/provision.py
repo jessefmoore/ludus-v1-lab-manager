@@ -374,6 +374,55 @@ def _auto_create_shared_range(
     )
 
 
+# Ludus range states that mean "already has live VMs" vs "a deploy is
+# already in flight". Anything else (NEVER DEPLOYED, DESTROYED, ERROR, or an
+# empty VM list) means the range must be deployed before it is usable.
+_LIVE_RANGE_STATE = "SUCCESS"
+_ACTIVE_RANGE_STATES = frozenset({"DEPLOYING", "BUILDING", "PENDING", "TESTING"})
+
+
+def _range_needs_deploy(ludus: LudusClient, userid: str) -> bool:
+    """Return True if *userid*'s range must be (re)deployed to have live VMs.
+
+    A missing user/range, a never-deployed/destroyed/errored range, or a
+    range with zero VMs all need a deploy. A range that is already
+    ``SUCCESS`` with VMs - or one whose deploy is currently in flight - does
+    not. Network/Ludus hiccups fall back to "needs deploy" so we err toward
+    actually deploying rather than silently skipping.
+    """
+    try:
+        info = ludus.range_get_vms(user_id=userid)
+    except LudusError:
+        return True
+    state = str(info.get("rangeState") or "").upper()
+    if state in _ACTIVE_RANGE_STATES:
+        return False
+    vms = info.get("VMs") or []
+    return not (state == _LIVE_RANGE_STATE and len(vms) > 0)
+
+
+def _range_confirmed_up(ludus: LudusClient, userid: str) -> bool:
+    """Return True once *userid*'s range is fully deployed and powered on.
+
+    The "deploy confirmed" gate: the range must be ``SUCCESS`` with at least
+    one VM and *every* VM reporting ``poweredOn``. A range still deploying,
+    errored, empty, or with any VM off is not yet confirmed. Any Ludus/network
+    error is treated as "not confirmed" so we keep waiting rather than falsely
+    flipping a student to ready.
+    """
+    try:
+        info = ludus.range_get_vms(user_id=userid)
+    except LudusError:
+        return False
+    state = str(info.get("rangeState") or "").upper()
+    if state != _LIVE_RANGE_STATE:
+        return False
+    vms = info.get("VMs") or []
+    if not vms:
+        return False
+    return all(bool(vm.get("poweredOn")) for vm in vms)
+
+
 def _provision_one(
     db: DBSession,
     ludus: LudusClient,
@@ -383,6 +432,7 @@ def _provision_one(
     storage_dir: Path,
     *,
     lead_userid: str | None = None,
+    lead_range_deployed: bool = True,
 ) -> bool:
     """Drive the Ludus lifecycle for a single student.
 
@@ -393,6 +443,12 @@ def _provision_one(
     When *lead_userid* is set and matches the student's ``ludus_userid``,
     the ``user_add`` and range-access steps are skipped because this student
     already owns the shared range.
+
+    *lead_range_deployed* says whether the lead's shared range is already
+    live. It is ``True`` for a just-auto-created range (deploy already fired)
+    and ``False`` when a *pre-existing* owner range was picked - which may be
+    empty/never-deployed, so the lead still needs a real ``range_deploy``
+    before students can use it.
     """
     # Short-circuit: if we already have a config on disk for a ready
     # student, don't re-call Ludus. This keeps the endpoint idempotent
@@ -408,7 +464,8 @@ def _provision_one(
     is_lead = lead_userid is not None and userid == lead_userid
 
     # 1. user_add (idempotent on LudusUserExists).
-    # Skipped for the lead user who was already created during auto-create.
+    # Skipped for the lead user, who already exists (auto-created, or the
+    # owner of a pre-existing range that was picked).
     if not is_lead:
         try:
             ludus.user_add(
@@ -426,6 +483,28 @@ def _provision_one(
     # Lead user already owns the shared range; skip the access grant.
     if is_lead and session_row.mode == SessionMode.shared:
         assigned_range_id: str | None = session_row.shared_range_id
+        # A pre-existing owner range was picked. Reuse it only if it is
+        # actually deployed; otherwise deploy the lab config into it now so
+        # we never mark students ready against an empty/never-deployed range.
+        if not lead_range_deployed and _range_needs_deploy(ludus, userid):
+            try:
+                ludus.range_deploy(
+                    userid=userid,
+                    config_yaml=lab_template.range_config_yaml,
+                )
+            except LudusError as exc:
+                _mark_error(db, student, step="range_deploy", reason=repr(exc))
+                return False
+            _emit_event(
+                db,
+                session_id=session_row.id,
+                student_id=student.id,
+                action="session.shared_range_deployed",
+                details={
+                    "session_id": session_row.id,
+                    "range_owner": userid,
+                },
+            )
     elif session_row.mode == SessionMode.shared:
         if not session_row.shared_range_id:
             _mark_error(
@@ -479,16 +558,32 @@ def _provision_one(
         _mark_error(db, student, step="write_config", reason=repr(exc))
         return False
 
-    # 5. Persist on the student + emit success event.
+    # 5. Persist config on the student. The status depends on whether the
+    #    range the student depends on is actually up yet: a shared student
+    #    depends on the owner's range, a dedicated student on its own. The
+    #    student is only "ready" once that range is confirmed up (SUCCESS with
+    #    every VM powered on); otherwise it is "deploying" and a later
+    #    deploy-status poll flips it to ready (or error).
     student.wg_config_path = str(cfg_path)
-    student.status = StudentStatus.ready
     student.range_id = assigned_range_id
+
+    range_owner = (
+        session_row.shared_range_id
+        if session_row.mode == SessionMode.shared
+        else userid
+    )
+    if range_owner and _range_confirmed_up(ludus, range_owner):
+        student.status = StudentStatus.ready
+        action = "student.provisioned"
+    else:
+        student.status = StudentStatus.deploying
+        action = "student.deploying"
 
     _emit_event(
         db,
         session_id=session_row.id,
         student_id=student.id,
-        action="student.provisioned",
+        action=action,
         details={
             "student_id": student.id,
             "session_id": session_row.id,
@@ -496,11 +591,13 @@ def _provision_one(
             "mode": session_row.mode.value,
             "range_id": assigned_range_id,
             "config_path": str(cfg_path),
+            "status": student.status.value,
         },
     )
     db.commit()
     logger.info(
-        "student.provisioned id=%s userid=%s mode=%s",
+        "%s id=%s userid=%s mode=%s",
+        action,
         student.id,
         userid,
         session_row.mode.value,
@@ -572,6 +669,11 @@ def provision_session(
     # On Ludus v1 the shared range is simply the lead user's range, keyed by
     # that user's ID; there is no rangeID/rangeNumber to resolve.
     lead_userid: str | None = None
+    # Whether the lead's shared range is already live. Auto-create fires a
+    # deploy, so it is True there; a pre-existing owner range that was picked
+    # is not guaranteed to be deployed, so it is False and gets a liveness
+    # check + deploy in _provision_one.
+    lead_range_deployed = True
 
     # Auto-create a shared range when shared_range_id is None.
     # Pick the first pending student, create them on Ludus, deploy the lab
@@ -614,10 +716,12 @@ def provision_session(
                 db.refresh(session_row)
     elif session_row.mode == SessionMode.shared and session_row.shared_range_id:
         # A specific existing range was picked: its owner (== shared_range_id)
-        # is the lead who already owns the deployed range. Marking them lead
-        # skips user_add/deploy/access-grant for that student and just fetches
-        # their WireGuard config; everyone else gets cross-range access.
+        # is the lead. Mark them lead so everyone else gets cross-range access
+        # to the owner's range. The owner range may be empty/never-deployed
+        # (e.g. reusing a fresh user), so flag it as not-yet-deployed - the
+        # lead's _provision_one will deploy it if it isn't actually live.
         lead_userid = session_row.shared_range_id
+        lead_range_deployed = False
 
     # Signal that a provisioning pass is in flight before we start
     # calling Ludus, so concurrent callers see the state transition.
@@ -644,17 +748,25 @@ def provision_session(
             student,
             storage_dir,
             lead_userid=lead_userid,
+            lead_range_deployed=lead_range_deployed,
         )
         if ok:
             result.provisioned += 1
         else:
             result.failed += 1
 
-    # Decide the final session status. If any student is ready (either
-    # from this pass or a previous skipped/ready row), promote to active.
+    # Decide the final session status. While any range is still deploying the
+    # session stays ``provisioning``; once nothing is deploying it promotes to
+    # ``active`` if at least one student is ready, else reverts to its prior
+    # status. A deploy-status poll re-runs this transition as ranges settle.
     db.refresh(session_row)
-    any_ready = any(s.status == StudentStatus.ready for s in session_row.students)
-    session_row.status = SessionStatus.active if any_ready else prior_status
+    statuses = [s.status for s in session_row.students]
+    if any(s == StudentStatus.deploying for s in statuses):
+        session_row.status = SessionStatus.provisioning
+    elif any(s == StudentStatus.ready for s in statuses):
+        session_row.status = SessionStatus.active
+    else:
+        session_row.status = prior_status
     db.commit()
 
     # Return students in a stable order so the response is deterministic.

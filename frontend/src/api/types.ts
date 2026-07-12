@@ -1,7 +1,7 @@
 // Enums matching backend Pydantic schemas
 export type LabMode = "shared" | "dedicated";
 export type SessionStatus = "draft" | "provisioning" | "active" | "ended";
-export type StudentStatus = "pending" | "ready" | "error" | "range_removed";
+export type StudentStatus = "pending" | "deploying" | "ready" | "error" | "range_removed";
 
 // Auth
 export interface UserRead {
@@ -113,6 +113,15 @@ export interface SessionTeardownResponse {
   cleaned: number;
   failed: number;
   skipped: number;
+  students: StudentRead[];
+}
+
+// Response for the deploy-status poll (advances deploying -> ready/error).
+export interface DeployStatusResponse {
+  ready: number;
+  deploying: number;
+  failed: number;
+  done: boolean;
   students: StudentRead[];
 }
 

@@ -87,6 +87,12 @@ class FakeLudus:
         self.ansible_role_scope_calls: list[dict[str, Any]] = []
         self.ansible_role_scope_error: Exception | None = None
 
+        self.range_get_vms_calls: list[str] = []
+        # userid -> dict returned (or Exception raised) by range_get_vms.
+        # Default (no override) is a live, deployed range so a picked owner
+        # range is treated as reusable unless a test says otherwise.
+        self.range_get_vms_overrides: dict[str, dict | Exception] = {}
+
     def user_add(self, userid: str, name: str, email: str) -> dict[str, Any]:
         self.user_add_calls.append({"userid": userid, "name": name, "email": email})
         exc = self.user_add_overrides.get(userid)
@@ -132,6 +138,21 @@ class FakeLudus:
         exc = self.range_deploy_overrides.get(userid)
         if exc is not None:
             raise exc
+
+    def range_get_vms(self, *, user_id: str) -> dict:
+        self.range_get_vms_calls.append(user_id)
+        override = self.range_get_vms_overrides.get(user_id)
+        if isinstance(override, Exception):
+            raise override
+        if isinstance(override, dict):
+            return override
+        # Default: a live, deployed range with one powered-on VM, so the
+        # "confirmed up" gate passes and students land in ``ready``.
+        return {
+            "userID": user_id,
+            "rangeState": "SUCCESS",
+            "VMs": [{"name": "KALI", "poweredOn": True}],
+        }
 
     def user_wireguard(self, userid: str) -> str:
         self.user_wireguard_calls.append(userid)
@@ -468,6 +489,75 @@ def test_provision_shared_owner_is_lead(
     db_session.expire_all()
     rows = db_session.execute(select(Student).order_by(Student.id)).scalars().all()
     assert all(r.status == StudentStatus.ready and r.range_id == "ownerx" for r in rows)
+
+
+def test_provision_shared_owner_empty_range_gets_deployed(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    settings: Settings,
+    fake_ludus: FakeLudus,
+) -> None:
+    """A picked owner whose range is empty/never-deployed gets deployed.
+
+    Regression: the owner-as-lead path used to skip range_deploy entirely and
+    mark students ready against a range with zero VMs. Now the lead's range is
+    liveness-checked and deployed when it isn't actually up.
+    """
+    session_row = _make_session(
+        db_session, lab_template, mode=SessionMode.shared, shared_range_id="emptyowner",
+    )
+    _make_student(
+        db_session, session_row, ludus_userid="emptyowner", invite_token="o" * 32,
+        full_name="Owner", email="owner@example.com",
+    )
+    _make_student(
+        db_session, session_row, ludus_userid="sharerb", invite_token="s" * 32,
+        full_name="Sharer", email="sharer@example.com",
+    )
+    # The owner's range has never been deployed -> must be deployed now.
+    fake_ludus.range_get_vms_overrides["emptyowner"] = {
+        "userID": "emptyowner", "rangeState": "NEVER DEPLOYED", "VMs": [],
+    }
+
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    assert resp.json()["provisioned"] == 2
+
+    # The owner's (empty) range was deployed with the lab config.
+    assert [c["userid"] for c in fake_ludus.range_deploy_calls] == ["emptyowner"]
+    # The sharer still just gets cross-range access, no deploy.
+    assert [c["userid"] for c in fake_ludus.range_assign_calls] == ["sharerb"]
+    db_session.expire_all()
+    rows = db_session.execute(select(Student).order_by(Student.id)).scalars().all()
+    # The range was only just kicked off (still NEVER DEPLOYED / no live VMs),
+    # so both students are "deploying", not "ready" - a deploy-status poll
+    # promotes them once the range confirms up.
+    assert all(
+        r.status == StudentStatus.deploying and r.range_id == "emptyowner"
+        for r in rows
+    )
+
+
+def test_provision_shared_owner_live_range_is_reused_not_redeployed(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    settings: Settings,
+    fake_ludus: FakeLudus,
+) -> None:
+    """A picked owner whose range is already SUCCESS with VMs is reused as-is."""
+    session_row = _make_session(
+        db_session, lab_template, mode=SessionMode.shared, shared_range_id="liveowner",
+    )
+    _make_student(
+        db_session, session_row, ludus_userid="liveowner", invite_token="o" * 32,
+        full_name="Owner", email="owner@example.com",
+    )
+    # Default range_get_vms returns a live SUCCESS range, so no deploy.
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    assert fake_ludus.range_deploy_calls == []
 
 
 def test_provision_shared_session_wireguard_timeout_marks_error(

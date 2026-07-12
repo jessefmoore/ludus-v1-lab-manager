@@ -20,6 +20,9 @@ class StudentStatus(enum.StrEnum):
     """Provisioning state of a student's lab access."""
 
     pending = "pending"
+    # Range deploy has been fired on Ludus but is not yet confirmed up. The
+    # student is not usable until its range reaches SUCCESS with all VMs on.
+    deploying = "deploying"
     ready = "ready"
     error = "error"
     # Range was explicitly torn down (VMs destroyed) but the user is kept.

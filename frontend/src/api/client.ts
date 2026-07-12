@@ -11,6 +11,7 @@ import type {
   SessionProvisionResponse,
   SessionTeardownResponse,
   BaselineSnapshotResponse,
+  DeployStatusResponse,
   SessionQuotaRead,
   StudentCreate,
   StudentRead,
@@ -164,6 +165,12 @@ export const sessions = {
   baselineSnapshots: (id: number, name?: string) =>
     request<BaselineSnapshotResponse>(
       `/api/sessions/${id}/baseline-snapshots${name ? `?name=${encodeURIComponent(name)}` : ""}`,
+      { method: "POST" },
+    ),
+
+  deployStatus: (id: number) =>
+    request<DeployStatusResponse>(
+      `/api/sessions/${id}/deploy-status`,
       { method: "POST" },
     ),
 

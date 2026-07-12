@@ -155,6 +155,33 @@ export default function SessionDetail() {
     return () => clearInterval(interval);
   }, [id, session?.status, provisioning]);
 
+  // Advance "deploying" students: poll the reconciler, which checks each range
+  // on Ludus and flips students to ready (SUCCESS + all VMs on) or error. Runs
+  // only while something is deploying and stops once the batch settles.
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const anyDeploying = () =>
+      sessionRef.current?.students.some((s) => s.status === "deploying") ?? false;
+    const tick = async () => {
+      if (stopped || !sessionRef.current || !anyDeploying()) return;
+      try {
+        const r = await sessions.deployStatus(sessionRef.current.id);
+        if (stopped) return;
+        fetchSession(); // refresh session status + student pills from server
+        if (r.done) return; // nothing deploying - stop polling
+      } catch {
+        /* transient - retry */
+      }
+      if (!stopped) timer = setTimeout(tick, 15000);
+    };
+    if (anyDeploying()) tick();
+    return () => {
+      stopped = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [id, session?.status, fetchSession]);
+
   // Fetch activity events when panel is opened
   useEffect(() => {
     if (!activityOpen || !session) return;
@@ -181,7 +208,10 @@ export default function SessionDetail() {
     setProvisioning(true);
     try {
       const result = await sessions.provision(session.id);
-      toast("success", `Provisioned ${result.provisioned} student(s)${result.failed ? `, ${result.failed} failed` : ""}`);
+      toast(
+        "success",
+        `Provisioning ${result.provisioned} student range(s)${result.failed ? `, ${result.failed} failed` : ""}. VMs are deploying - status updates automatically.`,
+      );
       fetchSession();
     } catch (err) {
       toast("error", err instanceof ApiError ? err.detail : "Provisioning failed");
@@ -211,13 +241,13 @@ export default function SessionDetail() {
   const handleRebuild = () => {
     setConfirmModal({
       title: "Rebuild Session",
-      message: `Destroy the VMs for "${session.name}" but keep the ${totalStudents} student user(s) and their VPN configs. Students return to "pending" so you can Provision All to deploy fresh VMs. Continue?`,
+      message: `Destroy the VMs for "${session.name}" and immediately redeploy fresh ones, keeping the ${totalStudents} student user(s) and their VPN configs. This may take several minutes as ranges deploy. Continue?`,
       action: async () => {
         try {
           const r = await sessions.rebuild(session.id);
           toast(
             "success",
-            `Rebuilt: ${r.cleaned} range(s) destroyed${r.failed ? `, ${r.failed} failed` : ""}. Provision All to deploy fresh VMs.`,
+            `Rebuilding: ${r.cleaned} range(s) destroyed and redeploying${r.failed ? `, ${r.failed} failed` : ""}. Ranges deploy in the background.`,
           );
           fetchSession();
         } catch (err) {
@@ -558,7 +588,7 @@ export default function SessionDetail() {
             {(session.status === "active" || session.status === "provisioning") && (
               <>
                 {readyCount > 0 && (
-                  <Button variant="secondary" onClick={handleRebuild} title="Destroy VMs but keep users, then re-provision for fresh VMs">
+                  <Button variant="secondary" onClick={handleRebuild} title="Destroy VMs and redeploy fresh ones (keeps users and VPN configs)">
                     Rebuild
                   </Button>
                 )}

@@ -41,6 +41,12 @@ const config: Record<
     bg: "bg-bg-elevated",
     text: "text-text-secondary",
   },
+  deploying: {
+    label: "Deploying",
+    bg: "bg-accent-warning/15",
+    text: "text-accent-warning",
+    icon: "spin",
+  },
   error: {
     label: "Error",
     bg: "bg-accent-danger/15",

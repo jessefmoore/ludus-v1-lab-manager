@@ -57,6 +57,15 @@ class FakeLudus:
     def range_deploy(self, userid: str, config_yaml: str) -> None:
         self.range_deploy_calls.append({"userid": userid, "config_yaml": config_yaml})
 
+    def range_get_vms(self, *, user_id: str) -> dict:
+        # The picked shared range ("DEMO") is already live and powered on, so
+        # the owner-as-lead path reuses it and students land in ``ready``.
+        return {
+            "userID": user_id,
+            "rangeState": "SUCCESS",
+            "VMs": [{"name": "DEMO-DC", "poweredOn": True}],
+        }
+
     def user_wireguard(self, userid: str) -> str:
         self.user_wireguard_calls.append(userid)
         return _WG_TEMPLATE.format(userid=userid)

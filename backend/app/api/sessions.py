@@ -32,6 +32,7 @@ from app.schemas.session import (
     SessionRead,
 )
 from app.schemas.student import StudentRead
+from app.services import deploy_status as deploy_status_service
 from app.services import provision as provision_service
 from app.services import sessions as sessions_service
 from app.services import snapshots as snapshots_service
@@ -347,14 +348,52 @@ def rebuild_session(
     settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
 ) -> SessionTeardownResponse:
-    """Destroy the session's range VMs but keep its Ludus users/invites.
+    """Rebuild the session: destroy the range VMs, then redeploy fresh ones.
 
-    Provisioned students flip back to ``pending`` so a subsequent
-    ``/provision`` redeploys fresh VMs for the same people. Nothing on the
-    invite/VPN side changes.
+    Two phases in one call. First the range(s) are destroyed while keeping
+    each student's Ludus user, invite and WireGuard config, and students flip
+    back to ``pending``. Then provisioning re-runs immediately, so fresh VMs
+    come back automatically without a second "Provision All" click. Per-student
+    failures in either phase are surfaced in the response counts.
     """
-    return _run_teardown_op(
-        teardown_service.rebuild_session, session_id, db, registry, settings
+    # Phase 1: tear the range(s) down and reset students to pending.
+    try:
+        rebuild_result = teardown_service.rebuild_session(
+            db=db, registry=registry, session_id=session_id, settings=settings
+        )
+    except teardown_service.SessionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    # Phase 2: redeploy fresh VMs for the same people.
+    try:
+        provision_result = provision_service.provision_session(
+            db=db, registry=registry, session_id=session_id, settings=settings
+        )
+    except provision_service.QuotaExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
+    except provision_service.SessionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    # Report the destroy counts alongside the post-redeploy student states.
+    return SessionTeardownResponse(
+        cleaned=rebuild_result.cleaned,
+        failed=rebuild_result.failed + provision_result.failed,
+        skipped=rebuild_result.skipped,
+        students=[_student_to_read(s, settings) for s in provision_result.students],
     )
 
 
@@ -405,6 +444,56 @@ def baseline_snapshots(
         failed=result.failed,
         done=result.done,
         snapshot_name=name,
+    )
+
+
+class DeployStatusResponse(BaseModel):
+    """Response body for ``POST /{id}/deploy-status``."""
+
+    ready: int
+    deploying: int
+    failed: int
+    done: bool
+    students: list[StudentRead]
+
+
+@router.post("/{session_id}/deploy-status", response_model=DeployStatusResponse)
+def deploy_status(
+    session_id: int,
+    db: DBSession = Depends(get_db),  # noqa: B008 -- FastAPI idiom
+    registry: LudusClientRegistry = Depends(get_ludus_client_registry),  # noqa: B008
+    settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
+    _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
+) -> DeployStatusResponse:
+    """Advance ``deploying`` students as their Ludus ranges settle.
+
+    Polled by the UI after provisioning. A student flips to ``ready`` once its
+    range is confirmed up (``SUCCESS`` with every VM powered on), to ``error``
+    if the deploy failed, and otherwise stays ``deploying``. Idempotent;
+    ``done`` is True once nothing is still deploying so the caller can stop.
+    """
+    try:
+        result = deploy_status_service.reconcile_deploy_status(
+            db=db, registry=registry, session_id=session_id
+        )
+    except deploy_status_service.SessionNotFound as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    except LudusError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Ludus error: {exc}"
+        ) from exc
+    return DeployStatusResponse(
+        ready=result.ready,
+        deploying=result.deploying,
+        failed=result.failed,
+        done=result.done,
+        students=[_student_to_read(s, settings) for s in result.students],
     )
 
 
