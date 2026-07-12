@@ -87,7 +87,20 @@ async function request<T>(
     let detail = `HTTP ${res.status}`;
     try {
       const body = await res.json();
-      detail = body.detail || detail;
+      // FastAPI/Pydantic 422 returns `detail` as an ARRAY of error objects;
+      // other errors return a string. Always coerce to a readable string so
+      // callers can render it (an array/object as a React child crashes).
+      const d = body.detail;
+      if (typeof d === "string") {
+        detail = d;
+      } else if (Array.isArray(d)) {
+        detail =
+          d
+            .map((e) => (e?.msg ? `${e.msg}` : JSON.stringify(e)))
+            .join("; ") || detail;
+      } else if (d) {
+        detail = JSON.stringify(d);
+      }
     } catch {
       // no JSON body
     }

@@ -17,7 +17,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.common import StudentStatus
 
@@ -31,10 +31,28 @@ class StudentCreate(BaseModel):
     """
 
     full_name: str | None = None
-    email: EmailStr | None = None
+    # A lightly-validated string, NOT EmailStr: these are lab identifiers and
+    # the app deliberately uses reserved ``.local`` domains (e.g.
+    # ``RTA1@ludus.local``) that EmailStr rejects as "special-use". We only
+    # require a basic ``local@domain`` shape.
+    email: str | None = Field(default=None, max_length=254)
     # Ludus enforces ^[A-Za-z0-9]{1,20}$ for userIDs (no hyphens/punctuation).
     # Validate it here so a bad ID fails at enrollment, not deep in provisioning.
     ludus_userid: str | None = Field(default=None, pattern=r"^[A-Za-z0-9]{1,20}$")
+
+    @field_validator("email")
+    @classmethod
+    def _basic_email_shape(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        # Minimal sanity: exactly one '@' with non-empty local and domain parts.
+        local, sep, domain = v.partition("@")
+        if not sep or not local or not domain:
+            raise ValueError("email must be of the form name@domain")
+        return v
 
     @model_validator(mode="after")
     def check_either_manual_or_ludus(self) -> Self:

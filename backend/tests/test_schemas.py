@@ -150,6 +150,14 @@ def test_student_create_rejects_invalid_email() -> None:
         StudentCreate(full_name="Alice", email="not-an-email")
 
 
+def test_student_create_accepts_reserved_local_domain() -> None:
+    """Lab identifiers use reserved .local domains (rejected by EmailStr)."""
+    payload = StudentCreate(
+        full_name="RTA1", email="RTA1@ludus.local", ludus_userid="RTA1"
+    )
+    assert payload.email == "RTA1@ludus.local"
+
+
 def test_student_create_explicit_userid_ok() -> None:
     """An explicit, Ludus-valid userID is accepted (name/email optional)."""
     payload = StudentCreate(ludus_userid="RTA3")
