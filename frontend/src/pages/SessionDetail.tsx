@@ -241,13 +241,13 @@ export default function SessionDetail() {
   const handleRebuild = () => {
     setConfirmModal({
       title: "Rebuild Session",
-      message: `Destroy the VMs for "${session.name}" and immediately redeploy fresh ones, keeping the ${totalStudents} student user(s) and their VPN configs. This may take several minutes as ranges deploy. Continue?`,
+      message: `Destroy the VMs for "${session.name}", keeping the ${totalStudents} student user(s) and their VPN configs. Students return to "pending". Once the VMs are gone (a minute or two), click "Provision All" to redeploy fresh. Continue?`,
       action: async () => {
         try {
           const r = await sessions.rebuild(session.id);
           toast(
             "success",
-            `Rebuilding: ${r.cleaned} range(s) destroyed and redeploying${r.failed ? `, ${r.failed} failed` : ""}. Ranges deploy in the background.`,
+            `${r.cleaned} range(s) being destroyed${r.failed ? `, ${r.failed} failed` : ""}. When the VMs are gone, click Provision All to redeploy.`,
           );
           fetchSession();
         } catch (err) {
@@ -260,13 +260,13 @@ export default function SessionDetail() {
   const handleTeardown = () => {
     setConfirmModal({
       title: "Tear Down Session",
-      message: `Permanently destroy all VMs, remove the ${totalStudents} Ludus user(s) and their VPN configs, and mark "${session.name}" ended. This cannot be undone. Continue?`,
+      message: `Destroy all range VMs for "${session.name}" and mark it ended. The ${totalStudents} Ludus user(s) and their VPN configs are KEPT so their ranges can be redeployed later. Continue?`,
       action: async () => {
         try {
           const r = await sessions.teardown(session.id);
           toast(
             "success",
-            `Torn down: ${r.cleaned} removed${r.failed ? `, ${r.failed} failed` : ""}. Session ended.`,
+            `Torn down: ${r.cleaned} range(s) destroyed${r.failed ? `, ${r.failed} failed` : ""}. Users kept, session ended.`,
           );
           fetchSession();
         } catch (err) {
@@ -588,7 +588,7 @@ export default function SessionDetail() {
             {(session.status === "active" || session.status === "provisioning") && (
               <>
                 {readyCount > 0 && (
-                  <Button variant="secondary" onClick={handleRebuild} title="Destroy VMs and redeploy fresh ones (keeps users and VPN configs)">
+                  <Button variant="secondary" onClick={handleRebuild} title="Destroy VMs (keeps users and VPN configs); then Provision All to redeploy fresh">
                     Rebuild
                   </Button>
                 )}

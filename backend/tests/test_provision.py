@@ -491,6 +491,40 @@ def test_provision_shared_owner_is_lead(
     assert all(r.status == StudentStatus.ready and r.range_id == "ownerx" for r in rows)
 
 
+def test_provision_defers_student_when_range_destroy_in_flight(
+    client: TestClient,
+    db_session: OrmSession,
+    lab_template: LabTemplate,
+    settings: Settings,
+    fake_ludus: FakeLudus,
+) -> None:
+    """A range still being torn down (async destroy) defers, never redeploys.
+
+    Guards the two-step Rebuild flow: provisioning must not fire a deploy onto
+    a range whose Ludus ``range rm`` is still running.
+    """
+    session_row = _make_session(db_session, lab_template, mode=SessionMode.dedicated)
+    _make_student(
+        db_session, session_row, ludus_userid="busyuser", invite_token="b" * 32,
+        full_name="Busy", email="busy@example.com",
+    )
+    fake_ludus.range_get_vms_overrides["busyuser"] = {
+        "userID": "busyuser", "rangeState": "DESTROYING",
+        "VMs": [{"name": "old-vm", "poweredOn": True}],
+    }
+
+    resp = client.post(f"/api/sessions/{session_row.id}/provision")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["provisioned"] == 0 and body["skipped"] == 1
+
+    # No deploy was fired onto the range still being destroyed.
+    assert fake_ludus.range_deploy_calls == []
+    db_session.expire_all()
+    row = db_session.execute(select(Student)).scalars().one()
+    assert row.status == StudentStatus.pending  # left to retry
+
+
 def test_provision_shared_owner_empty_range_gets_deployed(
     client: TestClient,
     db_session: OrmSession,

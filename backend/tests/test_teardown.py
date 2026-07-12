@@ -182,7 +182,7 @@ def test_rebuild_ended_session_raises(db_session: OrmSession, settings: Settings
 # --- teardown ----------------------------------------------------------------
 
 
-def test_teardown_removes_users_and_ends_session(
+def test_teardown_destroys_ranges_keeps_users_and_ends_session(
     db_session: OrmSession, settings: Settings, tmp_path: Path
 ) -> None:
     lab = _lab(db_session)
@@ -195,17 +195,19 @@ def test_teardown_removes_users_and_ends_session(
 
     result = td.teardown_session(db_session, row.id, settings, registry=FakeRegistry(fake))
 
-    assert sorted(fake.user_rm_calls) == ["u1", "u2"]
-    # Ranges must be destroyed too, so user_rm doesn't fail on a non-empty pool.
+    # Ranges destroyed (range rm --user); users KEPT (no user_rm).
     assert sorted(fake.range_destroy_calls) == ["u1", "u2"]
+    assert fake.user_rm_calls == []
     assert result.cleaned == 2 and result.failed == 0
-    assert not cfg.exists()  # config unlinked
+    assert cfg.exists()  # config file kept on disk - the user persists
     db_session.refresh(row)
     assert row.status == SessionStatus.ended
-    assert row.shared_range_id is None
+    students = {s.ludus_userid: s for s in row.students}
     for s in row.students:
-        assert s.status == StudentStatus.pending
-        assert s.range_id is None and s.wg_config_path is None
+        assert s.status == StudentStatus.range_removed
+        assert s.range_id is None
+    # u1's config path is retained (not cleared) since the user is kept.
+    assert students["u1"].wg_config_path == str(cfg)
 
 
 def test_teardown_treats_missing_user_as_cleaned(
@@ -237,7 +239,7 @@ def test_teardown_marks_failed_student_error_but_still_ends(
     assert row.status == SessionStatus.ended  # ended despite one failure
     statuses = {s.ludus_userid: s.status for s in row.students}
     assert statuses["u1"] == StudentStatus.error
-    assert statuses["u2"] == StudentStatus.pending
+    assert statuses["u2"] == StudentStatus.range_removed
 
 
 def test_teardown_unknown_server_raises_value_error(

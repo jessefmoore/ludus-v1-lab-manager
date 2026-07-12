@@ -348,52 +348,18 @@ def rebuild_session(
     settings: Settings = Depends(get_settings),  # noqa: B008 -- FastAPI idiom
     _: User = Depends(get_current_user),  # noqa: B008 -- FastAPI idiom
 ) -> SessionTeardownResponse:
-    """Rebuild the session: destroy the range VMs, then redeploy fresh ones.
+    """Rebuild: destroy the session's range VMs and reset students to pending.
 
-    Two phases in one call. First the range(s) are destroyed while keeping
-    each student's Ludus user, invite and WireGuard config, and students flip
-    back to ``pending``. Then provisioning re-runs immediately, so fresh VMs
-    come back automatically without a second "Provision All" click. Per-student
-    failures in either phase are surfaced in the response counts.
+    Destroys the range(s) while keeping each student's Ludus user, invite and
+    WireGuard config, and flips provisioned students back to ``pending``. It
+    does NOT redeploy in the same call: Ludus's ``range rm`` is asynchronous,
+    so firing a deploy immediately would race the still-running destroy and
+    corrupt the range. Once the VMs are gone (a minute or two), click
+    "Provision All" to redeploy fresh - provisioning guards against deploying
+    onto a range whose destroy is still in flight.
     """
-    # Phase 1: tear the range(s) down and reset students to pending.
-    try:
-        rebuild_result = teardown_service.rebuild_session(
-            db=db, registry=registry, session_id=session_id, settings=settings
-        )
-    except teardown_service.SessionNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
-
-    # Phase 2: redeploy fresh VMs for the same people.
-    try:
-        provision_result = provision_service.provision_session(
-            db=db, registry=registry, session_id=session_id, settings=settings
-        )
-    except provision_service.QuotaExceeded as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
-    except provision_service.SessionNotFound as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Session not found"
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        ) from exc
-
-    # Report the destroy counts alongside the post-redeploy student states.
-    return SessionTeardownResponse(
-        cleaned=rebuild_result.cleaned,
-        failed=rebuild_result.failed + provision_result.failed,
-        skipped=rebuild_result.skipped,
-        students=[_student_to_read(s, settings) for s in provision_result.students],
+    return _run_teardown_op(
+        teardown_service.rebuild_session, session_id, db, registry, settings
     )
 
 

@@ -380,6 +380,33 @@ def _auto_create_shared_range(
 _LIVE_RANGE_STATE = "SUCCESS"
 _ACTIVE_RANGE_STATES = frozenset({"DEPLOYING", "BUILDING", "PENDING", "TESTING"})
 
+# Range states from which it is safe to (re)deploy: terminal states, plus an
+# active deploy (which is a deploy, not a competing destroy). Anything else -
+# most importantly a destroy still tearing VMs down - means we must wait.
+_DEPLOY_SAFE_STATES = frozenset(
+    {"", "NEVER DEPLOYED", "DESTROYED", "SUCCESS", "ERROR"}
+)
+
+
+def _range_destroy_in_flight(ludus: LudusClient, userid: str) -> bool:
+    """Return True if *userid*'s range has a destroy (or other op) in flight.
+
+    Ludus ``range rm`` is asynchronous - it returns immediately and tears the
+    VMs down in the background. Firing a deploy onto a range whose destroy is
+    still running races it and corrupts range/user state, so provisioning
+    defers such a student until the destroy finishes. A safe state is terminal
+    or an in-progress *deploy*; anything else (e.g. ``DESTROYING``) is treated
+    as an op in flight. A missing range/user means nothing to collide with.
+    """
+    try:
+        info = ludus.range_get_vms(user_id=userid)
+    except LudusError:
+        return False
+    state = str(info.get("rangeState") or "").upper()
+    if state in _DEPLOY_SAFE_STATES or state.startswith("DEPLOY"):
+        return False
+    return True
+
 
 def _range_needs_deploy(ludus: LudusClient, userid: str) -> bool:
     """Return True if *userid*'s range must be (re)deployed to have live VMs.
@@ -433,10 +460,12 @@ def _provision_one(
     *,
     lead_userid: str | None = None,
     lead_range_deployed: bool = True,
-) -> bool:
+) -> bool | None:
     """Drive the Ludus lifecycle for a single student.
 
-    Returns ``True`` if the student ends in ``ready``, ``False`` otherwise.
+    Returns ``True`` if the student was provisioned (ready or deploying),
+    ``False`` on failure, or ``None`` if it was *deferred* because the range
+    it depends on still has a destroy in flight (leave pending, retry later).
     All error paths commit a ``student.provision_failed`` event and flip
     the row to ``error`` via :func:`_mark_error`.
 
@@ -462,6 +491,30 @@ def _provision_one(
 
     userid = student.ludus_userid
     is_lead = lead_userid is not None and userid == lead_userid
+
+    # Guard: never deploy onto a range whose async destroy is still running
+    # (e.g. right after Rebuild). Leave the student pending and defer.
+    guard_target = (
+        session_row.shared_range_id
+        if session_row.mode == SessionMode.shared
+        else userid
+    )
+    if guard_target and _range_destroy_in_flight(ludus, guard_target):
+        _emit_event(
+            db,
+            session_id=session_row.id,
+            student_id=student.id,
+            action="student.provision_deferred",
+            details={
+                "student_id": student.id,
+                "session_id": session_row.id,
+                "userid": userid,
+                "reason": "range destroy still in flight; retry once VMs are gone",
+            },
+        )
+        db.commit()
+        logger.info("provision: deferred student id=%s (range busy)", student.id)
+        return None
 
     # 1. user_add (idempotent on LudusUserExists).
     # Skipped for the lead user, who already exists (auto-created, or the
@@ -683,6 +736,11 @@ def provision_session(
         and not session_row.shared_range_id
     ):
         pending = [s for s in session_row.students if s.status != StudentStatus.ready]
+        # Skip a lead whose range is still being torn down (async destroy),
+        # so auto-create doesn't deploy onto an in-flight destroy.
+        pending = [
+            s for s in pending if not _range_destroy_in_flight(ludus, s.ludus_userid)
+        ]
         if pending:
             lead = pending[0]
             lead_userid = lead.ludus_userid
@@ -752,6 +810,9 @@ def provision_session(
         )
         if ok:
             result.provisioned += 1
+        elif ok is None:
+            # Deferred: range still being torn down. Left pending to retry.
+            result.skipped += 1
         else:
             result.failed += 1
 

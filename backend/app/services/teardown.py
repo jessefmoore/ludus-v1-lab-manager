@@ -9,9 +9,11 @@ doesn't strand the rest of the batch:
   session the single shared range is destroyed once and ``shared_range_id`` is
   cleared so provision auto-creates a fresh one.
 
-* :func:`teardown_session` - full cleanup: remove each Ludus user (which also
-  tears down its Proxmox pool / range), delete the on-disk WireGuard config,
-  clear the student's provisioning fields, and mark the session ``ended``.
+* :func:`teardown_session` - destroy each student's range VMs (``ludus range
+  rm --user``) but KEEP the Ludus users and their WireGuard configs, then mark
+  the session ``ended``. Users are intentionally not removed: ``user rm`` drops
+  the Proxmox pool and races the asynchronous VM destroy, orphaning VMs.
+  Students flip to ``range_removed``.
 
 Both resolve the Ludus client from the lab template's ``ludus_server`` via the
 registry (an explicit ``ludus`` client may be passed for tests). Per-student
@@ -22,7 +24,6 @@ abort the batch.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -105,18 +106,6 @@ def _resolve(
 def _is_missing(exc: LudusError) -> bool:
     """True when a Ludus error really means 'already gone' (idempotent)."""
     return isinstance(exc, LudusNotFound) or "not found" in str(exc).lower()
-
-
-def _unlink_config(student: Student) -> None:
-    """Best-effort delete of the student's WireGuard config file."""
-    if not student.wg_config_path:
-        return
-    try:
-        os.unlink(student.wg_config_path)
-    except FileNotFoundError:
-        pass
-    except OSError as exc:
-        logger.warning("teardown: failed to unlink %s: %s", student.wg_config_path, exc)
 
 
 def _finalize(db: DBSession, session_row: SessionRow, result: TeardownResult) -> TeardownResult:
@@ -211,13 +200,15 @@ def teardown_session(
     ludus: LudusClient | None = None,
     registry: LudusClientRegistry | None = None,
 ) -> TeardownResult:
-    """Full teardown: remove Ludus users + configs, then mark the session ended.
+    """Tear down a session's ranges (``ludus range rm --user``) and end it.
 
-    Each provisioned student's Ludus user is removed (which also destroys its
-    range/pool), the on-disk WireGuard config is deleted, and the student's
-    provisioning fields are cleared. A user that's already gone counts as
-    cleaned. Students whose removal fails are marked ``error`` and left for
-    manual cleanup, but the session is still marked ``ended``.
+    Each provisioned student's range VMs are destroyed but the Ludus user is
+    KEPT, so the user/pool persists and can be redeployed later. We deliberately
+    do NOT call ``user_rm``: Ludus's user removal deletes the user's Proxmox
+    pool and races the *asynchronous* VM destroy, which fails on a non-empty
+    pool and orphans VMs. Students flip to ``range_removed``; a range that is
+    already gone still counts as cleaned. Per-student failures are marked
+    ``error`` but the session is still marked ``ended``.
     """
     session_row, _lab, client = _resolve(db, session_id, ludus, registry)
 
@@ -227,14 +218,13 @@ def teardown_session(
         if student.status == StudentStatus.pending:
             result.skipped += 1
             continue
-        # Destroy the range VMs FIRST. Ludus's user removal deletes the user's
-        # Proxmox pool, which fails if the pool still holds VMs ("pool is not
-        # empty"). force=True tears the VMs down so the pool is empty for
-        # user_rm. Missing/already-gone ranges are fine.
+        # Destroy the range VMs only (range rm --user); keep the Ludus user.
         try:
             client.range_destroy(user_id=student.ludus_userid, force=True)
         except LudusError as exc:
-            if not _is_missing(exc):
+            if _is_missing(exc):
+                logger.info("teardown: range for %s already gone", student.ludus_userid)
+            else:
                 student.status = StudentStatus.error
                 _emit(db, session_id, student.id, "student.teardown_failed",
                       {"student_id": student.id, "userid": student.ludus_userid,
@@ -242,26 +232,11 @@ def teardown_session(
                 result.failed += 1
                 db.commit()
                 continue
-        try:
-            client.user_rm(student.ludus_userid)
-        except LudusError as exc:
-            if _is_missing(exc):
-                logger.info("teardown: ludus user %s already gone", student.ludus_userid)
-            else:
-                student.status = StudentStatus.error
-                _emit(db, session_id, student.id, "student.teardown_failed",
-                      {"student_id": student.id, "userid": student.ludus_userid,
-                       "step": "user_rm", "reason": repr(exc)})
-                result.failed += 1
-                db.commit()
-                continue
-        _unlink_config(student)
-        student.status = StudentStatus.pending
+        # Keep the user and their WireGuard config; only the VMs are gone.
+        student.status = StudentStatus.range_removed
         student.range_id = None
-        student.wg_config_path = None
         result.cleaned += 1
 
-    session_row.shared_range_id = None
     session_row.status = SessionStatus.ended
     _emit(db, session_id, None, "session.torn_down",
           {"session_id": session_id, "cleaned": result.cleaned, "failed": result.failed})
